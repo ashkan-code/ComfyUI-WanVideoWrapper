@@ -49,6 +49,7 @@ class ManagedPosition:
     ob_high: float      # original OB zone high
     ob_low: float       # original OB zone low
     position_id: str
+    qty: str = "0"      # "0" = full close; set to actual qty string if needed
     open_time: float = 0.0
 
     def __post_init__(self):
@@ -182,11 +183,11 @@ class LiveManager:
     async def _close_market(self, pos: ManagedPosition, reason: str):
         side = "BUY" if pos.direction == "SHORT" else "SELL"
         body = {
-            "symbol": pos.symbol,
-            "side": side,
-            "tradeSide": "CLOSE",
-            "orderType": "MARKET",
-            "qty": "0",          # 0 = close entire position on Bitunix
+            "symbol":     pos.symbol,
+            "side":       side,
+            "tradeSide":  "CLOSE",
+            "orderType":  "MARKET",
+            "qty":        pos.qty,       # actual qty or "0" for full-close
             "positionId": pos.position_id,
             "reduceOnly": True,
         }
