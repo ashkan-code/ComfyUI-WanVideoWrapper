@@ -160,8 +160,8 @@ class AutoTrader:
         leverage = min(signal.leverage, MAX_LEVERAGE)
         await self.client.set_leverage(signal.symbol, leverage)
 
-        # Full margin — 99% to leave buffer for fees
-        margin = available * 0.99
+        # Full margin — 95% to cover fees + margin buffer
+        margin = available * 0.95
         qty    = _qty_str(signal.entry, margin, leverage)
         if qty is None:
             print(f"  ⚠️  {signal.symbol}: lot size too small, skipping")
