@@ -72,7 +72,7 @@ def parse_args():
     p = argparse.ArgumentParser(description="Bitunix ICT 24/7 advanced scalping")
     p.add_argument("--live",   action="store_true")
     p.add_argument("--auto",   action="store_true", help="skip confirmation prompt")
-    p.add_argument("--top",    type=int, default=20)
+    p.add_argument("--top",    type=int, default=100)
     p.add_argument("--poll",   type=int, default=30)
     p.add_argument("--quiet",  action="store_true")
     return p.parse_args()

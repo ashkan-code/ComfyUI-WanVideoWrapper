@@ -32,7 +32,7 @@ from .signals import Signal, build_signal
 
 TIMEFRAMES      = ["1m", "5m", "15m", "1h", "4h", "1d"]
 KLINE_LIMIT     = 200
-TOP_N_BY_VOLUME = 20
+TOP_N_BY_VOLUME = 100
 MIN_TF_CONFLUENCE = 2   # relax to 2 for top-20 focused scan
 MIN_OB_SCORE    = 6     # minimum zone score
 
