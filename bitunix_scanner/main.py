@@ -152,6 +152,11 @@ async def _run_cycle(client: AsyncBitunixClient,
         progress=not args.quiet,
     )
 
+    # Re-sync positions opened during the scan (race-condition fix)
+    n_new = await _load_existing_positions(client, live_mgr)
+    if n_new:
+        print(f"  [{_ts()}] 🔄 {n_new} new position(s) found after scan — added to LiveManager")
+
     if not signals:
         print(f"  [{_ts()}] ── سیگنالی یافت نشد")
         if live_mgr._positions:
