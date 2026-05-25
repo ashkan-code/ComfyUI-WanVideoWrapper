@@ -138,7 +138,7 @@ async def _run_cycle(client: AsyncBitunixClient,
     """
     print(f"\n  [{_ts()}]  ─── Cycle #{cycle} ───")
 
-    live_mgr = LiveManager(client, poll_sec=15)
+    live_mgr = LiveManager(client, poll_sec=300)  # 5-minute candle monitoring
 
     n_existing = await _load_existing_positions(client, live_mgr)
     if n_existing:

@@ -168,16 +168,29 @@ class AutoTrader:
             return None
 
         side = "SELL" if signal.direction == "SHORT" else "BUY"
+
+        # Place entry order with exchange SL attached
         body = {
-            "symbol":    signal.symbol,
-            "qty":       qty,
-            "side":      side,
-            "tradeSide": "OPEN",
-            "orderType": "LIMIT",
-            "price":     _fmt_price(signal.entry),
+            "symbol":      signal.symbol,
+            "qty":         qty,
+            "side":        side,
+            "tradeSide":   "OPEN",
+            "orderType":   "LIMIT",
+            "price":       _fmt_price(signal.entry),
+            "slPrice":     _fmt_price(signal.sl),
+            "slStopType":  "MARK_PRICE",
+            "slOrderType": "MARKET",
         }
 
         result = await self.client._post("/api/v1/futures/trade/place_order", body)
+
+        # If SL param rejected, retry without it (Bitunix sometimes rejects on LIMIT orders)
+        if result.get("code") != 0 and "sl" in str(result.get("msg", "")).lower():
+            body.pop("slPrice", None)
+            body.pop("slStopType", None)
+            body.pop("slOrderType", None)
+            result = await self.client._post("/api/v1/futures/trade/place_order", body)
+
         if result.get("code") == 0:
             oid = result["data"]["orderId"]
             print(f"""
@@ -188,12 +201,12 @@ class AutoTrader:
   ║  Direction : {signal.direction}
   ║  HTF Bias  : {signal.btc_bias.upper()}  [{signal.btc_detail}]
   ║  Entry     : {_fmt_price(signal.entry)}
-  ║  Stop Loss : {_fmt_price(signal.sl)}  ({signal.loss_pct:.3f}% from entry)
+  ║  Stop Loss : {_fmt_price(signal.sl)}  ({signal.loss_pct:.3f}% risk)  [exchange order]
   ║  TP1 (50%) : {_fmt_price(signal.tp1)}  ← {signal.tp1_reason}
   ║  TP2 (50%) : {_fmt_price(signal.tp2)}  ← {signal.tp2_reason}
   ║  RRR       : 1:{signal.rr1:.1f} → 1:{signal.rr2:.1f}
   ║  Leverage  : {leverage}x  |  Margin: {margin:.4f} USDT (full)
-  ║  Reason    : {'✅ OB' if signal.zone else ''} {'✅ FVG' if signal.fvg_ok else ''} {'✅ Liq Sweep' if signal.liq_swept else ''} {'✅ OTE' if signal.ote_ok else ''} {'✅ '+signal.mss_detail if signal.mss_ok else ''}
+  ║  ICT       : {'✅OB' if signal.zone else ''} {'✅FVG' if signal.fvg_ok else ''} {'✅Liq' if signal.liq_swept else ''} {'✅OTE' if signal.ote_ok else ''} {'✅'+signal.mss_detail if signal.mss_ok else ''}
   ║  Quality   : {signal.quality_score:.0f}/100
   ║  orderId   : {oid}
   ╚══════════════════════════════════════════════════════╝
@@ -202,27 +215,63 @@ class AutoTrader:
             # Hand to LiveManager
             if self.live_manager is not None:
                 from .live_manager import ManagedPosition
-                await asyncio.sleep(2)
-                positions = await self.client.get_positions()
-                pos_id    = next(
-                    (p["positionId"] for p in positions if p["symbol"] == signal.symbol),
-                    oid
+                # Wait for position to open on exchange
+                await asyncio.sleep(3)
+                positions  = await self.client.get_positions()
+                pos_data   = next(
+                    (p for p in positions if p["symbol"] == signal.symbol), None
                 )
-                actual_qty = next(
-                    (p["qty"] for p in positions if p["symbol"] == signal.symbol),
-                    qty
-                )
+                pos_id     = pos_data["positionId"] if pos_data else oid
+                actual_qty = pos_data["qty"] if pos_data else qty
+
+                if pos_data:
+                    # Place exchange TP1 (50%) and TP2 (50%) as LIMIT close orders
+                    tp_side = "BUY" if signal.direction == "SHORT" else "SELL"
+                    half    = _qty_str(signal.entry, float(actual_qty) / 2 * signal.entry / leverage, leverage)
+                    # Simpler: just split qty in half
+                    try:
+                        q     = float(actual_qty)
+                        q_dec = len(str(actual_qty).split(".")[-1]) if "." in str(actual_qty) else 0
+                        half_q = str(int(q // 2)) if q_dec == 0 else f"{q/2:.{q_dec}f}"
+                    except Exception:
+                        half_q = actual_qty
+
+                    for tp_price, tp_qty, tp_label in [
+                        (signal.tp1, half_q,       "TP1 50%"),
+                        (signal.tp2, actual_qty,   "TP2 50%"),
+                    ]:
+                        tp_body = {
+                            "symbol":     signal.symbol,
+                            "qty":        str(tp_qty),
+                            "side":       tp_side,
+                            "tradeSide":  "CLOSE",
+                            "orderType":  "LIMIT",
+                            "price":      _fmt_price(tp_price),
+                            "positionId": pos_id,
+                            "reduceOnly": True,
+                        }
+                        tp_r = await self.client._post(
+                            "/api/v1/futures/trade/place_order", tp_body
+                        )
+                        if tp_r.get("code") == 0:
+                            print(f"  🎯 {tp_label} LIMIT order placed at "
+                                  f"{_fmt_price(tp_price)}  orderId={tp_r['data']['orderId']}")
+                        else:
+                            print(f"  ⚠️  {tp_label} order failed: {tp_r.get('msg')}")
+
+                tp_order_ids = []
+
                 mp = ManagedPosition(
-                    symbol      = signal.symbol,
-                    direction   = signal.direction,
-                    entry_price = signal.entry,
-                    sl_price    = signal.sl,
-                    tp1_price   = signal.tp1,
-                    tp2_price   = signal.tp2,
-                    ob_high     = signal.zone.price_high,
-                    ob_low      = signal.zone.price_low,
-                    position_id = pos_id,
-                    qty         = str(actual_qty),
+                    symbol       = signal.symbol,
+                    direction    = signal.direction,
+                    entry_price  = signal.entry,
+                    sl_price     = signal.sl,
+                    tp1_price    = signal.tp1,
+                    tp2_price    = signal.tp2,
+                    ob_high      = signal.zone.price_high,
+                    ob_low       = signal.zone.price_low,
+                    position_id  = pos_id,
+                    qty          = str(actual_qty),
                 )
                 self.live_manager.add_position(mp)
             return oid
