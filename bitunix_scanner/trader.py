@@ -5,7 +5,7 @@ Rules:
   - ONE position at a time (max_positions = 1)
   - FULL margin: 100% of available balance
   - Leverage: max 10x (per SL %)
-  - Confirmation: price in OB zone + candle OR volume breakout
+  - Confirmation: price in OB zone + candle (REQUIRED) + volume (bonus)
   - After 2 consecutive losses → pause 1 candle cycle (5 min), re-assess HTF
   - Skip if spread > 0.15% (approximated from 1m candle range)
 """
@@ -377,7 +377,7 @@ class AutoTrader:
                     print(f"  ⚠️  {sym}: spread > 0.12% — skip")
                     continue
 
-                # 4. Candle confirmation REQUIRED + volume as bonus
+                # 4. Candle confirmation REQUIRED — volume is bonus (not blocking)
                 candle_ok        = await self._candle_confirms(signal)
                 vol_ok, ratio    = await self._volume_breaks(signal)
 
@@ -386,12 +386,7 @@ class AutoTrader:
                           f"  in zone — no candle confirm  vol={ratio:.1f}×")
                     continue
 
-                if not vol_ok:
-                    print(f"  🔶 {sym:<18} {_fmt(price):>12}"
-                          f"  candle OK — waiting volume ({ratio:.1f}× < 1.5×)")
-                    continue
-
-                trigger = "candle + vol"
+                trigger = "candle + vol ✨" if vol_ok else f"candle only (vol={ratio:.1f}×)"
                 print(f"  🎯 {sym}  in zone  trigger={trigger}  → executing …")
 
                 oid = await self._execute(signal, available)
