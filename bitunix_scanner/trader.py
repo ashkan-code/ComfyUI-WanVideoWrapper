@@ -341,20 +341,21 @@ class AutoTrader:
                     print(f"  ⚠️  {sym}: spread > 0.12% — skip")
                     continue
 
-                # 4. Candle OR volume confirmation
+                # 4. Candle confirmation REQUIRED + volume as bonus
                 candle_ok        = await self._candle_confirms(signal)
                 vol_ok, ratio    = await self._volume_breaks(signal)
 
-                if not candle_ok and not vol_ok:
+                if not candle_ok:
                     print(f"  🔶 {sym:<18} {_fmt(price):>12}"
-                          f"  in zone — waiting confirm  vol={ratio:.1f}×")
+                          f"  in zone — no candle confirm  vol={ratio:.1f}×")
                     continue
 
-                trigger = (
-                    "candle + vol" if (candle_ok and vol_ok)
-                    else "candle"   if candle_ok
-                    else f"vol {ratio:.1f}×"
-                )
+                if not vol_ok:
+                    print(f"  🔶 {sym:<18} {_fmt(price):>12}"
+                          f"  candle OK — waiting volume ({ratio:.1f}× < 1.5×)")
+                    continue
+
+                trigger = "candle + vol"
                 print(f"  🎯 {sym}  in zone  trigger={trigger}  → executing …")
 
                 oid = await self._execute(signal, available)
