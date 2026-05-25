@@ -145,11 +145,15 @@ class AutoTrader:
         return avg_spread <= MAX_SPREAD_PCT
 
     async def _btc_still_aligned(self, direction: str) -> bool:
-        tf_klines = {tf: await self.client.get_klines("BTCUSDT", tf, 50)
-                     for tf in ("1h", "4h")}
-        bias, _ = btc_ict_bias(tf_klines)
+        # Use same TFs as scanner (1d + 4h + 1h) for consistent bias
+        tf_klines = {tf: await self.client.get_klines("BTCUSDT", tf, 60)
+                     for tf in ("1h", "4h", "1d")}
+        bias, detail = btc_ict_bias(tf_klines)
         dir_type = "bullish" if direction == "LONG" else "bearish"
-        return bias in (dir_type, "neutral")
+        aligned = bias in (dir_type, "neutral")
+        if not aligned:
+            print(f"  ⚠️  BTC bias={bias.upper()} [{detail}] — not aligned with {direction}")
+        return aligned
 
     # ── Order execution ────────────────────────────────────────────────────
 
