@@ -31,7 +31,7 @@ import os
 import aiohttp
 
 from .client import AsyncBitunixClient
-from .live_manager import LiveManager
+from .live_manager import LiveManager, ManagedPosition
 from .scanner import run_scan
 from .signals import format_summary
 from .trader import AutoTrader
@@ -101,7 +101,50 @@ async def _main():
         client = AsyncBitunixClient(API_KEY, SECRET_KEY, session)
 
         live_mgr = LiveManager(client, poll_sec=20)
-        trader   = AutoTrader(
+
+        # ── Load existing open positions into LiveManager ─────────────────
+        open_positions = await client.get_positions()
+        tickers_raw    = await client._get_public("/api/v1/futures/market/tickers")
+        price_map      = {t["symbol"]: float(t["lastPrice"])
+                          for t in (tickers_raw.get("data") or [])}
+
+        if open_positions:
+            print(f"  📡 Loading {len(open_positions)} existing position(s) into LiveManager …")
+            for p in open_positions:
+                sym       = p["symbol"]
+                entry     = float(p["avgOpenPrice"])
+                pos_id    = p["positionId"]
+                qty_str   = str(p.get("qty", "0"))
+                direction = "SHORT" if p["side"] in ("SELL", "SHORT") else "LONG"
+                cur       = price_map.get(sym, entry)
+
+                # Scalp SL: above recent 5m swing high (with 0.1% buffer)
+                c5m = await client.get_klines(sym, "5m", 60)
+                if c5m:
+                    swing_h = max(float(c["high"]) for c in c5m[-30:])
+                    sl = (max(swing_h, cur) * 1.001 if direction == "SHORT"
+                          else min(float(c["low"]) for c in c5m[-30:]) * 0.999)
+                else:
+                    sl = float(p.get("liqPrice", entry * 1.05) or entry * 1.05)
+
+                risk = abs(sl - entry)
+                tp   = (entry - risk * 2.0) if direction == "SHORT" else (entry + risk * 2.0)
+
+                mp = ManagedPosition(
+                    symbol      = sym,
+                    direction   = direction,
+                    entry_price = entry,
+                    sl_price    = sl,
+                    tp_price    = tp,
+                    ob_high     = sl,
+                    ob_low      = tp,
+                    position_id = pos_id,
+                    qty         = qty_str,
+                )
+                live_mgr.add_position(mp)
+                print(f"     {sym}  {direction}  entry={entry:.6f}  SL={sl:.6f}  TP={tp:.6f}")
+
+        trader = AutoTrader(
             client,
             max_positions=args.max_pos,
             risk_pct=args.risk,
