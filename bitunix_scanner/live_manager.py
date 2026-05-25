@@ -213,6 +213,28 @@ class LiveManager:
             return True
         return False
 
+    # ── Structural bias check — immediate close if wrong side ─────────────
+
+    async def _structure_invalidated(self, mp: ManagedPosition) -> Optional[str]:
+        """
+        If BOTH 15m and 1h market structure are against the position direction,
+        the trade is structurally invalid — close immediately, don't wait for pattern.
+        """
+        against = 0
+        details = []
+        for tf in ("15m", "1h"):
+            raw = await self.client.get_klines(mp.symbol, tf, 60)
+            ms  = market_structure(raw, lookback=40)
+            if mp.direction == "SHORT" and ms == "bullish":
+                against += 1
+                details.append(f"{tf}=bullish")
+            elif mp.direction == "LONG" and ms == "bearish":
+                against += 1
+                details.append(f"{tf}=bearish")
+        if against >= 2:
+            return f"ساختار بازار علیه پوزیشن [{', '.join(details)}] ⚡"
+        return None
+
     # ── Main loop ─────────────────────────────────────────────────────────
 
     async def run(self):
@@ -237,7 +259,13 @@ class LiveManager:
             btc_flipped_cache: Optional[bool] = None
 
             for sym, mp in list(self._positions.items()):
-                # Fetch 3m candles
+                # ── Priority 1: structural invalidation (immediate close) ──
+                struct_reason = await self._structure_invalidated(mp)
+                if struct_reason:
+                    await self._close_market(mp, struct_reason)
+                    continue
+
+                # Fetch 3m candles for pattern detection
                 candles = await self.client.get_klines(sym, MONITOR_TF, 20)
                 if len(candles) < 5:
                     continue
@@ -247,17 +275,16 @@ class LiveManager:
                            if mp.direction == "SHORT"
                            else (current_price - mp.entry_price) / mp.entry_price * 100)
 
-                # Pattern check
+                # ── Priority 2: candle pattern check ──────────────────────
                 reason = detect_exit_pattern(
                     candles, mp.direction,
                     mp.ob_high, mp.ob_low, mp.entry_price
                 )
-
                 if reason:
                     await self._close_market(mp, reason)
                     continue
 
-                # BTC flip check (shared for all positions)
+                # ── Priority 3: BTC 15m flip ──────────────────────────────
                 if btc_flipped_cache is None:
                     btc_flipped_cache = await self._btc_flipped(mp.direction)
                 if btc_flipped_cache:

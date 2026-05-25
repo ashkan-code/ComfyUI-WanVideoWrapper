@@ -106,29 +106,66 @@ class AutoTrader:
         hi = signal.zone.price_high * (1 + ENTRY_ZONE_TOL)
         return lo <= price <= hi
 
+    @staticmethod
+    def _get_vol(candle: dict) -> float:
+        for k in ("volume", "vol", "baseVol", "qty"):
+            if k in candle:
+                try:
+                    return float(candle[k])
+                except (ValueError, TypeError):
+                    pass
+        return 0.0
+
+    async def _volume_breaks(self, signal: Signal) -> tuple[bool, float]:
+        """
+        Volume breakout: last closed 5m candle volume > 1.5× 20-candle average
+        AND the candle closes in the trade direction.
+        Returns (confirmed, vol_ratio).
+        """
+        raw = await self.client.get_klines(signal.symbol, "5m", 25)
+        if not raw or len(raw) < 22:
+            return False, 0.0
+
+        closed   = raw[:-1]          # exclude still-forming candle
+        last     = closed[-1]        # most recent fully closed candle
+        avg_vol  = sum(self._get_vol(c) for c in closed[-21:-1]) / 20
+        last_vol = self._get_vol(last)
+
+        if avg_vol == 0:
+            return False, 0.0
+
+        ratio = last_vol / avg_vol
+        o, c  = float(last["open"]), float(last["close"])
+
+        if signal.direction == "SHORT":
+            direction_ok = c < o
+        else:
+            direction_ok = c > o
+
+        return (ratio >= 1.5 and direction_ok), ratio
+
     async def _candle_confirms(self, signal: Signal) -> tuple[bool, float]:
         """
-        Confirmation: last closed 5m candle must match trade direction
-        AND be inside the OB zone.
+        Candle confirmation: last closed 5m candle matches trade direction
+        AND closes inside the OB zone.
         Returns (confirmed, current_price).
         """
         raw = await self.client.get_klines(signal.symbol, "5m", 3)
         if not raw or len(raw) < 2:
             return False, 0.0
 
-        # Use second-to-last (last fully closed candle)
-        candle = raw[-2]
-        o, c = float(candle["open"]), float(candle["close"])
-        price = float(raw[-1]["close"])  # latest 1m-equivalent
+        candle = raw[-2]   # last fully closed candle
+        o, c   = float(candle["open"]), float(candle["close"])
+        price  = float(raw[-1]["close"])
 
-        lo = signal.zone.price_low * (1 - ENTRY_ZONE_TOL)
+        lo = signal.zone.price_low  * (1 - ENTRY_ZONE_TOL)
         hi = signal.zone.price_high * (1 + ENTRY_ZONE_TOL)
         in_zone = lo <= c <= hi
 
         if signal.direction == "SHORT":
-            direction_ok = c < o      # bearish close
+            direction_ok = c < o
         else:
-            direction_ok = c > o      # bullish close
+            direction_ok = c > o
 
         return (in_zone and direction_ok), price
 
@@ -263,19 +300,34 @@ class AutoTrader:
                     to_remove.append(sym)
                     continue
 
-                confirmed, price = await self._candle_confirms(signal)
+                # Must be inside OB zone first
+                in_z = await self._in_zone(signal)
+                if not in_z:
+                    raw1 = await self.client.get_klines(sym, "1m", 1)
+                    price = float(raw1[-1]["close"]) if raw1 else 0.0
+                    dist_pct = (price - signal.entry) / signal.entry * 100 if price else 0
+                    print(f"  ⏳ {sym:<20}  price={_fmt(price) if price else '?':>12}"
+                          f"  entry={_fmt(signal.entry):>12}"
+                          f"  dist={dist_pct:+.2f}%  (خارج از zone)")
+                    continue
+
+                # Trigger: candle confirmation OR volume breakout (either is enough)
+                candle_ok, price = await self._candle_confirms(signal)
+                vol_ok,    ratio = await self._volume_breaks(signal)
                 dist_pct = (price - signal.entry) / signal.entry * 100 if price else 0
 
-                if confirmed:
+                if candle_ok or vol_ok:
+                    trigger = "کندل تأیید ✅" if candle_ok else f"شکست حجم ✅ ({ratio:.1f}×)"
+                    print(f"  🔔 {sym}: {trigger}")
                     oid = await self._execute(signal, available)
                     if oid:
                         self._placed[sym] = oid
                 else:
-                    in_z = await self._in_zone(signal)
-                    zone_mark = "🔶 near zone" if in_z else "      "
+                    vol_tag = f"vol={ratio:.1f}×" if ratio else "vol=?"
+                    zone_mark = "🔶 در zone"
                     print(f"  ⏳ {sym:<20}  price={_fmt(price) if price else '?':>12}"
                           f"  entry={_fmt(signal.entry):>12}"
-                          f"  dist={dist_pct:+.2f}%  {zone_mark}")
+                          f"  dist={dist_pct:+.2f}%  {zone_mark}  {vol_tag}")
 
             for sym in to_remove:
                 self._signals.pop(sym, None)
