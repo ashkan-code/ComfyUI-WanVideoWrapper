@@ -201,27 +201,55 @@ class LiveManager:
     # ── Checks ────────────────────────────────────────────────────────────
 
     async def _structure_invalidated(self, mp: ManagedPosition) -> Optional[str]:
-        """Both 15m AND 1h structure against position → emergency close."""
-        against = 0
-        details = []
-        for tf in ("15m", "1h"):
-            raw = await self.client.get_klines(mp.symbol, tf, 60)
-            ms  = market_structure(raw, lookback=40)
-            if mp.direction == "SHORT" and ms == "bullish":
-                against += 1
-                details.append(f"{tf}=bullish")
-            elif mp.direction == "LONG" and ms == "bearish":
-                against += 1
-                details.append(f"{tf}=bearish")
-        if against >= 2:
-            return f"Structure invalidated: {', '.join(details)} ⚡"
+        """
+        HTF-first danger check — priority: Daily > 4H > 1H > 15m
+        A single HTF signal is enough to close. No need for LTF confirmation.
+        """
+        opp = "bullish" if mp.direction == "SHORT" else "bearish"
+
+        # Priority 1: Daily structure against → immediate close
+        raw_1d = await self.client.get_klines(mp.symbol, "1d", 40)
+        ms_1d  = market_structure(raw_1d, lookback=30)
+        if ms_1d == opp:
+            return f"Daily ساختار چرخید به {ms_1d.upper()} ⚡"
+
+        # Priority 2: 4H structure against → immediate close
+        raw_4h = await self.client.get_klines(mp.symbol, "4h", 60)
+        ms_4h  = market_structure(raw_4h, lookback=40)
+        if ms_4h == opp:
+            return f"4H ساختار چرخید به {ms_4h.upper()} ⚡"
+
+        # Priority 3: 1H structure against → immediate close
+        raw_1h = await self.client.get_klines(mp.symbol, "1h", 60)
+        ms_1h  = market_structure(raw_1h, lookback=40)
+        if ms_1h == opp:
+            return f"1H ساختار چرخید به {ms_1h.upper()} ⚡"
+
+        # Priority 4: 15m (advisory — close only if 1h also neutral)
+        raw_15m = await self.client.get_klines(mp.symbol, "15m", 60)
+        ms_15m  = market_structure(raw_15m, lookback=30)
+        if ms_15m == opp and ms_1h == "neutral":
+            return f"15m {ms_15m.upper()} + 1H neutral — خروج احتیاطی ⚡"
+
         return None
 
-    async def _btc_15m_flipped(self, direction: str) -> bool:
-        raw = await self.client.get_klines("BTCUSDT", "15m", 60)
-        ms  = market_structure(raw, lookback=40)
-        return (direction == "SHORT" and ms == "bullish") or \
-               (direction == "LONG"  and ms == "bearish")
+    async def _btc_htf_flipped(self, direction: str) -> Optional[str]:
+        """BTC HTF-first check: 4H flip is enough — don't wait for 15m."""
+        opp = "bullish" if direction == "SHORT" else "bearish"
+
+        # BTC 4H first
+        raw_4h = await self.client.get_klines("BTCUSDT", "4h", 60)
+        ms_4h  = market_structure(raw_4h, lookback=40)
+        if ms_4h == opp:
+            return f"BTC 4H چرخید به {ms_4h.upper()} ₿⚡"
+
+        # BTC 1H
+        raw_1h = await self.client.get_klines("BTCUSDT", "1h", 60)
+        ms_1h  = market_structure(raw_1h, lookback=40)
+        if ms_1h == opp:
+            return f"BTC 1H چرخید به {ms_1h.upper()} ₿⚡"
+
+        return None
 
     async def _check_tp1_hit(self, mp: ManagedPosition):
         """
@@ -247,7 +275,7 @@ class LiveManager:
 
     async def run(self):
         print(f"\n  📡 LiveManager — {len(self._positions)} position(s)"
-              f"  [5m candle ICT monitoring  poll={self.poll_sec}s]\n")
+              f"  [HTF-first monitoring  poll={self.poll_sec}s]\n")
 
         while self._positions:
             # Sync: remove positions closed by exchange SL/TP
@@ -264,16 +292,23 @@ class LiveManager:
             if not self._positions:
                 break
 
-            btc_flip_cache: Optional[bool] = None
+            btc_flip_cache: Optional[str] = None
 
             for sym, mp in list(self._positions.items()):
-                # ── P1: structural invalidation ───────────────────────────
+                # ── P1: HTF structure (Daily > 4H > 1H > 15m) ────────────
                 struct_r = await self._structure_invalidated(mp)
                 if struct_r:
                     await self._emergency_close(mp, struct_r)
                     continue
 
-                # ── P2: 5m candle danger check ────────────────────────────
+                # ── P2: BTC HTF flip (4H > 1H) ───────────────────────────
+                if btc_flip_cache is None:
+                    btc_flip_cache = await self._btc_htf_flipped(mp.direction)
+                if btc_flip_cache:
+                    await self._emergency_close(mp, btc_flip_cache)
+                    continue
+
+                # ── P3: 5m candle danger ──────────────────────────────────
                 candles_5m = await self.client.get_klines(sym, "5m", 15)
                 if len(candles_5m) >= 4:
                     current_price = float(candles_5m[-1]["close"])
@@ -285,10 +320,8 @@ class LiveManager:
                         await self._emergency_close(mp, danger)
                         continue
 
-                    # ── P3: BTC 15m flip ──────────────────────────────────
-                    if btc_flip_cache is None:
-                        btc_flip_cache = await self._btc_15m_flipped(mp.direction)
-                    if btc_flip_cache:
+                    # ── P4: SL fallback ───────────────────────────────────
+                    if False:
                         await self._emergency_close(mp, "BTC 15m structure flipped ₿")
                         continue
 
