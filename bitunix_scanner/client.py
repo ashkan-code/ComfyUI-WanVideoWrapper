@@ -106,3 +106,17 @@ class AsyncBitunixClient:
         data = await self._get_private(
             "/api/v1/futures/position/get_pending_positions")
         return data.get("data") or []
+
+    async def _post(self, path: str, body: dict = None) -> dict:
+        body_str = json.dumps(body, separators=(",", ":")) if body else ""
+        headers = _make_headers(self.api_key, self.secret_key, "", body_str)
+        sem = _get_semaphore()
+        async with sem:
+            url = BASE_URL + path
+            async with self._session.post(url, headers=headers, data=body_str,
+                                           timeout=aiohttp.ClientTimeout(total=15)) as r:
+                return await r.json(content_type=None)
+
+    async def cancel_orders(self, symbol: str, order_ids: List[str]) -> dict:
+        return await self._post("/api/v1/futures/trade/cancel_orders",
+                                {"symbol": symbol, "orderIds": order_ids})
