@@ -563,6 +563,176 @@ def find_tiered_tp(klines_1h: list, klines_4h: list,
     return tp1, tp2, tp1_reason, tp2_reason
 
 
+def detect_breaker_block(raw: list, timeframe: str,
+                          max_bb: int = 4) -> List[OrderBlock]:
+    """
+    Breaker Block: a former OB that price traded through (mitigated),
+    now acting as opposite-direction support/resistance.
+
+    Former bullish OB → breaker bearish (now resistance).
+    Former bearish OB → breaker bullish (now support).
+    Returns OrderBlock objects with ob_type = 'bearish_breaker' or 'bullish_breaker'.
+    """
+    df = _klines_to_df(raw)
+    if len(df) < 40:
+        return []
+
+    atr   = _atr(df)
+    sh    = _swing_highs(df, n=3)
+    sl    = _swing_lows(df, n=3)
+    cur   = float(df["close"].iloc[-1])
+    result: List[OrderBlock] = []
+
+    for i in range(5, len(df) - 10):
+        c      = df.iloc[i]
+        avg_atr = atr.iloc[i]
+        if pd.isna(avg_atr) or avg_atr == 0:
+            continue
+
+        lookahead = df.iloc[i + 1: i + 6]
+        if lookahead.empty:
+            continue
+
+        ob_high = max(float(c["open"]), float(c["close"]))
+        ob_low  = min(float(c["open"]), float(c["close"]))
+
+        # Was this a bullish OB (bearish candle before upward BOS) now mitigated?
+        if float(c["close"]) < float(c["open"]):
+            prev_sh = [j for j in sh if j < i]
+            if prev_sh:
+                last_sh_price = float(df["high"].iloc[prev_sh[-1]])
+                move_up = lookahead["high"].max() - float(c["close"])
+                if lookahead["high"].max() > last_sh_price and move_up >= avg_atr * 1.2:
+                    # Now check if price later traded back through the OB (mitigation)
+                    post = df.iloc[i + 1:]
+                    if post["close"].min() <= ob_low * 1.002:
+                        # Mitigated → becomes bearish breaker
+                        dist = abs(cur - (ob_high + ob_low) / 2) / cur
+                        if dist <= 0.04:
+                            result.append(OrderBlock(
+                                ob_type="bearish_breaker",
+                                ob_high=ob_high, ob_low=ob_low,
+                                wick_high=float(c["high"]), wick_low=float(c["low"]),
+                                timeframe=timeframe, bar_index=i,
+                                timestamp=int(c["time"]),
+                            ))
+
+        # Was this a bearish OB (bullish candle before downward BOS) now mitigated?
+        elif float(c["close"]) > float(c["open"]):
+            prev_sl = [j for j in sl if j < i]
+            if prev_sl:
+                last_sl_price = float(df["low"].iloc[prev_sl[-1]])
+                move_dn = float(c["close"]) - lookahead["low"].min()
+                if lookahead["low"].min() < last_sl_price and move_dn >= avg_atr * 1.2:
+                    post = df.iloc[i + 1:]
+                    if post["close"].max() >= ob_high * 0.998:
+                        # Mitigated → becomes bullish breaker
+                        dist = abs(cur - (ob_high + ob_low) / 2) / cur
+                        if dist <= 0.04:
+                            result.append(OrderBlock(
+                                ob_type="bullish_breaker",
+                                ob_high=ob_high, ob_low=ob_low,
+                                wick_high=float(c["high"]), wick_low=float(c["low"]),
+                                timeframe=timeframe, bar_index=i,
+                                timestamp=int(c["time"]),
+                            ))
+
+    recent = sorted(result, key=lambda x: x.bar_index, reverse=True)
+    return recent[:max_bb]
+
+
+def detect_mitigation_block(raw: list, timeframe: str,
+                              direction: str) -> Optional[OrderBlock]:
+    """
+    Mitigation Block: the most recent unmitigated OB that price is
+    currently returning to (within 0.5% of its zone).
+
+    direction: 'bullish' (price returning to bullish OB from above)
+               'bearish' (price returning to bearish OB from below)
+    """
+    obs = detect_order_blocks(raw, timeframe, max_obs=8, proximity_pct=0.05)
+    df  = _klines_to_df(raw)
+    if df.empty:
+        return None
+    cur = float(df["close"].iloc[-1])
+
+    for ob in sorted(obs, key=lambda x: x.bar_index, reverse=True):
+        if ob.ob_type != direction:
+            continue
+        mid  = (ob.ob_high + ob.ob_low) / 2
+        dist = abs(cur - mid) / cur
+        if dist <= 0.005:
+            return ob
+    return None
+
+
+def detect_candle_confirmation(raw: list, direction: str) -> Tuple[bool, str]:
+    """
+    Check for an ICT-grade candlestick confirmation on the last CLOSED candle.
+
+    LONG  (bullish): Bullish Engulfing | Hammer | Bullish Pin Bar
+    SHORT (bearish): Bearish Engulfing | Shooting Star | Bearish Pin Bar
+    Returns (confirmed, pattern_name).
+    """
+    df = _klines_to_df(raw)
+    if len(df) < 3:
+        return False, ""
+
+    # Use the last two closed candles
+    prev = df.iloc[-3]
+    last = df.iloc[-2]
+
+    o1, h1, l1, c1 = float(prev["open"]), float(prev["high"]), float(prev["low"]), float(prev["close"])
+    o2, h2, l2, c2 = float(last["open"]), float(last["high"]), float(last["low"]), float(last["close"])
+
+    body2 = abs(c2 - o2)
+    body1 = abs(c1 - o1)
+    uw2   = h2 - max(o2, c2)  # upper wick
+    lw2   = min(o2, c2) - l2  # lower wick
+    rng2  = h2 - l2
+
+    if rng2 == 0:
+        return False, ""
+
+    if direction == "bullish":
+        # 1. Bullish Engulfing
+        if (c2 > o2 and body2 > 0
+                and o2 <= min(o1, c1)
+                and c2 >= max(o1, c1)
+                and body2 >= body1 * 0.75):
+            return True, "Bullish Engulfing"
+
+        # 2. Hammer (lower wick ≥ 2× body, close in upper 40% of range)
+        if (body2 > 0
+                and lw2 >= body2 * 2.0
+                and c2 >= l2 + rng2 * 0.6):
+            return True, "Hammer"
+
+        # 3. Bullish Pin Bar (lower wick ≥ 60% of total range)
+        if lw2 >= rng2 * 0.6 and c2 > o2:
+            return True, "Bullish Pin Bar"
+
+    else:  # bearish
+        # 1. Bearish Engulfing
+        if (c2 < o2 and body2 > 0
+                and o2 >= max(o1, c1)
+                and c2 <= min(o1, c1)
+                and body2 >= body1 * 0.75):
+            return True, "Bearish Engulfing"
+
+        # 2. Shooting Star (upper wick ≥ 2× body, close in lower 40% of range)
+        if (body2 > 0
+                and uw2 >= body2 * 2.0
+                and c2 <= l2 + rng2 * 0.4):
+            return True, "Shooting Star"
+
+        # 3. Bearish Pin Bar (upper wick ≥ 60% of total range)
+        if uw2 >= rng2 * 0.6 and c2 < o2:
+            return True, "Bearish Pin Bar"
+
+    return False, ""
+
+
 def btc_ict_bias(tf_klines: dict) -> Tuple[str, str]:
     """
     Determine BTC bias using ICT multi-TF market structure.

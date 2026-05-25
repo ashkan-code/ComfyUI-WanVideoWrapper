@@ -11,16 +11,20 @@ Rules:
     • TP tiered: TP1 50% (liq pool) → TP2 50% (HTF FVG)
     • SL moves to breakeven after TP1
     • Danger exit: structure invalidation / pattern / BTC flip
-    • After 2 losses → pause 1 candle cycle, reassess HTF
+    • After 2 losses → pause 1 hour, reassess HTF
     • After each exit → immediate re-scan
+    • Spread ≤ 0.12% required
+    • Semi-manual: present analysis → ask confirmation → execute
 
 Run:
     python -m bitunix_scanner.main           # scan only (one shot)
-    python -m bitunix_scanner.main --live    # 24/7 autonomous mode
+    python -m bitunix_scanner.main --live    # 24/7 with confirmation prompt
+    python -m bitunix_scanner.main --live --auto  # fully autonomous (no prompt)
     python -m bitunix_scanner.main --live --top 20 --poll 30
 
 Flags:
     --live     24/7 mode
+    --auto     skip manual confirmation (fully autonomous)
     --top N    symbols to scan by volume (default 20)
     --poll N   AutoTrader poll seconds (default 30)
     --quiet    suppress scan output
@@ -35,9 +39,20 @@ from datetime import datetime
 import aiohttp
 
 from .client import AsyncBitunixClient
+from .ict import (
+    market_structure,
+    detect_candle_confirmation,
+    detect_breaker_block,
+    detect_mitigation_block,
+    btc_ict_bias,
+    detect_fvg,
+    detect_liquidity_sweep,
+    find_impulse_for_ote,
+    find_ote_zone,
+)
 from .live_manager import LiveManager, ManagedPosition
 from .scanner import run_scan
-from .signals import format_summary
+from .signals import Signal, _fmt, format_summary
 from .trader import AutoTrader
 
 API_KEY    = os.getenv("BITUNIX_API_KEY",    "7bee3f4756a0dbc89ae152f34c2175ac")
@@ -46,6 +61,7 @@ SECRET_KEY = os.getenv("BITUNIX_SECRET_KEY", "4e0a845778d49068297106a64cbcda61")
 RESCAN_WAIT     = 300   # seconds between scans when no signal found
 POST_TRADE_WAIT = 30    # seconds after all positions closed before re-scan
 ERROR_WAIT      = 60    # seconds after an unexpected error
+CONFIRM_TIMEOUT = 120   # seconds to wait for user confirmation
 
 
 def _ts() -> str:
@@ -55,10 +71,180 @@ def _ts() -> str:
 def parse_args():
     p = argparse.ArgumentParser(description="Bitunix ICT 24/7 advanced scalping")
     p.add_argument("--live",   action="store_true")
+    p.add_argument("--auto",   action="store_true", help="skip confirmation prompt")
     p.add_argument("--top",    type=int, default=20)
     p.add_argument("--poll",   type=int, default=30)
     p.add_argument("--quiet",  action="store_true")
     return p.parse_args()
+
+
+# ── ICT analysis output formatter ─────────────────────────────────────────────
+
+async def _build_ict_report(client: AsyncBitunixClient,
+                             signal: Signal,
+                             available_usdt: float) -> str:
+    """
+    Build the structured ICT multi-timeframe analysis report.
+    """
+    sym     = signal.symbol
+    ict_dir = "bearish" if signal.direction == "SHORT" else "bullish"
+
+    # Fetch extra klines for the report
+    c1d  = await client.get_klines(sym, "1d",  60)
+    c4h  = await client.get_klines(sym, "4h",  60)
+    c15m = await client.get_klines(sym, "15m", 60)
+    c5m  = await client.get_klines(sym, "5m",  30)
+
+    # Structure on each TF
+    daily_ms = market_structure(c1d,  lookback=40)
+    h4_ms    = market_structure(c4h,  lookback=40)
+    m15_ms   = market_structure(c15m, lookback=30)
+
+    # Key levels
+    fvgs_1h = detect_fvg(await client.get_klines(sym, "1h", 60), ict_dir)
+    fvg_str = f"{_fmt(fvgs_1h[0][0])}–{_fmt(fvgs_1h[0][1])}" if fvgs_1h else "—"
+
+    liq_ok, liq_detail = detect_liquidity_sweep(c15m, ict_dir)
+
+    bb = detect_breaker_block(c4h, "4h")
+    bb_str = _fmt(bb[0].ob_high) + "–" + _fmt(bb[0].ob_low) if bb else "—"
+
+    mb = detect_mitigation_block(c4h, "4h", ict_dir)
+    mb_str = (f"{_fmt(mb.ob_low)}–{_fmt(mb.ob_high)}"
+              if mb else "—")
+
+    # Candlestick confirmation
+    candle_ok, candle_name = detect_candle_confirmation(c5m, ict_dir)
+
+    # OTE check
+    sw_lo, sw_hi = find_impulse_for_ote(c15m, ict_dir)
+    ote_lo, ote_hi = find_ote_zone(sw_lo, sw_hi, ict_dir)
+    cur_price = float(c5m[-1]["close"]) if c5m else signal.entry
+    ote_in = ote_lo <= cur_price <= ote_hi
+
+    # Spread
+    if c5m:
+        avg_spread = (float(c5m[-1]["high"]) - float(c5m[-1]["low"])) / float(c5m[-1]["close"]) * 100
+    else:
+        avg_spread = 0.0
+
+    arrow = "▲ LONG" if signal.direction == "LONG" else "▼ SHORT"
+    icon  = "🟢" if signal.direction == "LONG" else "🔴"
+
+    # Confluence checks string
+    checks = []
+    checks.append("✅ OB" if signal.zone else "❌ OB")
+    checks.append("✅ FVG" if signal.fvg_ok else "❌ FVG")
+    checks.append("✅ Liq Sweep" if signal.liq_swept else "❌ Liq Sweep")
+    checks.append("✅ OTE" if (signal.ote_ok or ote_in) else "⬜ OTE")
+    checks.append(f"✅ {signal.mss_detail}" if signal.mss_ok else "❌ BOS/MSS")
+    checks.append(f"✅ {candle_name}" if candle_ok else "⬜ Candle")
+    checks_str = "  ".join(checks)
+
+    sl_pct_str = (f"-{signal.loss_pct:.3f}%"
+                  if signal.direction == "LONG"
+                  else f"+{signal.loss_pct:.3f}%")
+
+    # Danger warning
+    if avg_spread > 0.12:
+        spread_warn = f"  ⚠️  Spread {avg_spread:.3f}% — above 0.12% threshold!\n"
+    else:
+        spread_warn = f"  Spread {avg_spread:.3f}% ✓\n"
+
+    # Entry reason summary
+    reasons = []
+    if signal.zone:
+        tfs = " + ".join(signal.zone.timeframes)
+        reasons.append(f"Confluent OB [{tfs}] score {signal.zone.score}/21")
+    if signal.fvg_ok:
+        reasons.append("FVG مشاهده شد روی ۱H")
+    if signal.liq_swept:
+        reasons.append(f"Liquidity sweep: {signal.liq_detail}")
+    if signal.mss_ok:
+        reasons.append(f"Structure shift: {signal.mss_detail}")
+    if ote_in or signal.ote_ok:
+        reasons.append(f"قیمت در OTE zone ({_fmt(ote_lo)}–{_fmt(ote_hi)})")
+    if candle_ok:
+        reasons.append(f"کندل تأیید: {candle_name} روی ۵m")
+    if bb_str != "—":
+        reasons.append(f"Breaker Block 4H: {bb_str}")
+    reason_text = "\n".join(f"    • {r}" for r in reasons) if reasons else "    • ICT confluence detected"
+
+    # Risk management
+    risk_lines = []
+    if not signal.fvg_ok:
+        risk_lines.append("FVG تأیید نشده — احتمال ورود زودهنگام بالاتر")
+    if not candle_ok:
+        risk_lines.append("کندل تأیید وجود ندارد — ورود روی سیگنال ضعیف‌تر است")
+    if avg_spread > 0.08:
+        risk_lines.append(f"اسپرد {avg_spread:.3f}% — لبه تریدینگ را کاهش می‌دهد")
+    if signal.quality_score < 60:
+        risk_lines.append(f"کیفیت سیگنال پایین ({signal.quality_score:.0f}/100) — با احتیاط")
+    risk_lines.append("اگر قیمت از OB خارج شد یا BTC ساختار تغییر داد → فوری ببند")
+    risk_text = "\n".join(f"    • {r}" for r in risk_lines)
+
+    report = f"""
+{'═'*56}
+  {icon}  تحلیل ICT  ─  {signal.symbol}
+{'═'*56}
+
+  **تحلیل مولتی تایم فریم:**
+  - Daily Bias : {daily_ms.upper()}
+  - 4H Bias    : {h4_ms.upper()}
+  - 15m Bias   : {m15_ms.upper()}
+  - Key Levels : OB {_fmt(signal.zone.price_low)}–{_fmt(signal.zone.price_high)}  |  FVG {fvg_str}  |  Liq: {liq_detail or '—'}
+  - Breaker BB : {bb_str}
+  - Mitigation : {mb_str}
+
+  Coin         : {signal.symbol}
+  Direction    : {arrow}
+  Leverage     : {signal.leverage}x  (max 10x)
+  Margin       : 100% — {available_usdt:.2f} USDT available
+  Entry        : {_fmt(signal.entry)}
+  Stop Loss    : {_fmt(signal.sl)}  ({sl_pct_str})  ← OB wick + 0.4%
+  TP1 (50%)    : {_fmt(signal.tp1)}  ← {signal.tp1_reason}
+  TP2 (50%)    : {_fmt(signal.tp2)}  ← {signal.tp2_reason}
+  RRR          : 1:{signal.rr1:.1f} → 1:{signal.rr2:.1f}
+  Quality      : {signal.quality_score:.0f}/100
+{spread_warn}
+  **چک‌لیست ICT:**
+  {checks_str}
+
+  **دلیل ورود (ICT):**
+{reason_text}
+
+  **ریسک و مدیریت:**
+{risk_text}
+
+{'═'*56}"""
+    return report
+
+
+async def _ask_confirm(timeout: int = CONFIRM_TIMEOUT) -> bool:
+    """
+    Async confirmation prompt with timeout.
+    Returns True if user confirms, False otherwise.
+    """
+    print(f"\n  ❓ تایید می‌کنی؟ (بله/خیر)  [{timeout}s timeout → auto-skip]\n", flush=True)
+
+    loop = asyncio.get_event_loop()
+    try:
+        answer = await asyncio.wait_for(
+            loop.run_in_executor(None, input, "  > "),
+            timeout=timeout,
+        )
+        ans = answer.strip().lower()
+        if ans in ("بله", "yes", "y", "آره", "ok", "1", "✓", "تایید"):
+            return True
+        print(f"  ⏩ رد شد: '{answer}'\n")
+        return False
+    except asyncio.TimeoutError:
+        print(f"\n  ⏱️  {timeout}s گذشت — سیگنال رد شد (timeout)\n")
+        return False
+    except EOFError:
+        # Non-interactive environment — auto-skip
+        print("  ⚠️  محیط غیر تعاملی — سیگنال رد شد\n")
+        return False
 
 
 # ── load existing exchange positions ──────────────────────────────────────────
@@ -133,12 +319,12 @@ async def _run_cycle(client: AsyncBitunixClient,
                      cycle: int,
                      trader_state: dict) -> str:
     """
-    One cycle: load positions → scan → pick best → trade → monitor.
-    Returns 'traded' | 'no_signal' | 'positions_only'.
+    One cycle: load positions → scan → pick best → [confirm] → trade → monitor.
+    Returns 'traded' | 'no_signal' | 'skipped' | 'positions_only'.
     """
     print(f"\n  [{_ts()}]  ─── Cycle #{cycle} ───")
 
-    live_mgr = LiveManager(client, poll_sec=300)  # 5-minute candle monitoring
+    live_mgr = LiveManager(client, poll_sec=300)
 
     n_existing = await _load_existing_positions(client, live_mgr)
     if n_existing:
@@ -164,9 +350,25 @@ async def _run_cycle(client: AsyncBitunixClient,
             await live_mgr.run()
         return "no_signal"
 
-    # Show best setup
+    # Best signal
     best = signals[0]
-    print(format_summary([best]))
+
+    # Account balance for report
+    account   = await client.get_account()
+    available = float(account.get("available", 0))
+
+    # Build and print the structured ICT report
+    report = await _build_ict_report(client, best, available)
+    print(report)
+
+    # Semi-manual confirmation (unless --auto)
+    if not args.auto:
+        confirmed = await _ask_confirm()
+        if not confirmed:
+            if live_mgr._positions:
+                print(f"  [{_ts()}] 📡 Monitoring {len(live_mgr._positions)} existing position(s) …")
+                await live_mgr.run()
+            return "skipped"
 
     trader = AutoTrader(
         client,
@@ -174,15 +376,13 @@ async def _run_cycle(client: AsyncBitunixClient,
         poll_sec      = args.poll,
         live_manager  = live_mgr,
     )
-    # Restore consecutive loss state across cycles
     trader._consec_losses = trader_state.get("consec_losses", 0)
     trader._pause_until   = trader_state.get("pause_until",   0.0)
 
-    trader.add_signals([best])   # only the single best signal
+    trader.add_signals([best])
 
     await asyncio.gather(trader.run(), live_mgr.run())
 
-    # Persist trader state
     trader_state["consec_losses"] = trader._consec_losses
     trader_state["pause_until"]   = trader._pause_until
 
@@ -192,18 +392,20 @@ async def _run_cycle(client: AsyncBitunixClient,
 # ── 24/7 main loop ────────────────────────────────────────────────────────────
 
 async def _live_loop(args):
+    mode_tag = "AUTONOMOUS" if args.auto else "SEMI-MANUAL (تایید قبل از ورود)"
     print(f"""
 ╔══════════════════════════════════════════════════════╗
-║   BITUNIX  ·  ICT ADVANCED  ·  24/7 AUTONOMOUS     ║
+║   BITUNIX  ·  ICT ADVANCED  ·  24/7               ║
 ║   Scope    : Top {args.top:<3} by volume                    ║
-║   Mode     : 1 trade — FULL MARGIN                  ║
+║   Mode     : {mode_tag:<40}║
 ║   Entry    : OB + FVG + Liq Sweep (≥ 2/3)          ║
 ║   OTE      : 61.8%–79% Fibonacci preferred          ║
-║   SL       : OB wick + 0.4% buffer  (max 1.5%)     ║
+║   SL       : OB wick + 0.4%  (max 1.5%)            ║
+║   Spread   : max 0.12%                              ║
 ║   TP1(50%) : nearest liquidity pool (≥ 2:1)        ║
 ║   TP2(50%) : HTF FVG / OB  (≥ 3:1)                ║
 ║   Leverage : max 10x                                ║
-║   Re-scan  : immediately after every exit           ║
+║   Pause    : 1 hour after 2 consecutive losses      ║
 ╚══════════════════════════════════════════════════════╝
 """)
 
@@ -220,6 +422,10 @@ async def _live_loop(args):
 
                 if result == "no_signal":
                     print(f"\n  [{_ts()}] ⏳ No setup — rescanning in "
+                          f"{RESCAN_WAIT // 60} min …\n")
+                    await asyncio.sleep(RESCAN_WAIT)
+                elif result == "skipped":
+                    print(f"\n  [{_ts()}] ⏩ Skipped — rescanning in "
                           f"{RESCAN_WAIT // 60} min …\n")
                     await asyncio.sleep(RESCAN_WAIT)
                 else:
@@ -265,7 +471,11 @@ async def _main():
         signals = await run_scan(API_KEY, SECRET_KEY,
                                  top_n=args.top, progress=not args.quiet)
         if signals:
-            print(format_summary(signals[:3]))  # show top 3
+            account   = await client.get_account()
+            available = float(account.get("available", 0))
+            for sig in signals[:3]:
+                report = await _build_ict_report(client, sig, available)
+                print(report)
         else:
             print("\n  ── No valid setup found ──\n")
 

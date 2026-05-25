@@ -28,7 +28,8 @@ POLL_INTERVAL    = 30
 ENTRY_ZONE_TOL   = 0.005   # ±0.5% OB zone tolerance
 PAUSE_CANDLES    = 1       # candle cycles to pause after 2 losses
 CANDLE_SEC       = 300     # 5m candle = 300 s
-MAX_SPREAD_PCT   = 0.0015  # 0.15%
+PAUSE_DURATION   = 3600    # 1 hour pause after 2 consecutive losses
+MAX_SPREAD_PCT   = 0.0012  # 0.12%
 
 
 def _price_decimals(price: float) -> int:
@@ -85,9 +86,9 @@ class AutoTrader:
     def record_loss(self):
         self._consec_losses += 1
         if self._consec_losses >= 2:
-            self._pause_until = time.time() + CANDLE_SEC * PAUSE_CANDLES
+            self._pause_until = time.time() + PAUSE_DURATION
             print(f"\n  ⚠️  {self._consec_losses} consecutive losses — "
-                  f"pausing {PAUSE_CANDLES} candle cycle ({CANDLE_SEC}s) …\n")
+                  f"pausing 1 hour ({PAUSE_DURATION}s) for HTF reassessment …\n")
             self._consec_losses = 0
 
     def record_win(self):
@@ -248,7 +249,6 @@ class AutoTrader:
                             "orderType":  "LIMIT",
                             "price":      _fmt_price(tp_price),
                             "positionId": pos_id,
-                            "reduceOnly": True,
                         }
                         tp_r = await self.client._post(
                             "/api/v1/futures/trade/place_order", tp_body
@@ -334,7 +334,7 @@ class AutoTrader:
 
                 # 3. Spread check
                 if not await self._spread_ok(sym):
-                    print(f"  ⚠️  {sym}: spread > 0.15% — skip")
+                    print(f"  ⚠️  {sym}: spread > 0.12% — skip")
                     continue
 
                 # 4. Candle OR volume confirmation
