@@ -24,6 +24,7 @@ RISK_PCT = 0.90          # fraction of available balance to use as margin per tr
 MAX_POSITIONS = 3        # max simultaneous open positions
 POLL_INTERVAL = 30       # seconds between price checks
 ENTRY_ZONE_TOL = 0.005   # 0.5%: OB zone ± this fraction counts as "in zone"
+MAX_LEVERAGE = 10        # hard cap — never exceed 10x regardless of SL distance
 
 # injected by main after construction
 _live_manager: Optional["LiveManager"] = None
@@ -146,8 +147,18 @@ class AutoTrader:
             print(f"  ⚠️  Balance too low ({available:.4f} USDT), skipping {signal.symbol}")
             return None
 
+        # Hard cap: never use leverage above MAX_LEVERAGE (10x)
+        leverage = min(signal.leverage, MAX_LEVERAGE)
+
+        # Set leverage on exchange before placing order
+        lev_result = await self.client.set_leverage(signal.symbol, leverage)
+        if lev_result.get("code") not in (0, None):
+            msg = lev_result.get("msg", "unknown")
+            # Non-fatal: warn and continue (exchange may already have correct leverage)
+            print(f"  ⚠️  {signal.symbol}: set_leverage({leverage}x) → {msg}")
+
         margin = available * self.risk_pct
-        qty = _qty_str(signal.entry, margin, signal.leverage)
+        qty = _qty_str(signal.entry, margin, leverage)
         if qty is None:
             print(f"  ⚠️  {signal.symbol}: balance too low for minimum lot size, skipping")
             return None
@@ -176,7 +187,7 @@ class AutoTrader:
             print(f"\n  ✅ ORDER PLACED  [{signal.direction}  {signal.symbol}]")
             print(f"     qty={qty}  entry={_fmt_price(signal.entry)}")
             print(f"     SL={_fmt_price(signal.sl)}  TP={_fmt_price(signal.tp)}")
-            print(f"     leverage={signal.leverage}x  orderId={oid}\n")
+            print(f"     leverage={leverage}x  orderId={oid}\n")
 
             # Hand off to LiveManager for candle-by-candle monitoring
             if self.live_manager is not None:

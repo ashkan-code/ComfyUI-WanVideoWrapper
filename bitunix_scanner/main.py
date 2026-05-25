@@ -1,6 +1,13 @@
 """
 Bitunix Scalping System — ICT Multi-TF OB Confluence
 
+Rules (hardcoded):
+    • Max leverage  : 10x  (floor(15 / SL%) capped at 10)
+    • BTC alignment : required  (signals must match BTC bias)
+    • SL            : tightest OB wick (lowest TF)
+    • TP            : 2× risk  (R:R 1:2)
+    • Live manager  : closes on adverse 3m candle pattern
+
 Scan only:
     python -m bitunix_scanner.main
 
@@ -9,7 +16,6 @@ Scan + Auto-trade + Live management:
     python -m bitunix_scanner.main --auto --max-pos 2 --top 150
 
 Flags:
-    --no-alignment   include signals diverging from BTC bias
     --quiet          suppress scan progress
     --max-pos N      max simultaneous positions (default 3)
     --risk R         fraction of balance per trade (default 0.90)
@@ -36,15 +42,14 @@ SECRET_KEY = os.getenv("BITUNIX_SECRET_KEY", "4e0a845778d49068297106a64cbcda61")
 
 def parse_args():
     p = argparse.ArgumentParser(description="Bitunix ICT scalping system")
-    p.add_argument("--top",          type=int,   default=150)
-    p.add_argument("--min-score",    type=int,   default=9)
-    p.add_argument("--no-alignment", action="store_true")
-    p.add_argument("--quiet",        action="store_true")
-    p.add_argument("--auto",         action="store_true",
+    p.add_argument("--top",       type=int,   default=150)
+    p.add_argument("--min-score", type=int,   default=9)
+    p.add_argument("--quiet",     action="store_true")
+    p.add_argument("--auto",      action="store_true",
                    help="Enable auto-trading + live position management")
-    p.add_argument("--max-pos",      type=int,   default=3)
-    p.add_argument("--risk",         type=float, default=0.90)
-    p.add_argument("--poll",         type=int,   default=30)
+    p.add_argument("--max-pos",   type=int,   default=3)
+    p.add_argument("--risk",      type=float, default=0.90)
+    p.add_argument("--poll",      type=int,   default=30)
     return p.parse_args()
 
 
@@ -54,18 +59,19 @@ async def _main():
     import bitunix_scanner.scanner as sc
     sc.TOP_N_BY_VOLUME   = args.top
     sc.MIN_OB_SCORE      = args.min_score
-    sc.REQUIRE_ALIGNMENT = not args.no_alignment
+    sc.REQUIRE_ALIGNMENT = True          # always required — BTC alignment is mandatory
 
     mode = "SCALP AUTO-TRADE + LIVE MGR" if args.auto else "SCAN ONLY"
     print(f"""
 ╔══════════════════════════════════════════════╗
 ║   BITUNIX  ·  ICT Scalping System           ║
-║   TFs     : 1m 5m 15m 1h 4h 1d             ║
-║   SL      : tightest OB wick (lowest TF)    ║
-║   TP      : 2 × risk  (R:R 1:2)             ║
-║   Leverage: 15 ÷ SL%  (max 10×)             ║
-║   Exit    : pattern / BOS / BTC flip        ║
-║   Mode    : {mode:<36}║
+║   TFs        : 1m 5m 15m 1h 4h 1d          ║
+║   SL         : tightest OB wick (lowest TF) ║
+║   TP         : 2 × risk  (R:R 1:2)          ║
+║   Leverage   : 15 ÷ SL%  (max 10×)          ║
+║   BTC Align  : REQUIRED  ✓                  ║
+║   Exit       : pattern / BOS / BTC flip     ║
+║   Mode       : {mode:<33}║
 ╚══════════════════════════════════════════════╝
 """)
 

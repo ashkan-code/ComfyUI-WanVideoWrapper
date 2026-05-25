@@ -117,6 +117,14 @@ class AsyncBitunixClient:
                                            timeout=aiohttp.ClientTimeout(total=15)) as r:
                 return await r.json(content_type=None)
 
+    async def set_leverage(self, symbol: str, leverage: int,
+                           margin_coin: str = "USDT") -> dict:
+        return await self._post("/api/v1/futures/account/change_leverage", {
+            "symbol": symbol,
+            "leverage": leverage,
+            "marginCoin": margin_coin,
+        })
+
     async def cancel_orders(self, symbol: str, order_ids: List[str]) -> dict:
         return await self._post("/api/v1/futures/trade/cancel_orders",
                                 {"symbol": symbol, "orderIds": order_ids})
