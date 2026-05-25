@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 MAX_POSITIONS    = 1
 MAX_LEVERAGE     = 10
 POLL_INTERVAL    = 30
-ENTRY_ZONE_TOL   = 0.005   # ±0.5% OB zone tolerance
+ENTRY_ZONE_TOL   = 0.001   # ±0.1% sniper tolerance — price must be at OB
 PAUSE_CANDLES    = 1       # candle cycles to pause after 2 losses
 CANDLE_SEC       = 300     # 5m candle = 300 s
 PAUSE_DURATION   = 3600    # 1 hour pause after 2 consecutive losses
@@ -97,25 +97,61 @@ class AutoTrader:
     # ── Entry checks ───────────────────────────────────────────────────────
 
     async def _in_zone(self, signal: Signal) -> Tuple[bool, float]:
-        raw   = await self.client.get_klines(signal.symbol, "1m", 1)
+        raw   = await self.client.get_klines(signal.symbol, "1m", 3)
         if not raw:
             return False, 0.0
         price = float(raw[-1]["close"])
         lo = signal.zone.price_low  * (1 - ENTRY_ZONE_TOL)
         hi = signal.zone.price_high * (1 + ENTRY_ZONE_TOL)
-        return lo <= price <= hi, price
+        in_zone = lo <= price <= hi
+
+        # Sniper: price must be APPROACHING from correct side
+        # SHORT: price came from below, now at OB top (retracing UP)
+        # LONG:  price came from above, now at OB bottom (retracing DOWN)
+        approaching = True
+        if in_zone and len(raw) >= 2:
+            prev = float(raw[-2]["close"])
+            if signal.direction == "SHORT":
+                approaching = prev <= price  # price moving UP into OB
+            else:
+                approaching = prev >= price  # price moving DOWN into OB
+
+        return in_zone and approaching, price
 
     async def _candle_confirms(self, signal: Signal) -> bool:
-        raw = await self.client.get_klines(signal.symbol, "5m", 3)
-        if not raw or len(raw) < 2:
+        """
+        Sniper confirmation: last closed 5m candle must be in direction + in zone.
+        ALSO checks 1m for rejection wick (pin bar / shooting star / hammer).
+        Both must agree before entry.
+        """
+        from .ict import detect_candle_confirmation
+        ict_dir = "bearish" if signal.direction == "SHORT" else "bullish"
+
+        # 5m candle: closed in correct direction inside OB zone
+        raw5 = await self.client.get_klines(signal.symbol, "5m", 3)
+        if not raw5 or len(raw5) < 2:
             return False
-        c    = raw[-2]
-        o, cl = float(c["open"]), float(c["close"])
+        c5  = raw5[-2]
+        o5, cl5 = float(c5["open"]), float(c5["close"])
         lo = signal.zone.price_low  * (1 - ENTRY_ZONE_TOL)
         hi = signal.zone.price_high * (1 + ENTRY_ZONE_TOL)
-        in_zone = lo <= cl <= hi
-        correct = (cl < o) if signal.direction == "SHORT" else (cl > o)
-        return in_zone and correct
+        in_zone5 = lo <= cl5 <= hi
+        correct5 = (cl5 < o5) if signal.direction == "SHORT" else (cl5 > o5)
+        if not (in_zone5 and correct5):
+            return False
+
+        # 1m candle: rejection pattern at the OB level
+        raw1 = await self.client.get_klines(signal.symbol, "1m", 5)
+        if raw1 and len(raw1) >= 3:
+            ok1m, name1m = detect_candle_confirmation(raw1, ict_dir)
+            if ok1m:
+                return True
+            # Acceptable if last 1m is directional (even without pin bar)
+            c1 = raw1[-2]
+            o1, cl1 = float(c1["open"]), float(c1["close"])
+            correct1 = (cl1 < o1) if signal.direction == "SHORT" else (cl1 > o1)
+            return correct1
+        return True
 
     async def _volume_breaks(self, signal: Signal) -> Tuple[bool, float]:
         raw = await self.client.get_klines(signal.symbol, "5m", 25)

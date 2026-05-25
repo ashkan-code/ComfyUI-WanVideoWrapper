@@ -12,7 +12,7 @@ from .ict import (
 )
 
 MAX_LEVERAGE  = 10
-SL_BUFFER_PCT = 0.004   # 0.4% beyond OB wick (within 0.3–0.5% spec)
+SL_BUFFER_PCT = 0.002   # 0.2% beyond OB wick — tighter sniper SL
 MAX_SL_PCT    = 0.015   # skip if SL > 1.5% from entry
 MIN_RR        = 2.0     # minimum R:R (1:2)
 
@@ -96,12 +96,14 @@ def build_signal(symbol: str, zone: ConfluentZone,
 
     if zone.zone_type == "bullish":
         direction = "LONG"
-        entry    = zone.price_high
+        # Sniper: enter at bottom of OB (price retraces DOWN to OB)
+        entry    = zone.price_low
         sl       = wick_low * (1 - SL_BUFFER_PCT)
         loss_pct = (entry - sl) / entry * 100
     else:
         direction = "SHORT"
-        entry    = zone.price_low
+        # Sniper: enter at top of OB (price retraces UP to OB)
+        entry    = zone.price_high
         sl       = wick_high * (1 + SL_BUFFER_PCT)
         loss_pct = (sl - entry) / entry * 100
 
