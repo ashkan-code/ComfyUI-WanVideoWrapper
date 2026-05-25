@@ -259,6 +259,135 @@ def market_structure(raw: list, lookback: int = 50) -> str:
     return "neutral"
 
 
+def detect_fvg(raw: list, direction: str) -> List[Tuple[float, float]]:
+    """
+    Detect Fair Value Gaps (imbalances) in `direction` ('bullish'|'bearish').
+
+    Bearish FVG (price dropped fast, gap sits below A):
+        A.low > C.high  → zone = (C.high, A.low)   ← TP target for SHORT trades
+    Bullish FVG (price rose fast, gap sits above A):
+        A.high < C.low  → zone = (A.high, C.low)   ← TP target for LONG trades
+
+    Returns list of (fvg_low, fvg_high) tuples, newest first.
+    """
+    df = _klines_to_df(raw)
+    fvgs: List[Tuple[float, float]] = []
+    for i in range(2, len(df)):
+        a = df.iloc[i - 2]
+        c = df.iloc[i]
+        if direction == "bearish" and a["low"] > c["high"]:
+            fvgs.append((float(c["high"]), float(a["low"])))
+        elif direction == "bullish" and a["high"] < c["low"]:
+            fvgs.append((float(a["high"]), float(c["low"])))
+    return list(reversed(fvgs))
+
+
+def find_liquidity_pools(raw: list, direction: str,
+                         entry: float, equal_tol: float = 0.003
+                         ) -> List[Tuple[float, str]]:
+    """
+    Find ICT liquidity pools in the trade direction:
+
+    SHORT → targets BELOW entry:
+        • Swing lows (sell-side liquidity)
+        • Equal lows (engineered liquidity — within equal_tol %)
+
+    LONG  → targets ABOVE entry:
+        • Swing highs (buy-side liquidity)
+        • Equal highs
+
+    Returns list of (price, label) sorted nearest-to-entry first.
+    """
+    df = _klines_to_df(raw)
+    candidates: List[Tuple[float, str]] = []
+
+    if direction == "bearish":   # SHORT — look below
+        for idx in _swing_lows(df, n=3):
+            p = float(df["low"].iloc[idx])
+            if p < entry * 0.9995:
+                candidates.append((p, "Swing Low"))
+        # Equal lows: last 40 bars
+        recent = [float(df["low"].iloc[i]) for i in range(max(0, len(df)-40), len(df))
+                  if float(df["low"].iloc[i]) < entry * 0.9995]
+        seen: List[float] = []
+        for p in recent:
+            if any(abs(p - s) / s <= equal_tol for s in seen):
+                candidates.append((p, "Equal Lows"))
+            seen.append(p)
+    else:                        # LONG — look above
+        for idx in _swing_highs(df, n=3):
+            p = float(df["high"].iloc[idx])
+            if p > entry * 1.0005:
+                candidates.append((p, "Swing High"))
+        recent = [float(df["high"].iloc[i]) for i in range(max(0, len(df)-40), len(df))
+                  if float(df["high"].iloc[i]) > entry * 1.0005]
+        seen = []
+        for p in recent:
+            if any(abs(p - s) / s <= equal_tol for s in seen):
+                candidates.append((p, "Equal Highs"))
+            seen.append(p)
+
+    # Sort: nearest to entry first
+    if direction == "bearish":
+        candidates.sort(key=lambda x: x[0], reverse=True)   # highest below entry first
+    else:
+        candidates.sort(key=lambda x: x[0])                 # lowest above entry first
+    return candidates
+
+
+def find_ict_tp(klines_1h: list, klines_4h: list,
+                entry: float, direction: str, sl: float,
+                min_rr: float = 1.5) -> Tuple[float, str]:
+    """
+    ICT take-profit detection.
+
+    Priority:
+      1. Nearest bearish/bullish FVG in trade direction (1h then 4h)
+      2. Nearest swing low/high or equal lows/highs (1h)
+      3. Fallback: 2:1 R:R
+
+    All candidates filtered by min_rr; nearest valid target wins.
+    """
+    risk = abs(entry - sl)
+    if risk == 0:
+        return (entry * 0.98 if direction == "bearish" else entry * 1.02), "2:1 R:R"
+
+    fvg_dir = "bearish" if direction == "bearish" else "bullish"
+    candidates: List[Tuple[float, str]] = []
+
+    # ── 1. FVG targets ────────────────────────────────────────────────────
+    for tf_label, raw in (("1h", klines_1h), ("4h", klines_4h)):
+        for flo, fhi in detect_fvg(raw, fvg_dir)[:6]:
+            mid = (flo + fhi) / 2
+            if direction == "bearish" and mid < entry * 0.9995:
+                candidates.append((mid, f"FVG {tf_label} [{flo:.6g}–{fhi:.6g}]"))
+            elif direction == "bullish" and mid > entry * 1.0005:
+                candidates.append((mid, f"FVG {tf_label} [{flo:.6g}–{fhi:.6g}]"))
+
+    # ── 2. Liquidity pools ────────────────────────────────────────────────
+    for price, label in find_liquidity_pools(klines_1h, fvg_dir, entry)[:6]:
+        candidates.append((price, f"{label} 1h"))
+
+    # ── 3. Filter by min R:R ──────────────────────────────────────────────
+    valid: List[Tuple[float, str]] = []
+    for tp, reason in candidates:
+        rr = abs(tp - entry) / risk
+        if direction == "bearish" and tp < entry and rr >= min_rr:
+            valid.append((tp, reason))
+        elif direction == "bullish" and tp > entry and rr >= min_rr:
+            valid.append((tp, reason))
+
+    if not valid:
+        fallback = (entry - risk * 2.0) if direction == "bearish" else (entry + risk * 2.0)
+        return fallback, "2:1 R:R (no ICT target)"
+
+    # Return nearest valid target (best achievable, closest to entry)
+    if direction == "bearish":
+        return max(valid, key=lambda x: x[0])   # highest price below entry
+    else:
+        return min(valid, key=lambda x: x[0])   # lowest price above entry
+
+
 def btc_ict_bias(tf_klines: dict) -> Tuple[str, str]:
     """
     Determine BTC bias using ICT multi-TF market structure.

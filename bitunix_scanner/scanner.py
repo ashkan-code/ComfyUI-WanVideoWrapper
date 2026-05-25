@@ -67,7 +67,12 @@ async def _scan_symbol(client: AsyncBitunixClient,
     if best.score < MIN_OB_SCORE:
         return None
 
-    sig = build_signal(symbol, best, current_price, btc_bias, btc_detail)
+    # Pass 1h + 4h klines for ICT TP target detection
+    sig = build_signal(
+        symbol, best, current_price, btc_bias, btc_detail,
+        klines_1h=tf_klines.get("1h", []),
+        klines_4h=tf_klines.get("4h", []),
+    )
 
     if REQUIRE_ALIGNMENT and not sig.aligned:
         return None
