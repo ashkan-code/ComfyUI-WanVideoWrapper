@@ -2,12 +2,18 @@
 
 import math
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional
 
-from .ict import ConfluentZone
+from .ict import ConfluentZone, TF_WEIGHT
 
 TIMEFRAMES = ["1m", "5m", "15m", "1h", "4h", "1d"]
 MAX_LEVERAGE = 10
+
+# ── Scalping parameters ───────────────────────────────────────────────────
+# SL is taken from the lowest-TF OB wick in the confluent zone (tighter)
+# TP uses a 2:1 R:R for quick exits
+SCALP_RR       = 2.0    # risk:reward ratio
+SL_BUFFER_PCT  = 0.0005  # 0.05% buffer beyond OB wick
 
 
 @dataclass
@@ -30,35 +36,43 @@ def _floor_leverage(lev: float) -> int:
     return max(1, min(MAX_LEVERAGE, math.floor(lev)))
 
 
+def _tightest_wick(zone: ConfluentZone) -> tuple:
+    """
+    For scalping: use the lowest-TF OB wick for SL (tightest stop).
+    Returns (wick_high, wick_low) of the lowest-timeframe OB in the zone.
+    """
+    sorted_obs = sorted(zone.obs, key=lambda ob: TF_WEIGHT.get(ob.timeframe, 99))
+    lowest_tf_ob = sorted_obs[0]
+    return lowest_tf_ob.wick_high, lowest_tf_ob.wick_low
+
+
 def build_signal(symbol: str, zone: ConfluentZone,
                  current_price: float,
-                 btc_bias: str, btc_detail: str) -> Signal:
+                 btc_bias: str, btc_detail: str) -> Optional[Signal]:
     """
-    Build a trading signal from a confluent OB zone.
+    Scalping signal from a confluent OB zone.
 
-    Entry  : edge of zone nearest to price
-    SL     : beyond the OB wick (with 0.1% buffer)
-    TP     : 2.5 × risk from entry (minimum R:R 2.5)
-    Leverage: floor(15 / loss_pct), capped at MAX_LEVERAGE
+    Entry    : edge of zone nearest to current price
+    SL       : tightest OB wick (lowest TF) + small buffer — keeps leverage high
+    TP       : SCALP_RR × risk from entry
+    Leverage : floor(15 / loss_pct), capped at MAX_LEVERAGE (10×)
     """
+    wick_high, wick_low = _tightest_wick(zone)
+
     if zone.zone_type == "bullish":
         direction = "LONG"
-        # Entry at OB high edge (top of body), SL below wick
         entry = zone.price_high
-        sl_raw = min(ob.wick_low for ob in zone.obs)
-        sl = sl_raw * (1 - 0.001)          # 0.1% buffer below wick
+        sl = wick_low * (1 - SL_BUFFER_PCT)
         loss_pct = (entry - sl) / entry * 100
         risk = entry - sl
-        tp = entry + risk * 2.5
+        tp = entry + risk * SCALP_RR
     else:
         direction = "SHORT"
-        # Entry at OB low edge (bottom of body), SL above wick
         entry = zone.price_low
-        sl_raw = max(ob.wick_high for ob in zone.obs)
-        sl = sl_raw * (1 + 0.001)
+        sl = wick_high * (1 + SL_BUFFER_PCT)
         loss_pct = (sl - entry) / entry * 100
         risk = sl - entry
-        tp = entry - risk * 2.5
+        tp = entry - risk * SCALP_RR
 
     if loss_pct <= 0:
         loss_pct = 0.1

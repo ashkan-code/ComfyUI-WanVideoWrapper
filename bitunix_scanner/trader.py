@@ -11,16 +11,22 @@ Confirmation logic (ICT):
 import asyncio
 import math
 import time
-from typing import Dict, List, Optional
+from typing import TYPE_CHECKING, Dict, List, Optional
 
 from .client import AsyncBitunixClient
 from .ict import btc_ict_bias
 from .signals import Signal, _fmt
 
+if TYPE_CHECKING:
+    from .live_manager import LiveManager, ManagedPosition
+
 RISK_PCT = 0.90          # fraction of available balance to use as margin per trade
 MAX_POSITIONS = 3        # max simultaneous open positions
 POLL_INTERVAL = 30       # seconds between price checks
 ENTRY_ZONE_TOL = 0.005   # 0.5%: OB zone ± this fraction counts as "in zone"
+
+# injected by main after construction
+_live_manager: Optional["LiveManager"] = None
 
 
 def _price_decimals(price: float) -> int:
@@ -71,11 +77,13 @@ class AutoTrader:
     def __init__(self, client: AsyncBitunixClient,
                  max_positions: int = MAX_POSITIONS,
                  risk_pct: float = RISK_PCT,
-                 poll_sec: int = POLL_INTERVAL):
+                 poll_sec: int = POLL_INTERVAL,
+                 live_manager: Optional["LiveManager"] = None):
         self.client = client
         self.max_positions = max_positions
         self.risk_pct = risk_pct
         self.poll_sec = poll_sec
+        self.live_manager = live_manager
         self._signals: Dict[str, Signal] = {}
         self._placed: Dict[str, str] = {}   # symbol → orderId
 
@@ -169,6 +177,28 @@ class AutoTrader:
             print(f"     qty={qty}  entry={_fmt_price(signal.entry)}")
             print(f"     SL={_fmt_price(signal.sl)}  TP={_fmt_price(signal.tp)}")
             print(f"     leverage={signal.leverage}x  orderId={oid}\n")
+
+            # Hand off to LiveManager for candle-by-candle monitoring
+            if self.live_manager is not None:
+                from .live_manager import ManagedPosition
+                # Fetch actual position_id from exchange
+                await asyncio.sleep(1.5)
+                positions = await self.client.get_positions()
+                pos_id = next(
+                    (p["positionId"] for p in positions if p["symbol"] == signal.symbol),
+                    oid  # fallback to orderId
+                )
+                mp = ManagedPosition(
+                    symbol=signal.symbol,
+                    direction=signal.direction,
+                    entry_price=signal.entry,
+                    sl_price=signal.sl,
+                    tp_price=signal.tp,
+                    ob_high=signal.zone.price_high,
+                    ob_low=signal.zone.price_low,
+                    position_id=pos_id,
+                )
+                self.live_manager.add_position(mp)
             return oid
         else:
             print(f"  ❌ Order failed for {signal.symbol}: {result.get('msg')}")
