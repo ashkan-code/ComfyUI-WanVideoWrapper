@@ -1,46 +1,45 @@
 """
-Multi-symbol async scanner.
+Advanced ICT scanner — top 20 by volume, single best setup.
 
 Flow:
-  1. Fetch all 632 futures tickers → filter top N by 24h volume
-  2. Fetch BTC klines on all TFs → compute ICT bias
-  3. For each symbol (concurrent, rate-limited):
-       a. Fetch klines on 6 TFs
-       b. Detect OBs per TF
-       c. Find multi-TF confluent zones (≥ 3 TFs)
-  4. Build signals; keep only those aligned with BTC bias
-  5. Sort by OB score descending
+  1. Fetch all tickers → top 20 by 24h volume
+  2. BTC HTF bias (4H/1H/1D) — skip if neutral
+  3. For each symbol (concurrent):
+       a. Klines on all 6 TFs
+       b. OB detection + confluence (min 2 TFs)
+       c. FVG detection on 1h
+       d. Liquidity sweep on 15m/5m
+       e. MSS/BOS on 15m/5m
+       f. OTE zone check (61.8–79% Fib)
+       g. Build signal; reject if SL > 1.5% or confluence < 2
+  4. Select the SINGLE highest quality_score signal
 """
 
 import asyncio
 import time
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional
 
 import aiohttp
 
 from .client import AsyncBitunixClient
 from .ict import (
-    OrderBlock,
-    ConfluentZone,
+    OrderBlock, ConfluentZone,
     btc_ict_bias,
     detect_order_blocks,
     find_confluence,
 )
 from .signals import Signal, build_signal
 
-TIMEFRAMES = ["1m", "5m", "15m", "1h", "4h", "1d"]
-KLINE_LIMIT = 200          # candles per TF
-TOP_N_BY_VOLUME = 150      # scan only top N symbols by 24h volume
-MIN_TF_CONFLUENCE = 3      # minimum distinct TFs for a valid zone
-MIN_OB_SCORE = 9           # 3 TFs minimum weighted score (e.g. 1h+4h+1d = 15)
-# Accept both aligned AND neutral-BTC signals
-REQUIRE_ALIGNMENT = True   # set False to include divergent signals too
+TIMEFRAMES      = ["1m", "5m", "15m", "1h", "4h", "1d"]
+KLINE_LIMIT     = 200
+TOP_N_BY_VOLUME = 20
+MIN_TF_CONFLUENCE = 2   # relax to 2 for top-20 focused scan
+MIN_OB_SCORE    = 6     # minimum zone score
 
 
 async def _fetch_all_tf(client: AsyncBitunixClient, symbol: str,
-                         timeframes: List[str]) -> Dict[str, list]:
-    tasks = {tf: client.get_klines(symbol, tf, KLINE_LIMIT)
-             for tf in timeframes}
+                         timeframes: List[str]) -> dict:
+    tasks  = {tf: client.get_klines(symbol, tf, KLINE_LIMIT) for tf in timeframes}
     results = await asyncio.gather(*tasks.values(), return_exceptions=True)
     return {tf: (r if not isinstance(r, Exception) else [])
             for tf, r in zip(tasks.keys(), results)}
@@ -53,43 +52,35 @@ async def _scan_symbol(client: AsyncBitunixClient,
                         btc_detail: str) -> Optional[Signal]:
     tf_klines = await _fetch_all_tf(client, symbol, TIMEFRAMES)
 
-    # Detect OBs on each TF
-    tf_obs: Dict[str, List[OrderBlock]] = {}
-    for tf, raw in tf_klines.items():
-        tf_obs[tf] = detect_order_blocks(raw, tf)
-
-    # Find confluent zones
-    zones = find_confluence(tf_obs, min_tfs=MIN_TF_CONFLUENCE)
+    tf_obs = {tf: detect_order_blocks(raw, tf) for tf, raw in tf_klines.items()}
+    zones  = find_confluence(tf_obs, min_tfs=MIN_TF_CONFLUENCE)
     if not zones:
         return None
 
-    best = zones[0]          # highest score
-    if best.score < MIN_OB_SCORE:
+    ict_dir = btc_bias  # "bullish" or "bearish"
+    zone    = next((z for z in zones if z.zone_type == ict_dir and z.score >= MIN_OB_SCORE), None)
+    if not zone:
         return None
 
-    # Pass 1h + 4h klines for ICT TP target detection
-    sig = build_signal(
-        symbol, best, current_price, btc_bias, btc_detail,
-        klines_1h=tf_klines.get("1h", []),
-        klines_4h=tf_klines.get("4h", []),
+    return build_signal(
+        symbol, zone, current_price, btc_bias, btc_detail,
+        klines_5m  = tf_klines.get("5m",  []),
+        klines_15m = tf_klines.get("15m", []),
+        klines_1h  = tf_klines.get("1h",  []),
+        klines_4h  = tf_klines.get("4h",  []),
     )
-
-    if REQUIRE_ALIGNMENT and not sig.aligned:
-        return None
-
-    return sig
 
 
 async def run_scan(api_key: str, secret_key: str,
                    top_n: int = TOP_N_BY_VOLUME,
                    progress: bool = True) -> List[Signal]:
     """
-    Main entry point. Returns list of signals sorted by OB score.
+    Returns list of valid signals sorted by quality_score descending.
+    Caller should take signals[0] as the single best trade.
     """
     async with aiohttp.ClientSession() as session:
         client = AsyncBitunixClient(api_key, secret_key, session)
 
-        # ── Step 1: Get all tickers, sort by quote volume ─────────────────
         if progress:
             print("Fetching ticker list …", flush=True)
         tickers = await client.get_all_tickers()
@@ -97,37 +88,38 @@ async def run_scan(api_key: str, secret_key: str,
             print("ERROR: could not fetch tickers.")
             return []
 
-        # baseVol in Bitunix is the dollar volume (confusingly named)
         for t in tickers:
             try:
                 t["_vol"] = float(t.get("baseVol", 0))
             except Exception:
                 t["_vol"] = 0.0
 
-        tickers_sorted = sorted(tickers, key=lambda t: t["_vol"], reverse=True)
-        top_tickers = tickers_sorted[:top_n]
-        price_map = {t["symbol"]: float(t["lastPrice"])
-                     for t in top_tickers if t.get("lastPrice")}
-        symbols = list(price_map.keys())
+        top_tickers = sorted(tickers, key=lambda t: t["_vol"], reverse=True)[:top_n]
+        price_map   = {t["symbol"]: float(t["lastPrice"])
+                       for t in top_tickers if t.get("lastPrice")}
+        symbols     = list(price_map.keys())
 
         if progress:
-            print(f"Total symbols available : {len(tickers)}", flush=True)
-            print(f"Scanning top {len(symbols)} by 24h volume …", flush=True)
+            print(f"Scanning top {len(symbols)} symbols by 24h volume …", flush=True)
 
-        # ── Step 2: BTC ICT bias ───────────────────────────────────────────
+        # BTC HTF bias (4H / 1H / 1D) — skip if neutral
         if progress:
-            print("Analysing BTC multi-TF structure …", flush=True)
-        btc_tf_klines = await _fetch_all_tf(client, "BTCUSDT",
-                                             ["1h", "4h", "1d"])
-        btc_bias, btc_detail = btc_ict_bias(btc_tf_klines)
+            print("Analysing BTC HTF structure (4H/1H/1D) …", flush=True)
+        btc_tf = await _fetch_all_tf(client, "BTCUSDT", ["1h", "4h", "1d"])
+        btc_bias, btc_detail = btc_ict_bias(btc_tf)
         if progress:
             print(f"BTC Bias → {btc_bias.upper()}  [{btc_detail}]", flush=True)
 
-        # ── Step 3: Scan symbols concurrently ─────────────────────────────
-        if progress:
-            print(f"\nScanning {len(symbols)} symbols …", flush=True)
+        if btc_bias == "neutral":
+            if progress:
+                print("BTC bias is NEUTRAL — no trade this cycle.", flush=True)
+            return []
 
-        t0 = time.time()
+        if progress:
+            print(f"\nScanning {len(symbols)} symbols for {btc_bias.upper()} setups …\n",
+                  flush=True)
+
+        t0    = time.time()
         tasks = [
             _scan_symbol(client, sym, price_map[sym], btc_bias, btc_detail)
             for sym in symbols
@@ -137,19 +129,17 @@ async def run_scan(api_key: str, secret_key: str,
         done = 0
         for coro in asyncio.as_completed(tasks):
             result = await coro
-            done += 1
+            done  += 1
             if result is not None:
                 signals.append(result)
-            if progress and done % 20 == 0:
-                elapsed = time.time() - t0
-                pct = done / len(symbols) * 100
-                print(f"  {done}/{len(symbols)}  ({pct:.0f}%)  "
-                      f"signals so far: {len(signals)}  "
-                      f"[{elapsed:.1f}s]", flush=True)
+            if progress and done % 5 == 0:
+                print(f"  {done}/{len(symbols)}  signals: {len(signals)}"
+                      f"  [{time.time()-t0:.1f}s]", flush=True)
 
         elapsed = time.time() - t0
         if progress:
-            print(f"\nScan complete in {elapsed:.1f}s  "
-                  f"→  {len(signals)} signal(s) found", flush=True)
+            print(f"\nScan done in {elapsed:.1f}s → {len(signals)} valid setup(s)",
+                  flush=True)
 
-        return sorted(signals, key=lambda s: s.zone.score, reverse=True)
+        # Best single setup at the top
+        return sorted(signals, key=lambda s: s.quality_score, reverse=True)

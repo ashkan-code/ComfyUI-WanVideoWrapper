@@ -1,7 +1,7 @@
 """ICT concepts: Order Block detection, market structure analysis."""
 
 from dataclasses import dataclass, field
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -386,6 +386,181 @@ def find_ict_tp(klines_1h: list, klines_4h: list,
         return max(valid, key=lambda x: x[0])   # highest price below entry
     else:
         return min(valid, key=lambda x: x[0])   # lowest price above entry
+
+
+def find_impulse_for_ote(raw: list, direction: str,
+                         lookback: int = 50) -> Tuple[float, float]:
+    """
+    Find the most recent impulse swing (low, high) for OTE Fibonacci.
+    Returns (swing_low, swing_high).
+    """
+    df = _klines_to_df(raw)
+    if len(df) < 10:
+        lo = float(df["low"].min()) if len(df) else 0.0
+        hi = float(df["high"].max()) if len(df) else 0.0
+        return lo, hi
+
+    recent = df.tail(lookback).reset_index(drop=True)
+    sh = _swing_highs(recent, n=2)
+    sl = _swing_lows(recent, n=2)
+
+    if direction == "bullish":
+        for si in reversed(sl):
+            later_sh = [j for j in sh if j > si]
+            if later_sh:
+                return float(recent["low"].iloc[si]), float(recent["high"].iloc[later_sh[0]])
+    else:
+        for si in reversed(sh):
+            later_sl = [j for j in sl if j > si]
+            if later_sl:
+                return float(recent["low"].iloc[later_sl[0]]), float(recent["high"].iloc[si])
+
+    return float(recent["low"].min()), float(recent["high"].max())
+
+
+def find_ote_zone(swing_low: float, swing_high: float,
+                  direction: str) -> Tuple[float, float]:
+    """
+    OTE (Optimal Trade Entry) = 61.8%–79% Fibonacci retracement.
+
+    Bullish (retracing down after impulse up):
+        OTE low  = high - range * 0.79
+        OTE high = high - range * 0.618
+    Bearish (retracing up after impulse down):
+        OTE low  = low + range * 0.618
+        OTE high = low + range * 0.79
+    """
+    diff = swing_high - swing_low
+    if direction == "bullish":
+        return swing_high - diff * 0.79, swing_high - diff * 0.618
+    else:
+        return swing_low + diff * 0.618, swing_low + diff * 0.79
+
+
+def detect_liquidity_sweep(raw: list, direction: str) -> Tuple[bool, str]:
+    """
+    Detect a liquidity sweep: a wick beyond a swing level that closes back inside.
+
+    Bullish (LONG): SSL sweep — wick below a swing low, close above it.
+    Bearish (SHORT): BSL sweep — wick above a swing high, close below it.
+    """
+    df = _klines_to_df(raw)
+    if len(df) < 15:
+        return False, ""
+
+    recent = df.tail(30).reset_index(drop=True)
+    n = len(recent)
+
+    if direction == "bullish":
+        sl_idxs = _swing_lows(recent.iloc[: n - 2].reset_index(drop=True), n=2)
+        for si in reversed(sl_idxs[-4:]):
+            level = float(recent["low"].iloc[si])
+            for j in range(si + 1, n):
+                c = recent.iloc[j]
+                if float(c["low"]) < level and float(c["close"]) > level:
+                    return True, f"SSL swept {level:.6g}"
+    else:
+        sh_idxs = _swing_highs(recent.iloc[: n - 2].reset_index(drop=True), n=2)
+        for si in reversed(sh_idxs[-4:]):
+            level = float(recent["high"].iloc[si])
+            for j in range(si + 1, n):
+                c = recent.iloc[j]
+                if float(c["high"]) > level and float(c["close"]) < level:
+                    return True, f"BSL swept {level:.6g}"
+
+    return False, ""
+
+
+def detect_mss_bos_ltf(raw_5m: list, raw_15m: list,
+                        direction: str) -> Tuple[bool, str]:
+    """
+    Detect Market Structure Shift (MSS) or Break of Structure (BOS) on LTF.
+    Checks 15m first, then 5m.
+    """
+    for tf_label, raw in (("15m", raw_15m), ("5m", raw_5m)):
+        df = _klines_to_df(raw)
+        if len(df) < 20:
+            continue
+        recent = df.tail(40).reset_index(drop=True)
+        sh = _swing_highs(recent, n=2)
+        sl = _swing_lows(recent, n=2)
+        last_close = float(recent["close"].iloc[-1])
+
+        if direction == "bullish" and len(sh) >= 2:
+            prev_sh_price = float(recent["high"].iloc[sh[-2]])
+            if last_close > prev_sh_price:
+                tag = "BOS" if float(recent["high"].iloc[sh[-1]]) > prev_sh_price else "MSS"
+                return True, f"{tag} {tf_label}"
+        elif direction == "bearish" and len(sl) >= 2:
+            prev_sl_price = float(recent["low"].iloc[sl[-2]])
+            if last_close < prev_sl_price:
+                tag = "BOS" if float(recent["low"].iloc[sl[-1]]) < prev_sl_price else "MSS"
+                return True, f"{tag} {tf_label}"
+
+    return False, ""
+
+
+def find_tiered_tp(klines_1h: list, klines_4h: list,
+                   entry: float, direction: str, sl: float,
+                   min_rr: float = 2.0) -> Tuple[float, float, str, str]:
+    """
+    TP1: nearest liquidity pool on 1h (min 2:1 R:R).
+    TP2: HTF FVG on 4h or 1h (min 3:1 R:R).
+    Returns (tp1, tp2, tp1_reason, tp2_reason).
+    """
+    risk = abs(entry - sl)
+    if risk == 0:
+        risk = entry * 0.01
+
+    fvg_dir = direction
+    tp1: Optional[float] = None
+    tp1_reason = ""
+    tp2: Optional[float] = None
+    tp2_reason = ""
+
+    # TP1: nearest liquidity pool on 1h (min 2:1)
+    for price, label in find_liquidity_pools(klines_1h, fvg_dir, entry)[:10]:
+        rr = abs(price - entry) / risk
+        if rr < min_rr:
+            continue
+        if direction == "bearish" and price < entry:
+            if tp1 is None or price > tp1:
+                tp1, tp1_reason = price, f"{label} 1h [1:{rr:.1f}]"
+        elif direction == "bullish" and price > entry:
+            if tp1 is None or price < tp1:
+                tp1, tp1_reason = price, f"{label} 1h [1:{rr:.1f}]"
+
+    # TP2: FVG on 4h then 1h (min 3:1)
+    for tf_label, raw in (("4h", klines_4h), ("1h", klines_1h)):
+        for flo, fhi in detect_fvg(raw, fvg_dir)[:8]:
+            mid = (flo + fhi) / 2
+            rr = abs(mid - entry) / risk
+            if rr < min_rr * 1.5:
+                continue
+            if direction == "bearish" and mid < entry:
+                if tp2 is None or mid < tp2:
+                    tp2, tp2_reason = mid, f"FVG {tf_label} [1:{rr:.1f}]"
+            elif direction == "bullish" and mid > entry:
+                if tp2 is None or mid > tp2:
+                    tp2, tp2_reason = mid, f"FVG {tf_label} [1:{rr:.1f}]"
+
+    if tp1 is None:
+        tp1 = entry - risk * min_rr if direction == "bearish" else entry + risk * min_rr
+        tp1_reason = "2:1 fallback"
+
+    if tp2 is None:
+        tp2 = entry - risk * min_rr * 2 if direction == "bearish" else entry + risk * min_rr * 2
+        tp2_reason = "4:1 fallback"
+
+    # Ensure TP2 is farther than TP1
+    if direction == "bearish" and tp2 > tp1:
+        tp2 = entry - risk * min_rr * 2
+        tp2_reason = "4:1 adjusted"
+    elif direction == "bullish" and tp2 < tp1:
+        tp2 = entry + risk * min_rr * 2
+        tp2_reason = "4:1 adjusted"
+
+    return tp1, tp2, tp1_reason, tp2_reason
 
 
 def btc_ict_bias(tf_klines: dict) -> Tuple[str, str]:

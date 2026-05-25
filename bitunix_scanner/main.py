@@ -1,28 +1,29 @@
 """
-Bitunix ICT Scalping — 24/7 Autonomous Live System
+Bitunix ICT Advanced Scalping — 24/7 Autonomous System
 
-Rules (hardcoded):
-    • Max leverage  : 10x
-    • BTC alignment : required
-    • SL            : exact entry-OB wick + 0.05% buffer
-    • TP            : nearest ICT target (FVG / swing low / equal levels)
-    • Confidence    : ≥ 90% → full margin | 70–89% → 90% | < 70% → skip
-    • Danger exit   : structural invalidation (15m+1h) / pattern / BTC flip
-    • Loop          : after every close → immediate re-scan for next entry
+Rules:
+    • Top 20 symbols by volume
+    • Single best setup only — ONE trade at a time
+    • Full margin (100% available balance)
+    • Max leverage 10x
+    • SL ≤ 1.5% | RRR ≥ 1:2
+    • Entry: OB + FVG + Liq Sweep (min 2/3) | OTE zone preferred
+    • TP tiered: TP1 50% (liq pool) → TP2 50% (HTF FVG)
+    • SL moves to breakeven after TP1
+    • Danger exit: structure invalidation / pattern / BTC flip
+    • After 2 losses → pause 1 candle cycle, reassess HTF
+    • After each exit → immediate re-scan
 
 Run:
-    python -m bitunix_scanner.main            # scan only (one shot)
-    python -m bitunix_scanner.main --live     # 24/7 autonomous mode
-    python -m bitunix_scanner.main --live --top 200 --max-pos 3
+    python -m bitunix_scanner.main           # scan only (one shot)
+    python -m bitunix_scanner.main --live    # 24/7 autonomous mode
+    python -m bitunix_scanner.main --live --top 20 --poll 30
 
 Flags:
-    --live           24/7 mode (scan → trade → monitor → re-scan, forever)
-    --top N          symbols to scan by 24h volume (default 150)
-    --min-score N    minimum OB score (default 9)
-    --max-pos N      max simultaneous positions (default 3)
-    --risk R         normal risk fraction (default 0.90)
-    --poll N         AutoTrader poll seconds (default 30)
-    --quiet          suppress scan progress bars
+    --live     24/7 mode
+    --top N    symbols to scan by volume (default 20)
+    --poll N   AutoTrader poll seconds (default 30)
+    --quiet    suppress scan output
 """
 
 import argparse
@@ -42,9 +43,9 @@ from .trader import AutoTrader
 API_KEY    = os.getenv("BITUNIX_API_KEY",    "7bee3f4756a0dbc89ae152f34c2175ac")
 SECRET_KEY = os.getenv("BITUNIX_SECRET_KEY", "4e0a845778d49068297106a64cbcda61")
 
-RESCAN_WAIT    = 300   # seconds between scans when no signal found
-POST_TRADE_WAIT = 30   # seconds after all positions closed before re-scan
-ERROR_WAIT     = 60    # seconds to wait after an unexpected error
+RESCAN_WAIT     = 300   # seconds between scans when no signal found
+POST_TRADE_WAIT = 30    # seconds after all positions closed before re-scan
+ERROR_WAIT      = 60    # seconds after an unexpected error
 
 
 def _ts() -> str:
@@ -52,35 +53,30 @@ def _ts() -> str:
 
 
 def parse_args():
-    p = argparse.ArgumentParser(description="Bitunix ICT 24/7 scalping system")
-    p.add_argument("--live",      action="store_true",
-                   help="Run in 24/7 autonomous mode (scan → trade → re-scan)")
-    p.add_argument("--top",       type=int,   default=150)
-    p.add_argument("--min-score", type=int,   default=9)
-    p.add_argument("--quiet",     action="store_true")
-    p.add_argument("--max-pos",   type=int,   default=3)
-    p.add_argument("--risk",      type=float, default=0.90)
-    p.add_argument("--poll",      type=int,   default=30)
+    p = argparse.ArgumentParser(description="Bitunix ICT 24/7 advanced scalping")
+    p.add_argument("--live",   action="store_true")
+    p.add_argument("--top",    type=int, default=20)
+    p.add_argument("--poll",   type=int, default=30)
+    p.add_argument("--quiet",  action="store_true")
     return p.parse_args()
 
 
-# ── helpers ────────────────────────────────────────────────────────────────
+# ── load existing exchange positions ──────────────────────────────────────────
 
 async def _load_existing_positions(client: AsyncBitunixClient,
                                    live_mgr: LiveManager) -> int:
-    """Register any open exchange positions with LiveManager."""
+    """Register any open exchange positions with LiveManager using tiered TP."""
     positions = await client.get_positions()
     if not positions:
         return 0
 
-    tickers = await client._get_public("/api/v1/futures/market/tickers")
+    tickers   = await client._get_public("/api/v1/futures/market/tickers")
     price_map = {t["symbol"]: float(t["lastPrice"])
                  for t in (tickers.get("data") or [])}
 
     added = 0
     for p in positions:
-        sym       = p["symbol"]
-        # skip if already being watched
+        sym = p["symbol"]
         if sym in live_mgr._positions:
             continue
 
@@ -89,11 +85,13 @@ async def _load_existing_positions(client: AsyncBitunixClient,
         qty_str   = str(p.get("qty", "0"))
         direction = "SHORT" if p["side"] in ("SELL", "SHORT") else "LONG"
         cur       = price_map.get(sym, entry)
+        ict_dir   = "bearish" if direction == "SHORT" else "bullish"
 
-        c5m = await client.get_klines(sym, "5m", 60)
-        c1h = await client.get_klines(sym, "1h", 60)
-        c4h = await client.get_klines(sym, "4h", 60)
+        c5m = await client.get_klines(sym, "5m",  60)
+        c1h = await client.get_klines(sym, "1h",  60)
+        c4h = await client.get_klines(sym, "4h",  60)
 
+        # SL: 30-candle swing with 0.1% buffer
         if c5m:
             swing_h = max(float(c["high"]) for c in c5m[-30:])
             swing_l = min(float(c["low"])  for c in c5m[-30:])
@@ -101,121 +99,132 @@ async def _load_existing_positions(client: AsyncBitunixClient,
                   else min(swing_l, cur) * 0.999)
         else:
             liq = float(p.get("liqPrice", 0) or 0)
-            sl = liq * 0.97 if direction == "SHORT" else liq * 1.03
+            sl  = liq * 0.97 if direction == "SHORT" else liq * 1.03
 
-        from .ict import find_ict_tp
-        ict_dir = "bearish" if direction == "SHORT" else "bullish"
-        tp, tp_reason = find_ict_tp(c1h, c4h, entry, ict_dir, sl, min_rr=1.5)
+        # Tiered TP
+        from .ict import find_tiered_tp
+        tp1, tp2, tp1_r, tp2_r = find_tiered_tp(c1h, c4h, entry, ict_dir, sl)
 
         mp = ManagedPosition(
             symbol      = sym,
             direction   = direction,
             entry_price = entry,
             sl_price    = sl,
-            tp_price    = tp,
+            tp1_price   = tp1,
+            tp2_price   = tp2,
             ob_high     = sl,
-            ob_low      = tp,
+            ob_low      = tp2,
             position_id = pos_id,
             qty         = qty_str,
         )
         live_mgr.add_position(mp)
-        print(f"  [{_ts()}] 📡 {sym}  {direction}  "
-              f"entry={entry:.6f}  SL={sl:.6f}  TP={tp:.6f}  ({tp_reason})")
+        print(f"  [{_ts()}] 📡 {sym} {direction}  "
+              f"entry={entry:.6g}  SL={sl:.6g}  "
+              f"TP1={tp1:.6g} ({tp1_r})  TP2={tp2:.6g} ({tp2_r})")
         added += 1
 
     return added
 
 
-# ── single trading cycle ───────────────────────────────────────────────────
+# ── single trading cycle ──────────────────────────────────────────────────────
 
 async def _run_cycle(client: AsyncBitunixClient,
                      args,
-                     cycle: int) -> str:
+                     cycle: int,
+                     trader_state: dict) -> str:
     """
-    One full cycle: load positions → scan → trade → monitor.
+    One cycle: load positions → scan → pick best → trade → monitor.
     Returns 'traded' | 'no_signal' | 'positions_only'.
     """
     print(f"\n  [{_ts()}]  ─── Cycle #{cycle} ───")
 
     live_mgr = LiveManager(client, poll_sec=15)
 
-    # Always load existing positions first (covers SL/TP monitoring)
     n_existing = await _load_existing_positions(client, live_mgr)
     if n_existing:
-        print(f"  [{_ts()}] 📋 {n_existing} existing position(s) handed to LiveManager")
+        print(f"  [{_ts()}] 📋 {n_existing} existing position(s) loaded into LiveManager")
 
-    # ── Scan ──────────────────────────────────────────────────────────────
+    # Scan
     print(f"  [{_ts()}] 🔍 Scanning top {args.top} symbols …")
     signals = await run_scan(
         API_KEY, SECRET_KEY,
-        top_n=args.top,
-        progress=not args.quiet,
+        top_n    = args.top,
+        progress = not args.quiet,
     )
 
-    # Re-sync positions opened during the scan (race-condition fix)
+    # Re-sync positions opened during scan
     n_new = await _load_existing_positions(client, live_mgr)
     if n_new:
-        print(f"  [{_ts()}] 🔄 {n_new} new position(s) found after scan — added to LiveManager")
+        print(f"  [{_ts()}] 🔄 {n_new} new position(s) found after scan")
 
     if not signals:
-        print(f"  [{_ts()}] ── سیگنالی یافت نشد")
+        print(f"  [{_ts()}] ── No valid setup found this cycle")
         if live_mgr._positions:
-            # Still have open positions to watch — run manager only
-            print(f"  [{_ts()}] 📡 LiveManager ادامه می‌دهد برای {len(live_mgr._positions)} پوزیشن …")
+            print(f"  [{_ts()}] 📡 Monitoring {len(live_mgr._positions)} existing position(s) …")
             await live_mgr.run()
         return "no_signal"
 
-    print(format_summary(signals))
+    # Show best setup
+    best = signals[0]
+    print(format_summary([best]))
 
     trader = AutoTrader(
         client,
-        max_positions = args.max_pos,
-        risk_pct      = args.risk,
+        max_positions = 1,
         poll_sec      = args.poll,
         live_manager  = live_mgr,
     )
-    trader.add_signals(signals)
+    # Restore consecutive loss state across cycles
+    trader._consec_losses = trader_state.get("consec_losses", 0)
+    trader._pause_until   = trader_state.get("pause_until",   0.0)
 
-    # Run trader + monitor concurrently until both are idle
+    trader.add_signals([best])   # only the single best signal
+
     await asyncio.gather(trader.run(), live_mgr.run())
+
+    # Persist trader state
+    trader_state["consec_losses"] = trader._consec_losses
+    trader_state["pause_until"]   = trader._pause_until
 
     return "traded"
 
 
-# ── 24/7 main loop ─────────────────────────────────────────────────────────
+# ── 24/7 main loop ────────────────────────────────────────────────────────────
 
 async def _live_loop(args):
     print(f"""
-╔══════════════════════════════════════════════════╗
-║   BITUNIX  ·  ICT  ·  24/7 AUTONOMOUS SYSTEM   ║
-║   TFs      : 1m 5m 15m 1h 4h 1d               ║
-║   SL       : exact OB wick  (+0.05% buffer)    ║
-║   TP       : ICT target (FVG / liq pool)       ║
-║   Leverage : max 10x  (15 ÷ SL%)               ║
-║   Margin   : اعتماد ≥90% → فول مارجین            ║
-║   Danger   : structural / pattern / BTC flip   ║
-║   Re-scan  : بعد از هر خروج → فوری              ║
-╚══════════════════════════════════════════════════╝
+╔══════════════════════════════════════════════════════╗
+║   BITUNIX  ·  ICT ADVANCED  ·  24/7 AUTONOMOUS     ║
+║   Scope    : Top {args.top:<3} by volume                    ║
+║   Mode     : 1 trade — FULL MARGIN                  ║
+║   Entry    : OB + FVG + Liq Sweep (≥ 2/3)          ║
+║   OTE      : 61.8%–79% Fibonacci preferred          ║
+║   SL       : OB wick + 0.4% buffer  (max 1.5%)     ║
+║   TP1(50%) : nearest liquidity pool (≥ 2:1)        ║
+║   TP2(50%) : HTF FVG / OB  (≥ 3:1)                ║
+║   Leverage : max 10x                                ║
+║   Re-scan  : immediately after every exit           ║
+╚══════════════════════════════════════════════════════╝
 """)
 
-    cycle = 0
-    total_cycles = 0
+    cycle        = 0
+    trader_state = {}
 
     async with aiohttp.ClientSession() as session:
         client = AsyncBitunixClient(API_KEY, SECRET_KEY, session)
 
         while True:
             cycle += 1
-            total_cycles += 1
             try:
-                result = await _run_cycle(client, args, cycle)
+                result = await _run_cycle(client, args, cycle, trader_state)
 
                 if result == "no_signal":
-                    print(f"\n  [{_ts()}] ⏳ بررسی مجدد در {RESCAN_WAIT // 60} دقیقه …\n")
+                    print(f"\n  [{_ts()}] ⏳ No setup — rescanning in "
+                          f"{RESCAN_WAIT // 60} min …\n")
                     await asyncio.sleep(RESCAN_WAIT)
                 else:
-                    # Traded or had positions — re-scan immediately after brief pause
-                    print(f"\n  [{_ts()}] ✅ چرخه #{cycle} کامل شد — شروع مجدد در {POST_TRADE_WAIT}s …\n")
+                    print(f"\n  [{_ts()}] ✅ Cycle #{cycle} done — restarting in "
+                          f"{POST_TRADE_WAIT}s …\n")
                     await asyncio.sleep(POST_TRADE_WAIT)
 
             except asyncio.CancelledError:
@@ -223,45 +232,42 @@ async def _live_loop(args):
             except KeyboardInterrupt:
                 raise
             except Exception as e:
-                print(f"\n  [{_ts()}] ❌ خطا در چرخه #{cycle}: {e}")
+                print(f"\n  [{_ts()}] ❌ Error in cycle #{cycle}: {e}")
                 traceback.print_exc()
-                print(f"  [{_ts()}] 🔄 ادامه در {ERROR_WAIT}s …\n")
+                print(f"  [{_ts()}] 🔄 Retrying in {ERROR_WAIT}s …\n")
                 await asyncio.sleep(ERROR_WAIT)
 
 
-# ── entry points ───────────────────────────────────────────────────────────
+# ── entry points ──────────────────────────────────────────────────────────────
 
 async def _main():
     args = parse_args()
 
     import bitunix_scanner.scanner as sc
-    sc.TOP_N_BY_VOLUME   = args.top
-    sc.MIN_OB_SCORE      = args.min_score
-    sc.REQUIRE_ALIGNMENT = True
+    sc.TOP_N_BY_VOLUME = args.top
 
     if args.live:
         try:
             await _live_loop(args)
         except (KeyboardInterrupt, asyncio.CancelledError):
-            print(f"\n\n  [{_ts()}] ⛔ سیستم توسط کاربر متوقف شد.\n")
+            print(f"\n\n  [{_ts()}] ⛔ System stopped by user.\n")
         return
 
-    # ── One-shot scan mode ────────────────────────────────────────────────
+    # One-shot scan mode
     print("""
-╔══════════════════════════════════════════════╗
-║   BITUNIX  ·  ICT Scalping System           ║
-║   Mode     : SCAN ONLY                      ║
-╚══════════════════════════════════════════════╝
+╔══════════════════════════════════════╗
+║   BITUNIX  ·  ICT Advanced Scan     ║
+║   Mode     : SCAN ONLY              ║
+╚══════════════════════════════════════╝
 """)
     async with aiohttp.ClientSession() as session:
-        client = AsyncBitunixClient(API_KEY, SECRET_KEY, session)
+        client  = AsyncBitunixClient(API_KEY, SECRET_KEY, session)
         signals = await run_scan(API_KEY, SECRET_KEY,
-                                 top_n=args.top,
-                                 progress=not args.quiet)
+                                 top_n=args.top, progress=not args.quiet)
         if signals:
-            print(format_summary(signals))
+            print(format_summary(signals[:3]))  # show top 3
         else:
-            print("\n  ── No signals found ──\n")
+            print("\n  ── No valid setup found ──\n")
 
 
 def main():
