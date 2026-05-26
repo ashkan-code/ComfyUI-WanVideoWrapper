@@ -201,8 +201,8 @@ class AutoTrader:
         margin = available * 0.95
         qty    = _qty_str(signal.entry, margin, leverage)
         if qty is None:
-            print(f"  ⚠️  {signal.symbol}: lot size too small, skipping")
-            return None
+            print(f"  ⚠️  {signal.symbol}: lot size too small (balance={available:.2f} USDT) — signal removed")
+            return "LOT_TOO_SMALL"
 
         side = "SELL" if signal.direction == "SHORT" else "BUY"
 
@@ -386,6 +386,9 @@ class AutoTrader:
                 print(f"  🎯 {sym}  in zone  trigger={trigger}  → executing …")
 
                 oid = await self._execute(signal, available)
+                if oid == "LOT_TOO_SMALL":
+                    to_remove.append(sym)   # drop signal, try next symbol
+                    continue
                 if oid:
                     self._placed[sym] = oid
                     break   # only one trade at a time
