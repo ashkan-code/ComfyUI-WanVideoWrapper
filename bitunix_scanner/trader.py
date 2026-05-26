@@ -368,9 +368,10 @@ class AutoTrader:
                     print(f"  ⏳ {sym:<18} {_fmt(price):>12}  dist={dist:+.2f}%  (out of zone)")
                     continue
 
-                # 3. Spread check
+                # 3. Spread check — drop signal if spread too wide (market condition)
                 if not await self._spread_ok(sym):
-                    print(f"  ⚠️  {sym}: spread > 0.12% — skip")
+                    print(f"  ⚠️  {sym}: spread > {MAX_SPREAD_PCT*100:.2f}% — signal removed")
+                    to_remove.append(sym)
                     continue
 
                 # 4. Candle confirmation REQUIRED — volume is bonus (not blocking)
