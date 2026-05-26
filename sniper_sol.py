@@ -11,7 +11,7 @@ TP2    : 81.50  50%         (liquidity pool 81.44-82.12 — RRR 5.0:1)
 Leverage: 5x  (swing)
 """
 
-import asyncio, os, sys, time, math
+import asyncio, os, sys, time, math, ssl
 import aiohttp
 
 sys.path.insert(0, os.path.dirname(__file__))
@@ -73,7 +73,11 @@ async def main():
 ╚══════════════════════════════════════════════════════════╝
 """)
 
-    async with aiohttp.ClientSession() as session:
+    ssl_ctx = ssl.create_default_context()
+    ssl_ctx.check_hostname = False
+    ssl_ctx.verify_mode = ssl.CERT_NONE
+    conn = aiohttp.TCPConnector(ssl=ssl_ctx)
+    async with aiohttp.ClientSession(connector=conn) as session:
         client = AsyncBitunixClient(API_KEY, SECRET_KEY, session)
 
         cur = await _ticker(client, SYMBOL)
@@ -83,64 +87,69 @@ async def main():
             print(f"  ❌ SOL {_fmt(cur)} > {_fmt(CANCEL_IF_ABOVE)} — setup باطل.\n")
             return
 
-        if cur < CANCEL_IF_BELOW:
-            print(f"  ❌ SOL {_fmt(cur)} < {_fmt(CANCEL_IF_BELOW)} — move رفته بدون fill.\n")
-            return
-
         # بررسی موقعیت باز
         positions = await client.get_positions()
         if any(p["symbol"] == SYMBOL for p in positions):
             print(f"  ⚠️  موقعیت SOLUSDT باز است — abort.\n"); return
 
-        # موجودی
+        # بررسی اوردر باز قبلی و موجودی
         acc = await client.get_account()
         avail = float(acc.get("available", 0))
         print(f"  💰 موجودی: {avail:.4f} USDT")
-        if avail < 1:
-            print("  ❌ موجودی کم\n"); return
 
-        # تنظیم اهرم
-        await client.set_leverage(SYMBOL, LEVERAGE)
-        print(f"  ⚙️  Leverage: {LEVERAGE}x")
+        open_orders = await client._get_private("/api/v1/futures/trade/get_pending_orders",
+                                               {"symbol": SYMBOL})
+        oid = None
+        for o in (open_orders.get("data") or {}).get("orderList") or []:
+            if o.get("side") == "SELL" and abs(float(o.get("price", 0)) - ENTRY) < 0.50:
+                oid = o["orderId"]
+                print(f"  🔄 اوردر قبلی یافت شد — monitor ادامه  id={oid}")
+                break
 
-        # محاسبه حجم
-        margin = avail * 0.95
-        qty = _qty_str(ENTRY, margin, LEVERAGE)
-        if not qty:
-            print("  ❌ حجم خیلی کم\n"); return
+        # اگر اوردری نیست و موجودی کافی هست → place کن
+        if not oid:
+            if avail < 1:
+                print("  ❌ موجودی کم و اوردر بازی یافت نشد\n"); return
 
-        notional = float(qty) * ENTRY
-        print(f"  📐 Margin: {margin:.2f} | Qty: {qty} SOL | Notional: {notional:.2f} USDT")
+            await client.set_leverage(SYMBOL, LEVERAGE)
+            print(f"  ⚙️  Leverage: {LEVERAGE}x")
 
-        # ثبت LIMIT SHORT با SL
-        print(f"\n  📤 LIMIT SELL @ {_fmt(ENTRY)} | SL @ {_fmt(SL)} …")
-        body = {
-            "symbol":      SYMBOL,
-            "qty":         qty,
-            "side":        SIDE,
-            "tradeSide":   "OPEN",
-            "orderType":   "LIMIT",
-            "price":       _fmt(ENTRY),
-            "slPrice":     _fmt(SL),
-            "slStopType":  "MARK_PRICE",
-            "slOrderType": "MARKET",
-        }
-        result = await client._post("/api/v1/futures/trade/place_order", body)
+            margin = avail * 0.95
+            qty = _qty_str(ENTRY, margin, LEVERAGE)
+            if not qty:
+                print("  ❌ حجم خیلی کم\n"); return
 
-        if result.get("code") != 0 and "sl" in str(result.get("msg", "")).lower():
-            print("  ⚠️  SL رد شد — بدون SL تلاش مجدد …")
-            for k in ("slPrice", "slStopType", "slOrderType"): body.pop(k, None)
+            notional = float(qty) * ENTRY
+            print(f"  📐 Margin: {margin:.2f} | Qty: {qty} SOL | Notional: {notional:.2f} USDT")
+
+            print(f"\n  📤 LIMIT SELL @ {_fmt(ENTRY)} | SL @ {_fmt(SL)} …")
+            body = {
+                "symbol":      SYMBOL,
+                "qty":         qty,
+                "side":        SIDE,
+                "tradeSide":   "OPEN",
+                "orderType":   "LIMIT",
+                "price":       _fmt(ENTRY),
+                "slPrice":     _fmt(SL),
+                "slStopType":  "MARK_PRICE",
+                "slOrderType": "MARKET",
+            }
             result = await client._post("/api/v1/futures/trade/place_order", body)
 
-        if result.get("code") != 0:
-            print(f"  ❌ خطا: {result.get('msg')}\n"); return
+            if result.get("code") != 0 and "sl" in str(result.get("msg", "")).lower():
+                print("  ⚠️  SL رد شد — بدون SL تلاش مجدد …")
+                for k in ("slPrice", "slStopType", "slOrderType"): body.pop(k, None)
+                result = await client._post("/api/v1/futures/trade/place_order", body)
 
-        oid = result["data"]["orderId"]
-        print(f"""
+            if result.get("code") != 0:
+                print(f"  ❌ خطا: {result.get('msg')}\n"); return
+
+            oid = result["data"]["orderId"]
+            print(f"""
   ✅ LIMIT SHORT PLACED
      orderId : {oid}
      Entry   : {_fmt(ENTRY)} — منتظر fill …
-     Cancel  : SOL > {_fmt(CANCEL_IF_ABOVE)} یا < {_fmt(CANCEL_IF_BELOW)}
+     Cancel  : SOL > {_fmt(CANCEL_IF_ABOVE)}
 """)
 
         # ─── حلقه مانیتورینگ ───────────────────────────────────────
@@ -151,21 +160,18 @@ async def main():
             n += 1
 
             try: cur = await _ticker(client, SYMBOL)
-            except: cur = 0.0
+            except: cur = None
 
-            # اگر بالای 87 رفت → setup باطل
-            if cur > CANCEL_IF_ABOVE:
-                print(f"\n  ⚠️  SOL={_fmt(cur)} > {_fmt(CANCEL_IF_ABOVE)} — setup باطل. Cancel …")
-                await client._post("/api/v1/futures/trade/cancel_order",
-                                   {"symbol": SYMBOL, "orderId": oid})
-                print("  🚫 Order cancel شد.\n"); return
-
-            # اگر خیلی پایین رفت بدون fill
-            if cur < CANCEL_IF_BELOW:
-                print(f"\n  ⚠️  SOL={_fmt(cur)} < {_fmt(CANCEL_IF_BELOW)} — move missed. Cancel …")
-                await client._post("/api/v1/futures/trade/cancel_order",
-                                   {"symbol": SYMBOL, "orderId": oid})
-                print("  🚫 Order cancel شد.\n"); return
+            if cur and (cur > CANCEL_IF_ABOVE or cur < CANCEL_IF_BELOW):
+                reason = "setup باطل" if cur > CANCEL_IF_ABOVE else "move missed"
+                print(f"\n  ⚠️  SOL={_fmt(cur)} — {reason}. Cancel …")
+                if oid:
+                    await client._post("/api/v1/futures/trade/cancel_order",
+                                       {"symbol": SYMBOL, "orderId": oid})
+                else:
+                    await client._post("/api/v1/futures/trade/cancel_all_orders",
+                                       {"symbol": SYMBOL})
+                print("  🚫 Cancel شد.\n"); return
 
             if n % 3 == 0:
                 print(f"  ⏳ [{time.strftime('%H:%M:%S')}] SOL={_fmt(cur)}  "
