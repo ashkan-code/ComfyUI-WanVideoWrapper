@@ -29,7 +29,7 @@ ENTRY_ZONE_TOL   = 0.001   # ±0.1% sniper tolerance — price must be at OB
 PAUSE_CANDLES    = 1       # candle cycles to pause after 2 losses
 CANDLE_SEC       = 300     # 5m candle = 300 s
 PAUSE_DURATION   = 3600    # 1 hour pause after 2 consecutive losses
-MAX_SPREAD_PCT   = 0.0012  # 0.12%
+MAX_SPREAD_PCT   = 0.0025  # 0.25% — increased to allow entries in volatile market
 
 
 def _price_decimals(price: float) -> int:
