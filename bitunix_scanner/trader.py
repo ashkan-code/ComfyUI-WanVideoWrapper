@@ -252,12 +252,18 @@ class AutoTrader:
             # Hand to LiveManager
             if self.live_manager is not None:
                 from .live_manager import ManagedPosition
-                # Wait for position to open on exchange
-                await asyncio.sleep(3)
-                positions  = await self.client.get_positions()
-                pos_data   = next(
-                    (p for p in positions if p["symbol"] == signal.symbol), None
-                )
+                # Wait for LIMIT order to fill — retry up to 60s
+                pos_data = None
+                for _wait in (3, 5, 7, 10, 15, 20):
+                    await asyncio.sleep(_wait)
+                    positions = await self.client.get_positions()
+                    pos_data  = next(
+                        (p for p in positions if p["symbol"] == signal.symbol), None
+                    )
+                    if pos_data:
+                        break
+                    print(f"  ⏳ Waiting for {signal.symbol} position to open …")
+
                 pos_id     = pos_data["positionId"] if pos_data else oid
                 actual_qty = pos_data["qty"] if pos_data else qty
 

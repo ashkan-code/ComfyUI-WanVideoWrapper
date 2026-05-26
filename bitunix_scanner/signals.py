@@ -51,9 +51,11 @@ def _floor_leverage(lev: float) -> int:
 
 def _entry_ob_wick(zone: ConfluentZone):
     if zone.zone_type == "bearish":
-        ob = min(zone.obs, key=lambda o: abs(o.ob_low - zone.price_low))
-    else:
+        # SHORT enters at zone.price_high → SL above → use OB that defines the top
         ob = min(zone.obs, key=lambda o: abs(o.ob_high - zone.price_high))
+    else:
+        # LONG enters at zone.price_low → SL below → use OB that defines the bottom
+        ob = min(zone.obs, key=lambda o: abs(o.ob_low - zone.price_low))
     return ob.wick_high, ob.wick_low
 
 
