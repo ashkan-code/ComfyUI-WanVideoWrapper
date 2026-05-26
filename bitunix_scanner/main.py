@@ -379,7 +379,7 @@ async def _run_cycle(client: AsyncBitunixClient,
     trader._consec_losses = trader_state.get("consec_losses", 0)
     trader._pause_until   = trader_state.get("pause_until",   0.0)
 
-    trader.add_signals([best])
+    trader.add_signals(signals)   # all signals ranked by quality — trader tries each on fail
 
     await asyncio.gather(trader.run(), live_mgr.run())
 
