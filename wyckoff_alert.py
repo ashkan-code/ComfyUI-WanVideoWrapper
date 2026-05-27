@@ -19,7 +19,7 @@ from bitunix_scanner.ict import (
     market_structure, detect_fvg,
 )
 from bitunix_scanner.signals import _fmt
-from bitunix_scanner.alert_monitor import AlertMonitor, PriceAlert
+from bitunix_scanner.alert_monitor import AlertMonitor, PriceAlert, _bar, _rank_label, TF_ALERT_ZONE
 
 API_KEY    = os.getenv("BITUNIX_API_KEY",    "7bee3f4756a0dbc89ae152f34c2175ac")
 SECRET_KEY = os.getenv("BITUNIX_SECRET_KEY", "4e0a845778d49068297106a64cbcda61")
@@ -128,6 +128,18 @@ async def _scan_one(client: AsyncBitunixClient,
 
         score = _score_htf(detail, tf, raw4h, ict_dir, cfg["base_score"])
 
+        # wick ratio از کندل فنر
+        c = detail.get("candle", {})
+        if c:
+            body = abs(float(c.get("close", 0)) - float(c.get("open", 0)))
+            if ict_dir == "bullish":
+                wk = min(float(c.get("open", 0)), float(c.get("close", 0))) - float(c.get("low", 0))
+            else:
+                wk = float(c.get("high", 0)) - max(float(c.get("open", 0)), float(c.get("close", 0)))
+            wr = wk / body if body > 0 else 0.0
+        else:
+            wr = 0.0
+
         alert = PriceAlert(
             symbol     = symbol,
             direction  = direction,
@@ -135,6 +147,7 @@ async def _scan_one(client: AsyncBitunixClient,
             level      = detail["level"],
             swept      = detail["swept"],
             pierce_pct = detail.get("pierce", 0),
+            wick_ratio = wr,
             score      = score,
             btc_bias   = btc_bias,
         )
@@ -146,27 +159,24 @@ async def _scan_one(client: AsyncBitunixClient,
     return best
 
 
-# ── فرمت ─────────────────────────────────────────────────────────────────────
-
-def _bar(s: float) -> str:
-    f = round(s / 10)
-    return "█" * f + "░" * (10 - f)
-
+# ── فرمت sniper preview ───────────────────────────────────────────────────────
 
 def _fmt_alert(rank: int, a: PriceAlert) -> str:
     icon  = "🟢" if a.direction == "LONG" else "🔴"
-    kind  = "Spring" if a.direction == "LONG" else "Upthrust"
-    age_h = int(a.detected_at)   # placeholder
+    kind  = "Spring 🔄" if a.direction == "LONG" else "Upthrust 🔄"
+    rl    = _rank_label(a.score)
+    z     = TF_ALERT_ZONE.get(a.tf, 0.015) * 100
+    b_ico = "🟢" if a.btc_bias == "bullish" else ("🔴" if a.btc_bias == "bearish" else "🟡")
     return (
-        f"{'━'*56}\n"
-        f"  #{rank}  {icon} {kind}  ─  {a.symbol}  [{a.tf.upper()}]\n"
-        f"  امتیاز : {a.score:.0f}/100  {_bar(a.score)}\n"
-        f"{'━'*56}\n"
-        f"  سطح فنر : {_fmt(a.level)}\n"
-        f"  Swept    : {_fmt(a.swept)}  (pierce {a.pierce_pct:.2f}%)\n"
-        f"  BTC Bias : {a.btc_bias.upper()}\n"
-        f"  Alert    : وقتی قیمت به سطح نزدیک شد → تحلیل ICT کامل\n"
-        f"{'━'*56}"
+        f"┌{'─'*58}┐\n"
+        f"│  🎯 #{rank:<2}  {icon} {kind}  {a.symbol:<14} [{a.tf.upper()}]{'':>4}│\n"
+        f"│  امتیاز: {a.score:>5.1f}/100  {_bar(a.score)}  {rl:<16}│\n"
+        f"├{'─'*58}┤\n"
+        f"│  سطح فنر : {_fmt(a.level):<16}  pierce: {a.pierce_pct:.2f}%{'':>10}│\n"
+        f"│  Swept   : {_fmt(a.swept):<16}  wick: {a.wick_ratio:.1f}x{'':>12}│\n"
+        f"│  BTC     : {b_ico} {a.btc_bias.upper():<10}  alert zone: ±{z:.1f}%{'':>9}│\n"
+        f"│  ⏳ منتظر قیمت → وقتی رسید سیگنال اسنایپری کامل می‌دیم{'':>3}│\n"
+        f"└{'─'*58}┘"
     )
 
 
@@ -242,20 +252,20 @@ async def main():
         # رتبه‌بندی
         found.sort(key=lambda a: a.score, reverse=True)
 
-        # جدول
-        print(f"\n{'═'*62}")
-        print(f"  نتایج — {len(found)} فنر HTF")
-        print(f"{'═'*62}")
-        print(f"  {'#':<4} {'ارز':<16} {'جهت':<6} {'TF':<5} {'امتیاز':<10} {'سطح':<14} {'Pierce'}")
-        print("  " + "─" * 58)
+        # جدول سریع
+        print(f"\n{'═'*68}")
+        print(f"  🎯 SNIPER WATCHLIST — {len(found)} فنر HTF  (رتبه‌بندی بر اساس امتیاز)")
+        print(f"{'═'*68}")
+        print(f"  {'#':<4} {'ارز':<16} {'جهت':<6} {'TF':<5} {'امتیاز':<12} {'سطح':<14} {'رتبه'}")
+        print("  " + "─" * 62)
         for i, a in enumerate(found, 1):
-            marker = "  ← 🔥" if a.score >= 65 else ("  ← ✅" if a.score >= 50 else "")
+            rl = _rank_label(a.score)
             print(f"  #{i:<3} {a.symbol:<16} {a.direction:<6} {a.tf:<5}"
-                  f" {a.score:>5.0f}/100  {_fmt(a.level):<14} {a.pierce_pct:.2f}%{marker}")
+                  f" {a.score:>5.1f}/100  {_fmt(a.level):<14} {rl}")
 
-        print(f"\n{'═'*62}")
-        print(f"  تحلیل کامل top {min(SHOW_TOP, len(found))}:")
-        print(f"{'═'*62}\n")
+        print(f"\n{'═'*68}")
+        print(f"  پیش‌نمایش top {min(SHOW_TOP, len(found))}:")
+        print(f"{'═'*68}\n")
 
         top = found[:SHOW_TOP]
         for rank, a in enumerate(top, 1):
@@ -266,9 +276,9 @@ async def main():
         if not alert_candidates:
             alert_candidates = found[:5]   # حداقل 5 تا
 
-        print(f"\n{'═'*62}")
-        print(f"  ثبت {len(alert_candidates)} alert برای نظارت قیمتی:")
-        print(f"{'═'*62}")
+        print(f"\n{'═'*68}")
+        print(f"  ثبت {len(alert_candidates)} سطح برای نظارت — وقتی قیمت رسید سیگنال اسنایپری:")
+        print(f"{'═'*68}")
         for a in alert_candidates:
             monitor.add(a)
 
