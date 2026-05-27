@@ -6,10 +6,8 @@ Wyckoff Spring / Upthrust Scanner — همه ارزهای Bitunix.
   ۲. همه ۶۳۵ ارز اسکن میشن (concurrent, batched)
   ۳. هر سیگنال امتیازدهی میشه (0–100)
   ۴. top 5 بالاترین امتیاز نمایش داده میشن
-  ۵. کاربر هر کدوم رو تأیید یا رد میکنه
-  ۶. بعد از تأیید → MARKET ورود
 
-هرگز بدون تأیید دستی ورود نمیزنه.
+فقط نمایش — بدون هیچ اوردری.
 """
 
 import asyncio
@@ -42,7 +40,6 @@ SL_BUFFER    = 0.005     # 0.5% فراتر از wick
 MIN_RR       = 3.0
 BATCH_SIZE   = 30        # همزمان چند ارز
 SHOW_TOP     = 5         # نمایش top N
-CONFIRM_SEC  = 180       # ثانیه timeout تأیید
 
 
 @dataclass
@@ -272,89 +269,6 @@ def _format_spring(rank: int, sig: SpringSignal) -> str:
 {'━'*56}"""
 
 
-# ── confirm ───────────────────────────────────────────────────────────────────
-
-async def _ask(sym: str, timeout: int = CONFIRM_SEC) -> bool:
-    print(f"\n  ❓ {sym} — وارد بشم؟  بله / خیر  [{timeout}s timeout]\n", flush=True)
-    loop = asyncio.get_event_loop()
-    try:
-        ans = await asyncio.wait_for(
-            loop.run_in_executor(None, input, "  > "),
-            timeout=timeout,
-        )
-        return ans.strip().lower() in ("بله", "yes", "y", "آره", "ok", "1", "تایید")
-    except (asyncio.TimeoutError, EOFError):
-        print("  ⏱️  timeout — رد شد\n")
-        return False
-
-
-# ── execute ───────────────────────────────────────────────────────────────────
-
-async def _execute(client: AsyncBitunixClient, sig: SpringSignal) -> bool:
-    await client.set_leverage(sig.symbol, sig.leverage)
-    acc   = await client.get_account()
-    avail = float(acc.get("available", 0))
-    if avail < 1:
-        print("  ❌ موجودی ناکافی"); return False
-
-    margin   = avail * 0.95
-    notional = margin * sig.leverage
-    p        = sig.entry
-
-    if p >= 1000:
-        qf = math.floor(notional / p * 1000) / 1000
-        qty = f"{qf:.3f}" if qf >= 0.001 else None
-    elif p >= 1:
-        qf = math.floor(notional / p * 100) / 100
-        qty = f"{qf:.2f}".rstrip("0").rstrip(".") if qf >= 0.01 else None
-    else:
-        qf = math.floor(notional / p)
-        qty = str(int(qf)) if qf >= 1 else None
-
-    if not qty:
-        print("  ❌ حجم خیلی کم"); return False
-
-    side = "SELL" if sig.direction == "SHORT" else "BUY"
-    body = {
-        "symbol": sig.symbol, "qty": qty, "side": side,
-        "tradeSide": "OPEN", "orderType": "MARKET",
-        "slPrice": _fmt_price(sig.sl),
-        "slStopType": "MARK_PRICE", "slOrderType": "MARKET",
-    }
-    r = await client._post("/api/v1/futures/trade/place_order", body)
-    if r.get("code") != 0 and "sl" in str(r.get("msg", "")).lower():
-        for k in ("slPrice", "slStopType", "slOrderType"): body.pop(k, None)
-        r = await client._post("/api/v1/futures/trade/place_order", body)
-
-    if r.get("code") != 0:
-        print(f"  ❌ خطا: {r.get('msg')}"); return False
-
-    oid = r["data"]["orderId"]
-    print(f"\n  ✅ MARKET {sig.direction}  {sig.symbol}  orderId={oid}")
-
-    # صبر برای fill و گذاشتن TP
-    pos = None
-    for w in (2, 3, 5, 8):
-        await asyncio.sleep(w)
-        positions = await client.get_positions()
-        pos = next((p for p in positions if p["symbol"] == sig.symbol), None)
-        if pos: break
-
-    if pos:
-        tp_side = "BUY" if sig.direction == "SHORT" else "SELL"
-        tp_r = await client._post("/api/v1/futures/trade/place_order", {
-            "symbol": sig.symbol, "qty": str(pos["qty"]),
-            "side": tp_side, "tradeSide": "CLOSE",
-            "orderType": "LIMIT", "price": _fmt_price(sig.tp),
-            "positionId": pos["positionId"],
-        })
-        if tp_r.get("code") == 0:
-            print(f"  🎯 TP @ {_fmt_price(sig.tp)}  orderId={tp_r['data']['orderId']}")
-        else:
-            print(f"  ⚠️  TP failed: {tp_r.get('msg')}")
-    return True
-
-
 # ── main scan ─────────────────────────────────────────────────────────────────
 
 async def run_spring_scan(top_n: int = 0,   # 0 = همه ارزها
@@ -438,19 +352,11 @@ async def run_spring_scan(top_n: int = 0,   # 0 = همه ارزها
             print(f"  ⏱️  زمان: {elapsed:.0f}s  |  top {len(top)} نمایش داده میشه")
             print(f"{'═'*56}\n")
 
-        # نمایش و تأیید
+        # نمایش نتایج — فقط تحلیل، بدون اوردر
         for rank, sig in enumerate(top, start=1):
             print(_format_spring(rank, sig))
-            confirmed = await _ask(sig.symbol)
-            if confirmed:
-                ok = await _execute(client, sig)
-                if ok:
-                    print(f"\n  ✅ {sig.symbol} وارد شد — بقیه رد میشن\n")
-                    return
-            else:
-                print(f"  ⏩ #{rank} {sig.symbol} رد شد\n")
 
-        print("  [Spring] همه رد شدن یا زمان تموم شد.\n")
+        print("  [Spring] اسکن تموم شد — فقط نمایش، بدون اوردر.\n")
 
 
 def kind_name(direction: str) -> str:
