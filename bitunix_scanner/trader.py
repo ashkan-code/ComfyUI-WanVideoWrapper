@@ -97,22 +97,26 @@ class AutoTrader:
     # ── Entry checks ───────────────────────────────────────────────────────
 
     async def _in_zone(self, signal: Signal) -> Tuple[bool, float]:
-        raw   = await self.client.get_klines(signal.symbol, "1m", 5)
+        """
+        Returns True if any recent 1m candle WICK touched the OB zone.
+        Uses wick (high/low) not close — so a 15M candle that entered OB
+        and closed OUTSIDE (confirmation rejection) still passes this check.
+        """
+        raw = await self.client.get_klines(signal.symbol, "1m", 8)
         if not raw:
             return False, 0.0
         price = float(raw[-1]["close"])
         lo = signal.zone.price_low  * (1 - ENTRY_ZONE_TOL)
         hi = signal.zone.price_high * (1 + ENTRY_ZONE_TOL)
-        in_zone = lo <= price <= hi
 
-        # Price must have visited the zone in last 3 candles (not just current tick)
-        # Removes the conflicting "approaching" check that blocked entry on bearish candles
-        if in_zone:
-            recent_prices = [float(k["close"]) for k in raw[-4:]]
-            visited = any(lo <= p <= hi for p in recent_prices)
-            return visited, price
+        if signal.direction == "SHORT":
+            # wick must have reached the OB from below (high >= zone_low)
+            visited = any(float(k["high"]) >= lo for k in raw[-6:])
+        else:
+            # wick must have reached the OB from above (low <= zone_high)
+            visited = any(float(k["low"]) <= hi for k in raw[-6:])
 
-        return False, price
+        return visited, price
 
     async def _candle_confirms(self, signal: Signal) -> bool:
         """
