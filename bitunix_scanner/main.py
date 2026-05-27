@@ -6,11 +6,11 @@ Rules:
     • Single best setup only — ONE trade at a time
     • Full margin (100% available balance)
     • Max leverage 10x
-    • SL ≤ 1.5% | RRR ≥ 1:2
+    • SL ≤ 2.5% (structural: OB wick + 0.5%) | RRR ≥ 1:3
     • Entry: OB + FVG + Liq Sweep (min 2/3) | OTE zone preferred
-    • TP tiered: TP1 50% (liq pool) → TP2 50% (HTF FVG)
-    • SL moves to breakeven after TP1
-    • Danger exit: structure invalidation / pattern / BTC flip
+    • Confirm: 15M candle must touch OB + close in direction → MARKET entry
+    • TP single: 100% at HTF OB/FVG target (≥ 3:1 RRR)
+    • Danger exit: structure invalidation / BTC flip
     • After 2 losses → pause 1 hour, reassess HTF
     • After each exit → immediate re-scan
     • Spread ≤ 0.12% required
@@ -113,8 +113,17 @@ async def _build_ict_report(client: AsyncBitunixClient,
     mb_str = (f"{_fmt(mb.ob_low)}–{_fmt(mb.ob_high)}"
               if mb else "—")
 
-    # Candlestick confirmation
-    candle_ok, candle_name = detect_candle_confirmation(c5m, ict_dir)
+    # 15M candle state (last completed)
+    candle_ok, candle_name = False, "—"
+    if c15m and len(c15m) >= 2:
+        c15 = c15m[-2]
+        o15, h15, l15, cl15 = (float(c15["open"]), float(c15["high"]),
+                                float(c15["low"]), float(c15["close"]))
+        if signal.direction == "SHORT":
+            candle_ok = h15 >= signal.zone.price_low * 0.997 and cl15 < o15
+        else:
+            candle_ok = l15 <= signal.zone.price_high * 1.003 and cl15 > o15
+        candle_name = f"15M {'bearish' if signal.direction=='SHORT' else 'bullish'} OB touch"
 
     # OTE check
     sw_lo, sw_hi = find_impulse_for_ote(c15m, ict_dir)
@@ -138,7 +147,7 @@ async def _build_ict_report(client: AsyncBitunixClient,
     checks.append("✅ Liq Sweep" if signal.liq_swept else "❌ Liq Sweep")
     checks.append("✅ OTE" if (signal.ote_ok or ote_in) else "⬜ OTE")
     checks.append(f"✅ {signal.mss_detail}" if signal.mss_ok else "❌ BOS/MSS")
-    checks.append(f"✅ {candle_name}" if candle_ok else "⬜ Candle")
+    checks.append(f"✅ {candle_name}" if candle_ok else "⬜ 15M confirm pending")
     checks_str = "  ".join(checks)
 
     sl_pct_str = (f"-{signal.loss_pct:.3f}%"
@@ -165,7 +174,7 @@ async def _build_ict_report(client: AsyncBitunixClient,
     if ote_in or signal.ote_ok:
         reasons.append(f"قیمت در OTE zone ({_fmt(ote_lo)}–{_fmt(ote_hi)})")
     if candle_ok:
-        reasons.append(f"کندل تأیید: {candle_name} روی ۵m")
+        reasons.append(f"تأیید ۱۵m: {candle_name}")
     if bb_str != "—":
         reasons.append(f"Breaker Block 4H: {bb_str}")
     reason_text = "\n".join(f"    • {r}" for r in reasons) if reasons else "    • ICT confluence detected"
@@ -175,7 +184,7 @@ async def _build_ict_report(client: AsyncBitunixClient,
     if not signal.fvg_ok:
         risk_lines.append("FVG تأیید نشده — احتمال ورود زودهنگام بالاتر")
     if not candle_ok:
-        risk_lines.append("کندل تأیید وجود ندارد — ورود روی سیگنال ضعیف‌تر است")
+        risk_lines.append("تأیید ۱۵m هنوز نیامده — منتظر بسته شدن کندل ۱۵m در منطقه OB")
     if avg_spread > 0.08:
         risk_lines.append(f"اسپرد {avg_spread:.3f}% — لبه تریدینگ را کاهش می‌دهد")
     if signal.quality_score < 60:
@@ -200,11 +209,10 @@ async def _build_ict_report(client: AsyncBitunixClient,
   Direction    : {arrow}
   Leverage     : {signal.leverage}x  (max 10x)
   Margin       : 100% — {available_usdt:.2f} USDT available
-  Entry        : {_fmt(signal.entry)}
-  Stop Loss    : {_fmt(signal.sl)}  ({sl_pct_str})  ← OB wick + 0.4%
-  TP1 (50%)    : {_fmt(signal.tp1)}  ← {signal.tp1_reason}
-  TP2 (50%)    : {_fmt(signal.tp2)}  ← {signal.tp2_reason}
-  RRR          : 1:{signal.rr1:.1f} → 1:{signal.rr2:.1f}
+  Entry        : MARKET after 15M confirmation
+  Stop Loss    : {_fmt(signal.sl)}  ({sl_pct_str})  ← OB wick + 0.5% structural
+  TP (100%)    : {_fmt(signal.tp1)}  ← {signal.tp1_reason}
+  RRR          : 1:{signal.rr1:.1f}
   Quality      : {signal.quality_score:.0f}/100
 {spread_warn}
   **چک‌لیست ICT:**
@@ -395,15 +403,15 @@ async def _live_loop(args):
     mode_tag = "AUTONOMOUS" if args.auto else "SEMI-MANUAL (تایید قبل از ورود)"
     print(f"""
 ╔══════════════════════════════════════════════════════╗
-║   BITUNIX  ·  ICT ADVANCED  ·  24/7               ║
+║   BITUNIX  ·  ICT SNIPER  ·  24/7                 ║
 ║   Scope    : Top {args.top:<3} by volume                    ║
 ║   Mode     : {mode_tag:<40}║
-║   Entry    : OB + FVG + Liq Sweep (≥ 2/3)          ║
-║   OTE      : 61.8%–79% Fibonacci preferred          ║
-║   SL       : OB wick + 0.4%  (max 1.5%)            ║
-║   Spread   : max 0.12%                              ║
-║   TP1(50%) : nearest liquidity pool (≥ 2:1)        ║
-║   TP2(50%) : HTF FVG / OB  (≥ 3:1)                ║
+║   Bias     : 4H + 1H structure                      ║
+║   Entry    : MARKET after 15M candle confirm        ║
+║   OTE      : 61.8%–78.6% Fibonacci zone             ║
+║   SL       : OB wick + 0.5%  (max 2.5%)            ║
+║   Spread   : max 0.25%                              ║
+║   TP (100%): HTF FVG / OB  (≥ 3:1 RRR)            ║
 ║   Leverage : max 10x                                ║
 ║   Pause    : 1 hour after 2 consecutive losses      ║
 ╚══════════════════════════════════════════════════════╝

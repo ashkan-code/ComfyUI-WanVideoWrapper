@@ -12,9 +12,9 @@ from .ict import (
 )
 
 MAX_LEVERAGE  = 10
-SL_BUFFER_PCT = 0.002   # 0.2% beyond OB wick — tighter sniper SL
-MAX_SL_PCT    = 0.015   # skip if SL > 1.5% from entry
-MIN_RR        = 2.0     # minimum R:R (1:2)
+SL_BUFFER_PCT = 0.005   # 0.5% beyond OB wick — structural SL (room to breathe)
+MAX_SL_PCT    = 0.025   # skip if SL > 2.5% from entry
+MIN_RR        = 3.0     # minimum R:R (1:3) — single TP requires better quality
 
 
 @dataclass
@@ -150,16 +150,18 @@ def build_signal(symbol: str, zone: ConfluentZone,
         ote_low, ote_high = find_ote_zone(sw_low, sw_high, ict_dir)
         ote_ok = ote_low <= current_price <= ote_high
 
-    # ── Tiered TP ─────────────────────────────────────────────────────────
+    # ── Single TP (sniper: use the further HTF target) ────────────────────
     if klines_1h and klines_4h:
-        tp1, tp2, tp1_reason, tp2_reason = find_tiered_tp(
+        _near, far, _near_reason, far_reason = find_tiered_tp(
             klines_1h, klines_4h, entry, ict_dir, sl, min_rr=MIN_RR
         )
+        tp1 = tp2 = far
+        tp1_reason = tp2_reason = far_reason
     else:
         risk = abs(entry - sl)
-        tp1 = entry - risk * MIN_RR if direction == "SHORT" else entry + risk * MIN_RR
-        tp2 = entry - risk * MIN_RR * 2 if direction == "SHORT" else entry + risk * MIN_RR * 2
-        tp1_reason, tp2_reason = "2:1 fallback", "4:1 fallback"
+        tp = (entry - risk * MIN_RR) if direction == "SHORT" else (entry + risk * MIN_RR)
+        tp1 = tp2 = tp
+        tp1_reason = tp2_reason = f"{MIN_RR:.0f}:1 target"
 
     leverage = _floor_leverage(15 / loss_pct)
     rr1 = abs(tp1 - entry) / abs(sl - entry)
@@ -218,10 +220,8 @@ def format_signal(sig: Signal) -> str:
     icon  = "🟢" if sig.direction == "LONG" else "🔴"
     sl_pct = f"-{sig.loss_pct:.3f}%" if sig.direction == "LONG" else f"+{sig.loss_pct:.3f}%"
 
-    tp1_dist = (sig.tp1 - sig.entry) / sig.entry * 100
-    tp2_dist = (sig.tp2 - sig.entry) / sig.entry * 100
-    tp1_pct = f"{tp1_dist:+.2f}%"
-    tp2_pct = f"{tp2_dist:+.2f}%"
+    tp_dist = (sig.tp1 - sig.entry) / sig.entry * 100
+    tp_pct = f"{tp_dist:+.2f}%"
 
     checks = (
         f"{'✅' if sig.mss_ok   else '❌'} BOS/MSS  "
@@ -239,9 +239,8 @@ def format_signal(sig: Signal) -> str:
         f"  HTF Bias  : 4H/1H {sig.btc_bias.upper()}  [{sig.btc_detail}]",
         f"  Entry     : {_fmt(sig.entry)}",
         f"  Stop Loss : {_fmt(sig.sl)}  ({sl_pct})  ← OB wick",
-        f"  TP1 (50%) : {_fmt(sig.tp1)}  ({tp1_pct})  ← {sig.tp1_reason}",
-        f"  TP2 (50%) : {_fmt(sig.tp2)}  ({tp2_pct})  ← {sig.tp2_reason}",
-        f"  RRR       : 1:{sig.rr1:.1f} → 1:{sig.rr2:.1f}",
+        f"  TP (100%) : {_fmt(sig.tp1)}  ({tp_pct})  ← {sig.tp1_reason}",
+        f"  RRR       : 1:{sig.rr1:.1f}",
         f"  Leverage  : {sig.leverage}x",
         f"  ─────────────────────────────────────────",
         f"  ICT Checks: {checks}",
@@ -251,6 +250,7 @@ def format_signal(sig: Signal) -> str:
         f"  OB Score  : {sig.zone.score}/21  {_bar(sig.zone.score, 21)}",
         f"  Quality   : {sig.quality_score:.0f}/100  {_bar(sig.quality_score)}",
         f"  Confluence: {sig.confluence_count}/3 (OB + FVG + Liq Sweep)",
+        f"  Entry     : 15M candle confirmation required before MARKET order",
         f"{'━'*52}",
     ]
     return "\n".join(lines)

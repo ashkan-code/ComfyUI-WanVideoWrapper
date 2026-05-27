@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 MAX_POSITIONS    = 1
 MAX_LEVERAGE     = 10
 POLL_INTERVAL    = 30
-ENTRY_ZONE_TOL   = 0.001   # ±0.1% sniper tolerance — price must be at OB
+ENTRY_ZONE_TOL   = 0.003   # ±0.3% zone tolerance — 15M confirmation is the real gate
 PAUSE_CANDLES    = 1       # candle cycles to pause after 2 losses
 CANDLE_SEC       = 300     # 5m candle = 300 s
 PAUSE_DURATION   = 3600    # 1 hour pause after 2 consecutive losses
@@ -116,38 +116,32 @@ class AutoTrader:
 
     async def _candle_confirms(self, signal: Signal) -> bool:
         """
-        Sniper confirmation: last closed 5m candle must be in direction + in zone.
-        ALSO checks 1m for rejection wick (pin bar / shooting star / hammer).
-        Both must agree before entry.
+        ICT 15M confirmation: last completed 15M candle must touch the OB zone
+        and close in the trade direction (bearish/bullish body).
         """
-        from .ict import detect_candle_confirmation
-        ict_dir = "bearish" if signal.direction == "SHORT" else "bullish"
-
-        # 5m candle: closed in correct direction inside OB zone
-        raw5 = await self.client.get_klines(signal.symbol, "5m", 3)
-        if not raw5 or len(raw5) < 2:
+        raw15 = await self.client.get_klines(signal.symbol, "15m", 4)
+        if not raw15 or len(raw15) < 2:
             return False
-        c5  = raw5[-2]
-        o5, cl5 = float(c5["open"]), float(c5["close"])
+        c = raw15[-2]  # last completed 15M candle
+        o  = float(c["open"])
+        h  = float(c["high"])
+        lo_c = float(c["low"])
+        cl = float(c["close"])
+
         lo = signal.zone.price_low  * (1 - ENTRY_ZONE_TOL)
         hi = signal.zone.price_high * (1 + ENTRY_ZONE_TOL)
-        in_zone5 = lo <= cl5 <= hi
-        correct5 = (cl5 < o5) if signal.direction == "SHORT" else (cl5 > o5)
-        if not (in_zone5 and correct5):
-            return False
 
-        # 1m candle: rejection pattern at the OB level
-        raw1 = await self.client.get_klines(signal.symbol, "1m", 5)
-        if raw1 and len(raw1) >= 3:
-            ok1m, name1m = detect_candle_confirmation(raw1, ict_dir)
-            if ok1m:
-                return True
-            # Acceptable if last 1m is directional (even without pin bar)
-            c1 = raw1[-2]
-            o1, cl1 = float(c1["open"]), float(c1["close"])
-            correct1 = (cl1 < o1) if signal.direction == "SHORT" else (cl1 > o1)
-            return correct1
-        return True
+        if signal.direction == "SHORT":
+            touched = h >= lo        # wick entered OB from below
+            correct = cl < o         # bearish body
+        else:
+            touched = lo_c <= hi     # wick entered OB from above
+            correct = cl > o         # bullish body
+
+        if touched and correct:
+            print(f"  ✅ 15M confirmed: O={o} H={h} L={lo_c} C={cl}  "
+                  f"zone={lo:.6g}–{hi:.6g}")
+        return touched and correct
 
     async def _volume_breaks(self, signal: Signal) -> Tuple[bool, float]:
         raw = await self.client.get_klines(signal.symbol, "5m", 25)
@@ -206,14 +200,13 @@ class AutoTrader:
 
         side = "SELL" if signal.direction == "SHORT" else "BUY"
 
-        # Place entry order with exchange SL attached
+        # MARKET entry — 15M confirmation already fired, enter immediately
         body = {
             "symbol":      signal.symbol,
             "qty":         qty,
             "side":        side,
             "tradeSide":   "OPEN",
-            "orderType":   "LIMIT",
-            "price":       _fmt_price(signal.entry),
+            "orderType":   "MARKET",
             "slPrice":     _fmt_price(signal.sl),
             "slStopType":  "MARK_PRICE",
             "slOrderType": "MARKET",
@@ -221,7 +214,7 @@ class AutoTrader:
 
         result = await self.client._post("/api/v1/futures/trade/place_order", body)
 
-        # If SL param rejected, retry without it (Bitunix sometimes rejects on LIMIT orders)
+        # Bitunix sometimes rejects SL param on MARKET orders — retry without
         if result.get("code") != 0 and "sl" in str(result.get("msg", "")).lower():
             body.pop("slPrice", None)
             body.pop("slStopType", None)
@@ -232,16 +225,15 @@ class AutoTrader:
             oid = result["data"]["orderId"]
             print(f"""
   ╔══════════════════════════════════════════════════════╗
-  ║  ✅ ORDER PLACED — {signal.direction}  {signal.symbol:<18}  ║
+  ║  ✅ MARKET ORDER — {signal.direction}  {signal.symbol:<17}  ║
   ╠══════════════════════════════════════════════════════╣
   ║  Coin      : {signal.symbol}
   ║  Direction : {signal.direction}
   ║  HTF Bias  : {signal.btc_bias.upper()}  [{signal.btc_detail}]
-  ║  Entry     : {_fmt_price(signal.entry)}
-  ║  Stop Loss : {_fmt_price(signal.sl)}  ({signal.loss_pct:.3f}% risk)  [exchange order]
-  ║  TP1 (50%) : {_fmt_price(signal.tp1)}  ← {signal.tp1_reason}
-  ║  TP2 (50%) : {_fmt_price(signal.tp2)}  ← {signal.tp2_reason}
-  ║  RRR       : 1:{signal.rr1:.1f} → 1:{signal.rr2:.1f}
+  ║  Entry     : MARKET (15M confirmed)
+  ║  Stop Loss : {_fmt_price(signal.sl)}  ({signal.loss_pct:.3f}% risk)  [exchange SL]
+  ║  TP (100%): {_fmt_price(signal.tp1)}  ← {signal.tp1_reason}
+  ║  RRR       : 1:{signal.rr1:.1f}
   ║  Leverage  : {leverage}x  |  Margin: {margin:.4f} USDT (full)
   ║  ICT       : {'✅OB' if signal.zone else ''} {'✅FVG' if signal.fvg_ok else ''} {'✅Liq' if signal.liq_swept else ''} {'✅OTE' if signal.ote_ok else ''} {'✅'+signal.mss_detail if signal.mss_ok else ''}
   ║  Quality   : {signal.quality_score:.0f}/100
@@ -252,9 +244,9 @@ class AutoTrader:
             # Hand to LiveManager
             if self.live_manager is not None:
                 from .live_manager import ManagedPosition
-                # Wait for LIMIT order to fill — retry up to 60s
+                # Wait for MARKET order to fill (usually instant)
                 pos_data = None
-                for _wait in (3, 5, 7, 10, 15, 20):
+                for _wait in (2, 3, 5, 7, 10):
                     await asyncio.sleep(_wait)
                     positions = await self.client.get_positions()
                     pos_data  = next(
@@ -262,46 +254,31 @@ class AutoTrader:
                     )
                     if pos_data:
                         break
-                    print(f"  ⏳ Waiting for {signal.symbol} position to open …")
+                    print(f"  ⏳ Waiting for {signal.symbol} position …")
 
                 pos_id     = pos_data["positionId"] if pos_data else oid
                 actual_qty = pos_data["qty"] if pos_data else qty
 
                 if pos_data:
-                    # Place exchange TP1 (50%) and TP2 (50%) as LIMIT close orders
+                    # Single TP LIMIT order — full quantity at tp1 (the far HTF target)
                     tp_side = "BUY" if signal.direction == "SHORT" else "SELL"
-                    half    = _qty_str(signal.entry, float(actual_qty) / 2 * signal.entry / leverage, leverage)
-                    # Simpler: just split qty in half
-                    try:
-                        q     = float(actual_qty)
-                        q_dec = len(str(actual_qty).split(".")[-1]) if "." in str(actual_qty) else 0
-                        half_q = str(int(q // 2)) if q_dec == 0 else f"{q/2:.{q_dec}f}"
-                    except Exception:
-                        half_q = actual_qty
-
-                    for tp_price, tp_qty, tp_label in [
-                        (signal.tp1, half_q,       "TP1 50%"),
-                        (signal.tp2, actual_qty,   "TP2 50%"),
-                    ]:
-                        tp_body = {
-                            "symbol":     signal.symbol,
-                            "qty":        str(tp_qty),
-                            "side":       tp_side,
-                            "tradeSide":  "CLOSE",
-                            "orderType":  "LIMIT",
-                            "price":      _fmt_price(tp_price),
-                            "positionId": pos_id,
-                        }
-                        tp_r = await self.client._post(
-                            "/api/v1/futures/trade/place_order", tp_body
-                        )
-                        if tp_r.get("code") == 0:
-                            print(f"  🎯 {tp_label} LIMIT order placed at "
-                                  f"{_fmt_price(tp_price)}  orderId={tp_r['data']['orderId']}")
-                        else:
-                            print(f"  ⚠️  {tp_label} order failed: {tp_r.get('msg')}")
-
-                tp_order_ids = []
+                    tp_body = {
+                        "symbol":     signal.symbol,
+                        "qty":        str(actual_qty),
+                        "side":       tp_side,
+                        "tradeSide":  "CLOSE",
+                        "orderType":  "LIMIT",
+                        "price":      _fmt_price(signal.tp1),
+                        "positionId": pos_id,
+                    }
+                    tp_r = await self.client._post(
+                        "/api/v1/futures/trade/place_order", tp_body
+                    )
+                    if tp_r.get("code") == 0:
+                        print(f"  🎯 TP LIMIT placed at {_fmt_price(signal.tp1)}"
+                              f"  (100% qty)  orderId={tp_r['data']['orderId']}")
+                    else:
+                        print(f"  ⚠️  TP order failed: {tp_r.get('msg')}")
 
                 mp = ManagedPosition(
                     symbol       = signal.symbol,
@@ -309,7 +286,7 @@ class AutoTrader:
                     entry_price  = signal.entry,
                     sl_price     = signal.sl,
                     tp1_price    = signal.tp1,
-                    tp2_price    = signal.tp2,
+                    tp2_price    = signal.tp1,   # single TP — both levels same
                     ob_high      = signal.zone.price_high,
                     ob_low       = signal.zone.price_low,
                     position_id  = pos_id,
@@ -326,10 +303,12 @@ class AutoTrader:
     async def run(self):
         print(f"""
   ┌─────────────────────────────────────────────────┐
-  │  ICT ADVANCED AUTO-TRADER                       │
+  │  ICT SNIPER AUTO-TRADER                         │
   │  Mode    : 1 trade at a time — FULL MARGIN      │
+  │  Entry   : MARKET after 15M candle confirm      │
   │  Leverage: max {MAX_LEVERAGE}x   Poll: {self.poll_sec}s                   │
-  │  Rules   : SL ≤ 1.5% | RRR ≥ 1:2 | OB+FVG+Liq │
+  │  Rules   : SL ≤ 2.5% | RRR ≥ 1:3 | OB+FVG+Liq │
+  │  TP      : Single target (HTF OB/FVG, 100%)     │
   └─────────────────────────────────────────────────┘
 """)
 
