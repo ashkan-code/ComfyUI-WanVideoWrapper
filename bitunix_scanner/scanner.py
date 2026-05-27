@@ -44,7 +44,7 @@ TOP_N_BY_VOLUME   = 100
 MIN_TF_CONFLUENCE = 2       # absolute min TFs overlapping
 MIN_OB_SCORE      = 6       # min confluence score (TF weights summed)
 HTF_REQUIRED      = {"4h", "1h"}   # zone MUST include at least one of these
-OTE_MAX_DIST_PCT  = 0.06    # skip if price more than 6% away from OTE midpoint
+OTE_MAX_DIST_PCT  = 0.03    # skip if price more than 3% away from OTE midpoint
 
 
 async def _fetch_all_tf(client: AsyncBitunixClient, symbol: str,
@@ -68,13 +68,13 @@ async def _scan_symbol(client: AsyncBitunixClient,
         return None
 
     # Determine which directions to try based on BTC bias
+    # IMPORTANT: No trading when BTC is neutral — choppy market = 50/50 = losses
     if btc_bias == "bullish":
         directions = ["bullish"]
     elif btc_bias == "bearish":
         directions = ["bearish"]
     else:
-        # Neutral/sideways: try both, pick higher quality
-        directions = ["bullish", "bearish"]
+        return None   # BTC بی‌تصمیمه → هیچ معامله‌ای نمی‌زنیم
 
     raw4h = tf_klines.get("4h", [])
     raw1h = tf_klines.get("1h", [])
@@ -175,7 +175,7 @@ async def run_scan(api_key: str, secret_key: str,
 
         # Direction label for display
         if btc_bias == "neutral":
-            dir_label = "LONG + SHORT (BTC sideways — both directions scanned)"
+            dir_label = "SKIP — BTC بی‌تصمیمه"
         elif btc_bias == "bullish":
             dir_label = "LONG only  (BTC bullish — discount zones)"
         else:
@@ -185,8 +185,11 @@ async def run_scan(api_key: str, secret_key: str,
             bias_icon = "🟢" if btc_bias == "bullish" else ("🔴" if btc_bias == "bearish" else "🟡")
             print(f"\n  {bias_icon} BTC → {btc_bias.upper()}", flush=True)
             print(f"     {btc_detail}", flush=True)
-            print(f"\n  → Scanning {len(symbols)} symbols | {dir_label}", flush=True)
-            print(f"     Filters: HTF OB (4H/1H) + Premium/Discount + OTE ±6%\n", flush=True)
+            if btc_bias == "neutral":
+                print(f"\n  ⏸️  BTC جهت واضحی نداره — این سایکل skip میشه\n", flush=True)
+            else:
+                print(f"\n  → Scanning {len(symbols)} symbols | {dir_label}", flush=True)
+                print(f"     Filters: HTF OB (4H/1H) + Premium/Discount + OTE ±3%\n", flush=True)
 
         t0    = time.time()
         tasks = [
