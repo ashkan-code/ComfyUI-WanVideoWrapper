@@ -1,19 +1,18 @@
 """
-Live position manager — ICT danger monitoring on 5m candle closes.
+Live position manager — HTF-only exit logic.
 
-Exchange orders placed:
-  • SL  : set at entry (MARK_PRICE MARKET stop) — exchange handles full SL
-  • TP1 : LIMIT close 50% at TP1 price (placed by trader after fill)
-  • TP2 : LIMIT close 50% at TP2 price (placed by trader after fill)
+فلسفه:
+  معامله فقط زمانی بسته میشه که تحلیل اصلی اشتباه ثابت بشه — نه نوسان ۵m.
+  SL صرافی کار خودشو میکنه. ما فقط invalidation اصلی رو نگاه میکنیم.
 
-This manager's job (every 5 minutes = 1 candle):
-  Priority 1 — Both 15m + 1h structure against position → emergency close
-  Priority 2 — 5m candle: Engulfing / Pin Bar / BOS against position → close
-  Priority 3 — BTC 15m structure flip → close
-  Priority 4 — SL price breached (fallback if exchange SL not triggered) → close
-  Priority 5 — Detect TP1 hit (position qty halved) → move SL to breakeven
+شرط close اضطراری:
+  1. Daily ساختار برعکس شد → close فوری
+  2. هم 4H هم 1H با هم برعکس شدن → close
+  3. BTC هم 4H هم 1H برعکس شد → close
+  4. SL fallback (اگه SL صرافی fire نکرد) → close
 
-On emergency close: cancel ALL open orders for that symbol, then market close.
+هیچ close بر اساس ۵m یا ۱۵m نیست.
+Poll هر ۱ ساعت یک بار کافیه.
 """
 
 import asyncio
@@ -26,11 +25,7 @@ from .client import AsyncBitunixClient
 from .ict import market_structure
 from .signals import _fmt
 
-CANDLE_POLL_SEC  = 300    # check every 5m candle close
-ENGULF_RATIO     = 1.0    # true engulfing only (body fully covers prev candle)
-WICK_RATIO       = 2.5    # wick must be 2.5× body (strong rejection)
-OB_BREAK_BUFFER  = 0.005  # 0.5% beyond OB before calling it broken
-MIN_TRADE_MIN    = 15     # don't trigger danger checks for first 15 min (let trade breathe)
+CANDLE_POLL_SEC  = 3600   # بررسی هر ۱ ساعت یک بار — HTF تغییر نمیکنه هر ۵ دقیقه
 
 
 @dataclass
@@ -251,7 +246,7 @@ class LiveManager:
 
     async def run(self):
         print(f"\n  📡 LiveManager — {len(self._positions)} position(s)"
-              f"  [HTF-first monitoring  poll={self.poll_sec}s]\n")
+              f"  [HTF-only monitoring  poll={self.poll_sec//60}h]\n")
 
         while self._positions:
             # Sync: remove positions closed by exchange SL/TP
@@ -262,7 +257,7 @@ class LiveManager:
                 mp = self._positions[sym]
                 if mp.position_id not in open_ids:
                     elapsed = (time.time() - mp.open_time) / 60
-                    print(f"  ✅ {sym} closed by exchange SL/TP  [{elapsed:.1f} min]")
+                    print(f"  ✅ {sym} closed by exchange SL/TP  [{elapsed:.0f} min]")
                     self._positions.pop(sym, None)
 
             if not self._positions:
@@ -271,67 +266,43 @@ class LiveManager:
             btc_flip_cache: Optional[str] = None
 
             for sym, mp in list(self._positions.items()):
-                # Skip danger checks for first MIN_TRADE_MIN minutes (let trade breathe)
-                elapsed_min = (time.time() - mp.open_time) / 60
-                if elapsed_min < MIN_TRADE_MIN:
-                    print(f"  ⏳ {sym}: {elapsed_min:.0f}m — در دوره سکوت اولیه ({MIN_TRADE_MIN}m)")
-                    continue
+                # Fetch current price for status
+                raw1h = await self.client.get_klines(sym, "1h", 3)
+                current_price = float(raw1h[-1]["close"]) if raw1h else mp.entry_price
 
-                # ── P1: HTF structure (Daily > 4H+1H) ────────────────────
+                pnl_pct = ((mp.entry_price - current_price) / mp.entry_price * 100
+                           if mp.direction == "SHORT"
+                           else (current_price - mp.entry_price) / mp.entry_price * 100)
+                elapsed_h = (time.time() - mp.open_time) / 3600
+                sign = "+" if pnl_pct >= 0 else ""
+                print(f"  📊 [{elapsed_h:.1f}h]  {sym}  {_fmt(current_price)}"
+                      f"  PnL={sign}{pnl_pct:.2f}%"
+                      f"  SL={_fmt(mp.sl_price)}  TP={_fmt(mp.tp1_price)}")
+
+                # ── HTF structure invalidation ────────────────────────────
                 struct_r = await self._structure_invalidated(mp)
                 if struct_r:
                     await self._emergency_close(mp, struct_r)
                     continue
 
-                # ── P2: BTC HTF flip (4H > 1H) ───────────────────────────
+                # ── BTC HTF flip ──────────────────────────────────────────
                 if btc_flip_cache is None:
                     btc_flip_cache = await self._btc_htf_flipped(mp.direction)
                 if btc_flip_cache:
                     await self._emergency_close(mp, btc_flip_cache)
                     continue
 
-                # ── P3: 5m candle danger ──────────────────────────────────
-                candles_5m = await self.client.get_klines(sym, "5m", 15)
-                if len(candles_5m) >= 4:
-                    current_price = float(candles_5m[-1]["close"])
-                    danger = detect_danger_candle(
-                        candles_5m, mp.direction,
-                        mp.ob_high, mp.ob_low, mp.entry_price
+                # ── SL fallback (exchange SL didn't fire) ─────────────────
+                sl_hit = (current_price >= mp.sl_price if mp.direction == "SHORT"
+                          else current_price <= mp.sl_price)
+                if sl_hit:
+                    await self._emergency_close(
+                        mp, f"SL fallback {_fmt(current_price)} 🛑"
                     )
-                    if danger:
-                        await self._emergency_close(mp, danger)
-                        continue
+                    continue
 
-                    # ── P4: SL fallback ───────────────────────────────────
-                    if False:
-                        await self._emergency_close(mp, "BTC 15m structure flipped ₿")
-                        continue
-
-                    # ── P4: SL fallback (in case exchange SL didn't fire) ──
-                    sl_breached = (current_price >= mp.sl_price
-                                   if mp.direction == "SHORT"
-                                   else current_price <= mp.sl_price)
-                    if sl_breached:
-                        await self._emergency_close(
-                            mp, f"SL fallback hit at {_fmt(current_price)} 🛑"
-                        )
-                        continue
-
-                    # ── P5: detect TP1 hit ────────────────────────────────
-                    await self._check_tp1_hit(mp)
-
-                    # Status
-                    pnl_pct = ((mp.entry_price - current_price) / mp.entry_price * 100
-                               if mp.direction == "SHORT"
-                               else (current_price - mp.entry_price) / mp.entry_price * 100)
-                    tp_now  = mp.tp2_price if mp.tp1_hit else mp.tp1_price
-                    tp_tag  = "→TP2" if mp.tp1_hit else "→TP1"
-                    sign    = "+" if pnl_pct >= 0 else ""
-                    print(f"  📊 {sym:<18}  {_fmt(current_price):>12}"
-                          f"  PnL={sign}{pnl_pct:.2f}%"
-                          f"  SL={_fmt(mp.sl_price)}"
-                          f"  {tp_tag}={_fmt(tp_now)}"
-                          f"  {'🟡 TP1 done' if mp.tp1_hit else ''}")
+                # ── TP hit check ──────────────────────────────────────────
+                await self._check_tp1_hit(mp)
 
             await asyncio.sleep(self.poll_sec)
 

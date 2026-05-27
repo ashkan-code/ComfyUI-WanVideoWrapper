@@ -118,47 +118,52 @@ class AutoTrader:
 
     async def _candle_confirms(self, signal: Signal) -> bool:
         """
-        ICT 15M confirmation — THREE conditions must all be true:
-          1. Wick touched the OB zone (price visited zone)
-          2. Strong directional body (body >= 35% of candle range — no doji)
-          3. Close rejected BEYOND the zone midpoint (strong rejection)
+        ICT 2-candle 15M confirmation pattern:
+
+        SHORT (bearish OB):
+          Candle-1 (trigger): wick HIGH >= OB zone  AND  close BELOW OB low
+                              → سایه بلند زد داخل OB ولی بدنه زیر OB بسته شد
+          Candle-2 (confirm): close < candle-1 close
+                              → کندل بعدی هم پایین‌تر بست (ادامه فشار)
+
+        LONG (bullish OB):
+          Candle-1 (trigger): wick LOW <= OB zone  AND  close ABOVE OB high
+          Candle-2 (confirm): close > candle-1 close
         """
-        raw15 = await self.client.get_klines(signal.symbol, "15m", 4)
-        if not raw15 or len(raw15) < 2:
+        raw15 = await self.client.get_klines(signal.symbol, "15m", 6)
+        if not raw15 or len(raw15) < 3:
             return False
-        c    = raw15[-2]   # last completed 15M candle
-        o    = float(c["open"])
-        h    = float(c["high"])
-        l    = float(c["low"])
-        cl   = float(c["close"])
 
-        lo = signal.zone.price_low  * (1 - ENTRY_ZONE_TOL)
-        hi = signal.zone.price_high * (1 + ENTRY_ZONE_TOL)
-        zone_mid = (lo + hi) / 2
+        c1   = raw15[-3]   # trigger candle
+        c2   = raw15[-2]   # confirmation candle (last completed)
 
-        rng  = h - l
-        body = abs(cl - o)
-        body_pct = (body / rng) if rng > 0 else 0
+        h1   = float(c1["high"])
+        l1   = float(c1["low"])
+        cl1  = float(c1["close"])
+        cl2  = float(c2["close"])
+
+        ob_lo = signal.zone.price_low
+        ob_hi = signal.zone.price_high
 
         if signal.direction == "SHORT":
-            touched  = h >= lo                # wick entered OB
-            strong   = cl < o and body_pct >= 0.35   # real bearish body
-            rejected = cl < zone_mid          # closed below zone midpoint
+            wick_in  = h1 >= ob_lo * (1 - ENTRY_ZONE_TOL)   # سایه وارد OB شد
+            rejected = cl1 < ob_lo                            # close زیر OB
+            cont     = cl2 < cl1                              # کندل بعدی پایین‌تر
         else:
-            touched  = l <= hi                # wick entered OB
-            strong   = cl > o and body_pct >= 0.35   # real bullish body
-            rejected = cl > zone_mid          # closed above zone midpoint
+            wick_in  = l1 <= ob_hi * (1 + ENTRY_ZONE_TOL)
+            rejected = cl1 > ob_hi
+            cont     = cl2 > cl1
 
-        ok = touched and strong and rejected
+        ok = wick_in and rejected and cont
         if ok:
-            print(f"  ✅ 15M confirmed: O={o:.6g} H={h:.6g} L={l:.6g} C={cl:.6g}"
-                  f"  body={body_pct:.0%}  zone_mid={zone_mid:.6g}")
+            print(f"  ✅ 2-candle 15M  C1: H={h1:.6g} L={l1:.6g} cl={cl1:.6g}"
+                  f"  C2: cl={cl2:.6g}  OB={ob_lo:.6g}–{ob_hi:.6g}")
         else:
-            reasons = []
-            if not touched:  reasons.append("zone لمس نشد")
-            if not strong:   reasons.append(f"بدنه ضعیف ({body_pct:.0%}<35%)")
-            if not rejected: reasons.append("close داخل zone موند")
-            print(f"  ⬜ 15M: {' | '.join(reasons)}")
+            r = []
+            if not wick_in:  r.append("سایه به OB نرسید")
+            if not rejected: r.append(f"close داخل/بالای OB ({cl1:.6g} vs ob_lo={ob_lo:.6g})")
+            if not cont:     r.append(f"C2 ادامه نداد (cl2={cl2:.6g} cl1={cl1:.6g})")
+            print(f"  ⬜ 15M: {' | '.join(r)}")
         return ok
 
     async def _volume_breaks(self, signal: Signal) -> Tuple[bool, float]:
