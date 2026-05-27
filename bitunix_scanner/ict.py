@@ -613,19 +613,105 @@ def detect_candle_confirmation(raw: list, direction: str) -> Tuple[bool, str]:
 
 
 def btc_ict_bias(tf_klines: dict) -> Tuple[str, str]:
-    scores = {"bullish": 0, "bearish": 0}
+    """
+    Full ICT BTC bias:
+      - 4H market structure (HH/HL vs LH/LL)         +4 / +4
+      - 4H BOS / MSS (price broke prev swing)         +3 / +3
+      - 4H FVG in direction                           +1 / +1
+      - 4H liquidity sweep                            +1 / +1
+      - 1H market structure                           +2 / +2
+      - 1H BOS / MSS                                  +1 / +1
+      - Daily structure (context filter)              +2 / +2
+      - 4H premium/discount (>50% = premium → SHORT)  +1 / +1
+    Needs ≥ 60% of scored points to call a direction.
+    """
+    scores  = {"bullish": 0, "bearish": 0}
     details = []
 
-    for tf, weight in [("1d", 3), ("4h", 2), ("1h", 1)]:
-        if tf not in tf_klines or not tf_klines[tf]:
-            continue
-        ms = market_structure(tf_klines[tf])
-        details.append(f"{tf}:{ms[0].upper()}")
-        if ms in ("bullish", "bearish"):
-            scores[ms] += weight
+    # ── 4H ───────────────────────────────────────────────────────────────
+    raw4h = tf_klines.get("4h", [])
+    if raw4h:
+        ms4h = market_structure(raw4h, lookback=60)
+        details.append(f"4H:{ms4h[0].upper()}")
+        if ms4h == "bullish":   scores["bullish"] += 4
+        elif ms4h == "bearish": scores["bearish"] += 4
 
-    if scores["bullish"] > scores["bearish"]:
-        return "bullish", " | ".join(details)
-    if scores["bearish"] > scores["bullish"]:
-        return "bearish", " | ".join(details)
-    return "neutral", " | ".join(details)
+        kl4 = _parse_klines(raw4h)
+        if len(kl4) >= 20:
+            recent4 = kl4[-60:] if len(kl4) >= 60 else kl4
+            sh4 = _swing_highs(recent4, n=3)
+            sl4 = _swing_lows(recent4,  n=3)
+            last_c = kl4[-1]["close"]
+            # BOS bullish: closed above previous swing high
+            if len(sh4) >= 2 and last_c > recent4[sh4[-2]]["high"]:
+                scores["bullish"] += 3
+                details.append("4H:BOS↑")
+            # BOS bearish: closed below previous swing low
+            if len(sl4) >= 2 and last_c < recent4[sl4[-2]]["low"]:
+                scores["bearish"] += 3
+                details.append("4H:BOS↓")
+
+            # FVG bias
+            if detect_fvg(raw4h, "bullish"): scores["bullish"] += 1
+            if detect_fvg(raw4h, "bearish"): scores["bearish"] += 1
+
+            # Liquidity sweep (shows intent)
+            lq_b, _ = detect_liquidity_sweep(raw4h, "bullish")
+            lq_s, _ = detect_liquidity_sweep(raw4h, "bearish")
+            if lq_b: scores["bullish"] += 1
+            if lq_s: scores["bearish"] += 1
+
+            # Premium / Discount of 4H range
+            # ICT: buy in discount (<50% of range), sell in premium (>50%)
+            rng_hi = max(k["high"] for k in recent4)
+            rng_lo = min(k["low"]  for k in recent4)
+            equil  = (rng_hi + rng_lo) / 2
+            if last_c < equil:
+                scores["bullish"] += 1
+                details.append("DISC")
+            else:
+                scores["bearish"] += 1
+                details.append("PREM")
+
+    # ── 1H ───────────────────────────────────────────────────────────────
+    raw1h = tf_klines.get("1h", [])
+    if raw1h:
+        ms1h = market_structure(raw1h, lookback=40)
+        details.append(f"1H:{ms1h[0].upper()}")
+        if ms1h == "bullish":   scores["bullish"] += 2
+        elif ms1h == "bearish": scores["bearish"] += 2
+
+        kl1 = _parse_klines(raw1h)
+        if len(kl1) >= 20:
+            recent1 = kl1[-40:] if len(kl1) >= 40 else kl1
+            sh1 = _swing_highs(recent1, n=2)
+            sl1 = _swing_lows(recent1,  n=2)
+            last_c = kl1[-1]["close"]
+            if len(sh1) >= 2 and last_c > recent1[sh1[-2]]["high"]:
+                scores["bullish"] += 1
+                details.append("1H:BOS↑")
+            if len(sl1) >= 2 and last_c < recent1[sl1[-2]]["low"]:
+                scores["bearish"] += 1
+                details.append("1H:BOS↓")
+
+    # ── Daily (context / filter) ──────────────────────────────────────────
+    raw1d = tf_klines.get("1d", [])
+    if raw1d:
+        ms1d = market_structure(raw1d, lookback=30)
+        details.append(f"D:{ms1d[0].upper()}")
+        if ms1d == "bullish":   scores["bullish"] += 2
+        elif ms1d == "bearish": scores["bearish"] += 2
+
+    # ── Decision ─────────────────────────────────────────────────────────
+    total = scores["bullish"] + scores["bearish"]
+    if total == 0:
+        return "neutral", " | ".join(details)
+
+    bull_pct = scores["bullish"] / total * 100
+    bear_pct = scores["bearish"] / total * 100
+
+    if bull_pct >= 60:
+        return "bullish", " | ".join(details) + f"  [{bull_pct:.0f}%↑]"
+    if bear_pct >= 60:
+        return "bearish", " | ".join(details) + f"  [{bear_pct:.0f}%↓]"
+    return "neutral", " | ".join(details) + f"  [↑{scores['bullish']} ↓{scores['bearish']}]"
