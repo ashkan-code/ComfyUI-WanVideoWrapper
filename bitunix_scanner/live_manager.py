@@ -27,9 +27,10 @@ from .ict import market_structure
 from .signals import _fmt
 
 CANDLE_POLL_SEC  = 300    # check every 5m candle close
-ENGULF_RATIO     = 0.75
-WICK_RATIO       = 2.0
-OB_BREAK_BUFFER  = 0.003
+ENGULF_RATIO     = 1.0    # true engulfing only (body fully covers prev candle)
+WICK_RATIO       = 2.5    # wick must be 2.5× body (strong rejection)
+OB_BREAK_BUFFER  = 0.005  # 0.5% beyond OB before calling it broken
+MIN_TRADE_MIN    = 15     # don't trigger danger checks for first 15 min (let trade breathe)
 
 
 @dataclass
@@ -64,12 +65,12 @@ def detect_danger_candle(candles: list, direction: str,
                           entry_price: float) -> Optional[str]:
     """
     Analyse the last two CLOSED 5m candles for ICT danger signals.
+    Only closes on HIGH-CONFIDENCE signals — avoids premature exits on noise.
     Returns reason string if position should be closed, else None.
     """
     if len(candles) < 4:
         return None
 
-    # Use last 2 closed candles (candles[-1] is still forming)
     c1 = candles[-3]   # second-last closed
     c2 = candles[-2]   # last closed
 
@@ -81,60 +82,39 @@ def detect_danger_candle(candles: list, direction: str,
     lw2 = _lw(o2, l2, cl2)
 
     if direction == "SHORT":
-        # 1. Strong bullish engulfing
-        if (cl2 > o2
-                and b2 > 0
+        # 1. True bullish engulfing (body fully covers prev candle — no 75% shortcut)
+        if (cl2 > o2 and b2 > 0
                 and o2 <= min(o1, cl1)
                 and cl2 >= max(o1, cl1)
                 and b2 >= b1 * ENGULF_RATIO):
             return "Bullish Engulfing 5m 🕯️"
 
-        # 2. Hammer / Pin Bar (strong lower wick — buyers defending lows)
-        if b2 > 0 and lw2 >= b2 * WICK_RATIO and cl2 > (l2 + (h2 - l2) * 0.6):
+        # 2. Hammer / Pin Bar — strong lower wick, closes near high
+        if b2 > 0 and lw2 >= b2 * WICK_RATIO and cl2 > (l2 + (h2 - l2) * 0.7):
             return "Hammer / Pin Bar 5m 🔨"
 
-        # 3. OB zone broken (close above OB high)
+        # 3. OB zone clearly broken (0.5% buffer)
         if cl2 > ob_high * (1 + OB_BREAK_BUFFER):
             return f"OB Broken ↑ ({_fmt(cl2)} > {_fmt(ob_high)}) 🚫"
 
-        # 4. Break of structure bullish on 5m
-        recent_high = max(float(c['high']) for c in candles[-10:-2])
-        if h2 > recent_high * 1.002:
-            return f"BOS Bullish 5m (HH {_fmt(h2)}) 📈"
-
-        # 5. Two consecutive strong bullish candles above entry
-        if (cl2 > o2 and cl1 > o1
-                and cl2 > entry_price and cl1 > entry_price
-                and b2 > b1 * 0.5):
-            return "2× Strong Bull 5m above entry 🔁"
+        # 4. REMOVED: 5m BOS — too noisy, fires on normal bounce
+        # 5. REMOVED: 2× Strong Bull — fires on normal retracement
 
     else:  # LONG
-        # 1. Strong bearish engulfing
-        if (cl2 < o2
-                and b2 > 0
+        # 1. True bearish engulfing
+        if (cl2 < o2 and b2 > 0
                 and o2 >= max(o1, cl1)
                 and cl2 <= min(o1, cl1)
                 and b2 >= b1 * ENGULF_RATIO):
             return "Bearish Engulfing 5m 🕯️"
 
-        # 2. Shooting Star (strong upper wick — sellers defending highs)
-        if b2 > 0 and uw2 >= b2 * WICK_RATIO and cl2 < (l2 + (h2 - l2) * 0.4):
+        # 2. Shooting Star — strong upper wick, closes near low
+        if b2 > 0 and uw2 >= b2 * WICK_RATIO and cl2 < (l2 + (h2 - l2) * 0.3):
             return "Shooting Star 5m ⭐"
 
-        # 3. OB zone broken
+        # 3. OB zone clearly broken
         if cl2 < ob_low * (1 - OB_BREAK_BUFFER):
             return f"OB Broken ↓ ({_fmt(cl2)} < {_fmt(ob_low)}) 🚫"
-
-        # 4. BOS bearish on 5m
-        recent_low = min(float(c['low']) for c in candles[-10:-2])
-        if l2 < recent_low * 0.998:
-            return f"BOS Bearish 5m (LL {_fmt(l2)}) 📉"
-
-        # 5. Two consecutive strong bearish candles below entry
-        if (cl2 < o2 and cl1 < o1
-                and cl2 < entry_price and cl1 < entry_price
-                and b2 > b1 * 0.5):
-            return "2× Strong Bear 5m below entry 🔁"
 
     return None
 
@@ -202,52 +182,48 @@ class LiveManager:
 
     async def _structure_invalidated(self, mp: ManagedPosition) -> Optional[str]:
         """
-        HTF-first danger check — priority: Daily > 4H > 1H > 15m
-        A single HTF signal is enough to close. No need for LTF confirmation.
+        HTF structure invalidation — needs MULTIPLE TFs to agree before closing.
+        Single TF flip (especially 1H) is noise in sideways markets — ignored alone.
+        Rules:
+          • Daily against → close immediately (Daily is king)
+          • 4H against + 1H against → close (two HTFs confirm)
+          • 4H against + 1H neutral → warning only, don't close
+          • 1H alone against → ignore (normal retracement)
         """
         opp = "bullish" if mp.direction == "SHORT" else "bearish"
 
-        # Priority 1: Daily structure against → immediate close
+        # Daily structure against → immediate close (no argument with Daily)
         raw_1d = await self.client.get_klines(mp.symbol, "1d", 40)
         ms_1d  = market_structure(raw_1d, lookback=30)
         if ms_1d == opp:
             return f"Daily ساختار چرخید به {ms_1d.upper()} ⚡"
 
-        # Priority 2: 4H structure against → immediate close
+        # 4H + 1H both against → close (strong confirmation)
         raw_4h = await self.client.get_klines(mp.symbol, "4h", 60)
         ms_4h  = market_structure(raw_4h, lookback=40)
-        if ms_4h == opp:
-            return f"4H ساختار چرخید به {ms_4h.upper()} ⚡"
-
-        # Priority 3: 1H structure against → immediate close
         raw_1h = await self.client.get_klines(mp.symbol, "1h", 60)
         ms_1h  = market_structure(raw_1h, lookback=40)
-        if ms_1h == opp:
-            return f"1H ساختار چرخید به {ms_1h.upper()} ⚡"
 
-        # Priority 4: 15m (advisory — close only if 1h also neutral)
-        raw_15m = await self.client.get_klines(mp.symbol, "15m", 60)
-        ms_15m  = market_structure(raw_15m, lookback=30)
-        if ms_15m == opp and ms_1h == "neutral":
-            return f"15m {ms_15m.upper()} + 1H neutral — خروج احتیاطی ⚡"
+        if ms_4h == opp and ms_1h == opp:
+            return f"4H+1H هر دو {opp.upper()} ← ساختار invalidated ⚡"
+
+        # 4H against + 1H neutral → log warning but don't close
+        if ms_4h == opp and ms_1h == "neutral":
+            print(f"  ⚠️  {mp.symbol}: 4H={ms_4h} ولی 1H=neutral → نگه می‌داریم")
 
         return None
 
     async def _btc_htf_flipped(self, direction: str) -> Optional[str]:
-        """BTC HTF-first check: 4H flip is enough — don't wait for 15m."""
+        """BTC flip: needs BOTH 4H and 1H to flip — one alone is noise."""
         opp = "bullish" if direction == "SHORT" else "bearish"
 
-        # BTC 4H first
         raw_4h = await self.client.get_klines("BTCUSDT", "4h", 60)
         ms_4h  = market_structure(raw_4h, lookback=40)
-        if ms_4h == opp:
-            return f"BTC 4H چرخید به {ms_4h.upper()} ₿⚡"
-
-        # BTC 1H
         raw_1h = await self.client.get_klines("BTCUSDT", "1h", 60)
         ms_1h  = market_structure(raw_1h, lookback=40)
-        if ms_1h == opp:
-            return f"BTC 1H چرخید به {ms_1h.upper()} ₿⚡"
+
+        if ms_4h == opp and ms_1h == opp:
+            return f"BTC 4H+1H هر دو {opp.upper()} ₿⚡"
 
         return None
 
@@ -295,7 +271,13 @@ class LiveManager:
             btc_flip_cache: Optional[str] = None
 
             for sym, mp in list(self._positions.items()):
-                # ── P1: HTF structure (Daily > 4H > 1H > 15m) ────────────
+                # Skip danger checks for first MIN_TRADE_MIN minutes (let trade breathe)
+                elapsed_min = (time.time() - mp.open_time) / 60
+                if elapsed_min < MIN_TRADE_MIN:
+                    print(f"  ⏳ {sym}: {elapsed_min:.0f}m — در دوره سکوت اولیه ({MIN_TRADE_MIN}m)")
+                    continue
+
+                # ── P1: HTF structure (Daily > 4H+1H) ────────────────────
                 struct_r = await self._structure_invalidated(mp)
                 if struct_r:
                     await self._emergency_close(mp, struct_r)
