@@ -53,6 +53,7 @@ from .ict import (
 from .live_manager import LiveManager, ManagedPosition
 from .scanner import run_scan
 from .signals import Signal, _fmt, format_summary
+from .spring_scanner import run_spring_scan
 from .trader import AutoTrader
 
 API_KEY    = os.getenv("BITUNIX_API_KEY",    "7bee3f4756a0dbc89ae152f34c2175ac")
@@ -332,7 +333,11 @@ async def _run_cycle(client: AsyncBitunixClient,
     """
     print(f"\n  [{_ts()}]  ─── Cycle #{cycle} ───")
 
-    live_mgr = LiveManager(client, poll_sec=300)
+    # ── اسکن فنر Wyckoff (جداگانه، همیشه با تأیید دستی) ──────────────────
+    print(f"  [{_ts()}] 🔄 Spring/Upthrust scan …")
+    await run_spring_scan(top_n=args.top, progress=True)
+
+    live_mgr = LiveManager(client, poll_sec=3600)
 
     n_existing = await _load_existing_positions(client, live_mgr)
     if n_existing:

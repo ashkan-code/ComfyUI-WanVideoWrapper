@@ -407,6 +407,109 @@ def detect_liquidity_sweep(raw: list, direction: str) -> Tuple[bool, str]:
     return False, ""
 
 
+def detect_wyckoff_spring(raw: list, direction: str,
+                           lookback: int = 60,
+                           equal_tol: float = 0.003,
+                           max_age: int = 10) -> Tuple[bool, dict]:
+    """
+    Wyckoff Spring (LONG) / Upthrust SHORT detection.
+
+    Spring — LONG:
+      ۱. Equal Lows: حداقل ۲ کف swing در فاصله ≤0.3% از هم (نقدینگی جمع شده)
+      ۲. Spring candle: low زیر سطح Equal Lows رفته (stop hunt)
+      ۳. همون کندل یا کندل بعدی close بالای سطح برگشته
+      ۴. سایه پایین ≥ ۱.۵× بدنه (hammer shape)
+      ۵. تازه‌ست: آخرین max_age کندل اتفاق افتاده
+
+    Upthrust — SHORT:
+      آینه: Equal Highs + wick بالا + close پایین‌تر از سطح
+    """
+    klines = _parse_klines(raw)
+    if len(klines) < 20:
+        return False, {}
+
+    recent = klines[-lookback:] if len(klines) >= lookback else klines
+    n = len(recent)
+
+    if direction == "bullish":
+        sl_idxs = _swing_lows(recent[: max(n - 3, 10)], n=2)
+        if len(sl_idxs) < 2:
+            return False, {}
+
+        for i in range(len(sl_idxs) - 1, 0, -1):
+            for j in range(i - 1, -1, -1):
+                lo_a = recent[sl_idxs[i]]["low"]
+                lo_b = recent[sl_idxs[j]]["low"]
+                if abs(lo_a - lo_b) / lo_a > equal_tol:
+                    continue
+
+                level = min(lo_a, lo_b)
+                second_idx = sl_idxs[i]
+
+                for k in range(second_idx + 1, n):
+                    c = recent[k]
+                    pierced = c["low"] < level * 0.9995
+                    recovered = c["close"] > level
+                    if not (pierced and recovered):
+                        continue
+                    body = abs(c["close"] - c["open"])
+                    lw   = min(c["open"], c["close"]) - c["low"]
+                    if body == 0 or lw < body * 1.5:
+                        continue
+                    if k < n - max_age:
+                        continue
+                    return True, {
+                        "type":    "Spring",
+                        "level":   level,
+                        "swept":   c["low"],
+                        "close":   c["close"],
+                        "eq_lo1":  lo_a,
+                        "eq_lo2":  lo_b,
+                        "candle":  c,
+                        "age":     n - 1 - k,
+                    }
+
+    else:  # bearish — Upthrust
+        sh_idxs = _swing_highs(recent[: max(n - 3, 10)], n=2)
+        if len(sh_idxs) < 2:
+            return False, {}
+
+        for i in range(len(sh_idxs) - 1, 0, -1):
+            for j in range(i - 1, -1, -1):
+                hi_a = recent[sh_idxs[i]]["high"]
+                hi_b = recent[sh_idxs[j]]["high"]
+                if abs(hi_a - hi_b) / hi_a > equal_tol:
+                    continue
+
+                level = max(hi_a, hi_b)
+                second_idx = sh_idxs[i]
+
+                for k in range(second_idx + 1, n):
+                    c = recent[k]
+                    pierced   = c["high"] > level * 1.0005
+                    recovered = c["close"] < level
+                    if not (pierced and recovered):
+                        continue
+                    body = abs(c["close"] - c["open"])
+                    uw   = c["high"] - max(c["open"], c["close"])
+                    if body == 0 or uw < body * 1.5:
+                        continue
+                    if k < n - max_age:
+                        continue
+                    return True, {
+                        "type":    "Upthrust",
+                        "level":   level,
+                        "swept":   c["high"],
+                        "close":   c["close"],
+                        "eq_hi1":  hi_a,
+                        "eq_hi2":  hi_b,
+                        "candle":  c,
+                        "age":     n - 1 - k,
+                    }
+
+    return False, {}
+
+
 def detect_mss_bos_ltf(raw_5m: list, raw_15m: list,
                         direction: str) -> Tuple[bool, str]:
     for tf_label, raw in (("15m", raw_15m), ("5m", raw_5m)):
