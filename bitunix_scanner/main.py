@@ -59,10 +59,11 @@ from .trader import AutoTrader
 API_KEY    = os.getenv("BITUNIX_API_KEY",    "7bee3f4756a0dbc89ae152f34c2175ac")
 SECRET_KEY = os.getenv("BITUNIX_SECRET_KEY", "4e0a845778d49068297106a64cbcda61")
 
-RESCAN_WAIT     = 300   # seconds between scans when no signal found
-POST_TRADE_WAIT = 30    # seconds after all positions closed before re-scan
-ERROR_WAIT      = 60    # seconds after an unexpected error
-CONFIRM_TIMEOUT = 120   # seconds to wait for user confirmation
+RESCAN_WAIT       = 300    # seconds between scans when no signal found
+POST_TRADE_WAIT   = 30     # seconds after all positions closed before re-scan
+ERROR_WAIT        = 60     # seconds after an unexpected error
+CONFIRM_TIMEOUT   = 120    # seconds to wait for user confirmation
+SPRING_SCAN_EVERY = 14400  # spring scan هر 4 ساعت یک بار (HTF event)
 
 
 def _ts() -> str:
@@ -333,10 +334,6 @@ async def _run_cycle(client: AsyncBitunixClient,
     """
     print(f"\n  [{_ts()}]  ─── Cycle #{cycle} ───")
 
-    # ── اسکن فنر Wyckoff (جداگانه، همیشه با تأیید دستی) ──────────────────
-    print(f"  [{_ts()}] 🔄 Spring/Upthrust scan …")
-    await run_spring_scan(top_n=args.top, progress=True)
-
     live_mgr = LiveManager(client, poll_sec=3600)
 
     n_existing = await _load_existing_positions(client, live_mgr)
@@ -422,8 +419,9 @@ async def _live_loop(args):
 ╚══════════════════════════════════════════════════════╝
 """)
 
-    cycle        = 0
-    trader_state = {}
+    cycle             = 0
+    trader_state      = {}
+    last_spring_scan  = 0.0   # timestamp آخرین spring scan
 
     async with aiohttp.ClientSession() as session:
         client = AsyncBitunixClient(API_KEY, SECRET_KEY, session)
@@ -431,6 +429,14 @@ async def _live_loop(args):
         while True:
             cycle += 1
             try:
+                # Spring scan: فقط هر 4 ساعت یک بار (نه هر 5 دقیقه)
+                import time as _time
+                now = _time.time()
+                if now - last_spring_scan >= SPRING_SCAN_EVERY:
+                    print(f"\n  [{_ts()}] 🔄 Wyckoff Spring scan (هر 4h) …")
+                    await run_spring_scan(top_n=0, progress=True)
+                    last_spring_scan = _time.time()
+
                 result = await _run_cycle(client, args, cycle, trader_state)
 
                 if result == "no_signal":

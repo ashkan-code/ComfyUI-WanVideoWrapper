@@ -91,23 +91,28 @@ async def main():
 
         found.sort(key=lambda s: s.score, reverse=True)
 
-        print(f"  {'رتبه':<5} {'ارز':<16} {'جهت':<8} {'TF':<5}"
-              f" {'امتیاز':<8} {'RRR':<7} {'SL%':<7} TP%")
-        print("  " + "─"*60)
+        print(f"\n{'═'*60}")
+        print(f"  نتایج  ─  {len(found)} فنر معتبر از {len(symbols)} ارز")
+        print(f"{'═'*60}")
+        print(f"  {'#':<4} {'ارز':<16} {'جهت':<7} {'TF':<5} {'امتیاز':<10}"
+              f" {'RRR':<7} {'SL%':<7} {'TP%':<8} {'Pierce'}")
+        print("  " + "─"*65)
         for i, s in enumerate(found, 1):
-            tp_pct = (s.tp - s.entry) / s.entry * 100
-            sl_pct = f"{s.loss_pct:.1f}%"
-            print(f"  #{i:<4} {s.symbol:<16} {s.direction:<8} {s.tf:<5}"
-                  f" {s.score:>5.0f}/100  1:{s.rr:.1f}   {sl_pct:<7} {tp_pct:+.1f}%")
+            tp_pct  = (s.tp - s.entry) / s.entry * 100
+            pierce  = s.detail.get("pierce", 0)
+            marker  = "  ← 🔥" if s.score >= 70 else ("  ← ✅" if s.score >= 55 else "")
+            print(f"  #{i:<3} {s.symbol:<16} {s.direction:<7} {s.tf:<5}"
+                  f" {s.score:>5.0f}/100  1:{s.rr:.1f}   {s.loss_pct:.1f}%   "
+                  f"{tp_pct:+.1f}%   {pierce:.2f}%{marker}")
 
-        print(f"\n{'═'*56}")
+        print(f"\n{'═'*60}")
         print(f"  تحلیل کامل top {min(SHOW_TOP, len(found))}:")
-        print(f"{'═'*56}")
+        print(f"{'═'*60}\n")
 
         for rank, sig in enumerate(found[:SHOW_TOP], 1):
             print(_format_spring(rank, sig))
 
-        print(f"\n  برای معامله دستور زیر رو بزن:")
+        print(f"\n  برای معامله (با تأیید دستی):")
         print(f"  python -m bitunix_scanner.main --live --poll 30\n")
 
 

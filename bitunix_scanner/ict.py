@@ -408,9 +408,120 @@ def detect_liquidity_sweep(raw: list, direction: str) -> Tuple[bool, str]:
 
 
 def detect_wyckoff_spring(raw: list, direction: str,
-                           lookback: int = 60,
-                           equal_tol: float = 0.003,
-                           max_age: int = 10) -> Tuple[bool, dict]:
+                           lookback: int = 80,
+                           equal_tol: float = 0.001,   # 0.1% — کف‌های مساوی واقعی
+                           min_pierce: float = 0.002,  # حداقل 0.2% زیر سطح رفته
+                           wick_ratio: float = 2.5,    # سایه ≥ 2.5× بدنه
+                           max_age: int = 4,            # فقط 4 کندل اخیر
+                           min_gap: int = 5) -> Tuple[bool, dict]:  # حداقل 5 کندل بین دو کف
+    """
+    Wyckoff Spring (LONG) / Upthrust (SHORT) — الماس‌های واقعی.
+
+    معیارهای سخت‌گیرانه:
+      Equal Lows/Highs : فاصله ≤ 0.1% (نه 0.3%) + حداقل 5 کندل بین‌شون
+      Pierce depth     : حداقل 0.2% زیر/بالای سطح رفته (stop hunt واقعی)
+      Recovery         : close حداقل 0.1% برگشته به داخل سطح
+      Wick ratio       : سایه ≥ 2.5× بدنه (rejection قوی)
+      Recency          : فقط 4 کندل اخیر (تازه)
+    """
+    klines = _parse_klines(raw)
+    if len(klines) < 30:
+        return False, {}
+
+    recent = klines[-lookback:] if len(klines) >= lookback else klines
+    n = len(recent)
+
+    if direction == "bullish":
+        sl_idxs = _swing_lows(recent[: max(n - 3, 15)], n=3)
+        if len(sl_idxs) < 2:
+            return False, {}
+
+        for i in range(len(sl_idxs) - 1, 0, -1):
+            for j in range(i - 1, -1, -1):
+                # حداقل min_gap کندل بین دو کف
+                if sl_idxs[i] - sl_idxs[j] < min_gap:
+                    continue
+                lo_a = recent[sl_idxs[i]]["low"]
+                lo_b = recent[sl_idxs[j]]["low"]
+                # Equal lows — فاصله ≤ 0.1%
+                if abs(lo_a - lo_b) / lo_a > equal_tol:
+                    continue
+
+                level      = min(lo_a, lo_b)
+                second_idx = sl_idxs[i]
+
+                for k in range(second_idx + 1, n):
+                    c = recent[k]
+                    # Pierce: حداقل 0.2% زیر سطح
+                    if c["low"] >= level * (1 - min_pierce):
+                        continue
+                    # Recovery: close حداقل 0.1% بالای سطح
+                    if c["close"] < level * 1.001:
+                        continue
+                    # Wick ratio ≥ 2.5
+                    body = abs(c["close"] - c["open"])
+                    lw   = min(c["open"], c["close"]) - c["low"]
+                    if body == 0 or lw < body * wick_ratio:
+                        continue
+                    # فقط 4 کندل اخیر
+                    if k < n - max_age:
+                        continue
+                    return True, {
+                        "type":   "Spring",
+                        "level":  level,
+                        "swept":  c["low"],
+                        "close":  c["close"],
+                        "pierce": (level - c["low"]) / level * 100,
+                        "eq_lo1": lo_a,
+                        "eq_lo2": lo_b,
+                        "candle": c,
+                        "age":    n - 1 - k,
+                        "gap":    sl_idxs[i] - sl_idxs[j],
+                    }
+
+    else:  # bearish — Upthrust
+        sh_idxs = _swing_highs(recent[: max(n - 3, 15)], n=3)
+        if len(sh_idxs) < 2:
+            return False, {}
+
+        for i in range(len(sh_idxs) - 1, 0, -1):
+            for j in range(i - 1, -1, -1):
+                if sh_idxs[i] - sh_idxs[j] < min_gap:
+                    continue
+                hi_a = recent[sh_idxs[i]]["high"]
+                hi_b = recent[sh_idxs[j]]["high"]
+                if abs(hi_a - hi_b) / hi_a > equal_tol:
+                    continue
+
+                level      = max(hi_a, hi_b)
+                second_idx = sh_idxs[i]
+
+                for k in range(second_idx + 1, n):
+                    c = recent[k]
+                    if c["high"] <= level * (1 + min_pierce):
+                        continue
+                    if c["close"] > level * 0.999:
+                        continue
+                    body = abs(c["close"] - c["open"])
+                    uw   = c["high"] - max(c["open"], c["close"])
+                    if body == 0 or uw < body * wick_ratio:
+                        continue
+                    if k < n - max_age:
+                        continue
+                    return True, {
+                        "type":   "Upthrust",
+                        "level":  level,
+                        "swept":  c["high"],
+                        "close":  c["close"],
+                        "pierce": (c["high"] - level) / level * 100,
+                        "eq_hi1": hi_a,
+                        "eq_hi2": hi_b,
+                        "candle": c,
+                        "age":    n - 1 - k,
+                        "gap":    sh_idxs[i] - sh_idxs[j],
+                    }
+
+    return False, {}
     """
     Wyckoff Spring (LONG) / Upthrust SHORT detection.
 
