@@ -3,10 +3,10 @@ import { shortenAddress, getExplorerTxUrl } from '../lib/ethers'
 
 interface Props { transactions: Transaction[]; onClear: () => void }
 
-const STATUS: Record<TxStatus, { label: string; color: string; bg: string; dot: string }> = {
-  pending:   { label: 'Pending',   color: '#f59e0b', bg: 'rgba(245,158,11,0.08)',  dot: 'animate-pulse' },
-  confirmed: { label: 'Confirmed', color: '#10b981', bg: 'rgba(16,185,129,0.08)',  dot: '' },
-  failed:    { label: 'Failed',    color: '#ef4444', bg: 'rgba(239,68,68,0.08)',   dot: '' },
+const STATUS: Record<TxStatus, { label: string; cls: string; dot: string; icon: string }> = {
+  pending:   { label: 'Pending',   cls: 'badge-amber', dot: 'animate-pulse', icon: '⏳' },
+  confirmed: { label: 'Confirmed', cls: 'badge-green',  dot: '',              icon: '✓'  },
+  failed:    { label: 'Failed',    cls: 'badge-red',    dot: '',              icon: '✗'  },
 }
 
 function timeAgo(ts: number): string {
@@ -19,46 +19,55 @@ function timeAgo(ts: number): string {
 export function TransactionList({ transactions, onClear }: Props) {
   if (transactions.length === 0) {
     return (
-      <div className="rounded-3xl p-16 text-center" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}>
-        <div className="text-5xl mb-4 opacity-20">⧖</div>
-        <p className="text-sm font-medium" style={{ color: '#334155' }}>No transactions yet</p>
-        <p className="text-xs mt-1" style={{ color: '#1e293b' }}>Sent transactions will appear here</p>
+      <div className="neon-card p-16 text-center animate-slideUp scan-container">
+        <div className="scan-line opacity-30" />
+        <div className="text-5xl mb-4" style={{ filter: 'grayscale(1)', opacity: .15 }}>⧖</div>
+        <p className="font-bold text-white mb-1">No transactions yet</p>
+        <p className="text-xs" style={{ color: '#0d2030' }}>
+          Go to <span className="text-neon-cyan font-mono">↗ Send</span> to make your first transaction.
+          It will appear here with live status.
+        </p>
       </div>
     )
   }
 
   return (
-    <div className="rounded-3xl overflow-hidden" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}>
-      <div className="px-5 py-4 flex justify-between items-center" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-        <p className="font-semibold text-white text-sm">Transaction History</p>
-        <button onClick={onClear} className="text-xs transition-colors hover:opacity-80" style={{ color: '#334155' }}>Clear all</button>
+    <div className="neon-card overflow-hidden animate-slideUp">
+      <div className="px-5 py-4 flex justify-between items-center"
+           style={{ borderBottom: '1px solid rgba(0,212,255,.06)' }}>
+        <div className="flex items-center gap-2">
+          <span className="text-white font-bold text-sm">Transaction History</span>
+          <span className="badge-cyan text-xs px-2 py-0.5 rounded-full font-bold">{transactions.length}</span>
+        </div>
+        <button onClick={onClear} className="text-xs transition-all hover:opacity-80" style={{ color: '#0d2030' }}>
+          Clear all
+        </button>
       </div>
 
       <div>
         {transactions.map((tx, i) => {
           const s = STATUS[tx.status]
           return (
-            <div key={tx.hash} className="px-5 py-4 transition-colors hover:bg-white/[0.02]"
-                 style={i < transactions.length - 1 ? { borderBottom: '1px solid rgba(255,255,255,0.03)' } : {}}>
+            <div key={tx.hash} className="px-5 py-4 transition-all hover:bg-white/[0.015] animate-fadeIn"
+                 style={i < transactions.length - 1 ? { borderBottom: '1px solid rgba(0,212,255,.04)' } : {}}>
               <div className="flex justify-between items-start mb-2">
-                <div className="flex items-center gap-2 px-2.5 py-1 rounded-full"
-                     style={{ background: s.bg, border: `1px solid ${s.color}25` }}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} style={{ background: s.color }} />
-                  <span className="text-xs font-semibold" style={{ color: s.color }}>{s.label}</span>
+                <div className={`${s.cls} flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} style={{ background: 'currentColor' }} />
+                  {s.icon} {s.label}
                 </div>
                 <div className="text-right">
-                  <p className="text-white font-semibold text-sm">{tx.value} ETH</p>
-                  <p className="text-xs" style={{ color: '#334155' }}>{timeAgo(tx.timestamp)}</p>
+                  <p className="text-white font-bold text-sm">{tx.value} ETH</p>
+                  <p className="text-xs" style={{ color: '#0d2030' }}>{timeAgo(tx.timestamp)}</p>
                 </div>
               </div>
-              <div className="flex justify-between items-center">
-                <p className="font-mono text-xs" style={{ color: '#475569' }}>To: {shortenAddress(tx.to)}</p>
+              <div className="flex justify-between items-center mt-2">
+                <p className="font-mono text-xs" style={{ color: '#1e3a4a' }}>→ {shortenAddress(tx.to)}</p>
                 <a href={getExplorerTxUrl(tx.chainId, tx.hash)} target="_blank" rel="noopener noreferrer"
-                   className="text-xs transition-colors hover:opacity-80" style={{ color: '#7c3aed' }}>
+                   className="text-xs font-semibold transition-all hover:opacity-80 text-neon-cyan">
                   Etherscan ↗
                 </a>
               </div>
-              <p className="font-mono text-xs mt-0.5" style={{ color: '#1e293b' }}>{shortenAddress(tx.hash)}</p>
+              <p className="font-mono text-xs mt-1" style={{ color: '#0d2030' }}>{shortenAddress(tx.hash)}</p>
             </div>
           )
         })}

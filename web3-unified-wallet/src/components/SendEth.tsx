@@ -15,12 +15,13 @@ export function SendEth({ wallet, onTransactionSent, onTransactionConfirmed }: P
   const [amount, setAmount] = useState('')
   const [gasEth, setGasEth] = useState<string | null>(null)
   const [isEstimating, setIsEstimating] = useState(false)
-  const [isSending, setIsSending] = useState(false)
+  const [isSending, setIsSending]       = useState(false)
   const [error, setError]   = useState<string | null>(null)
   const [sentHash, setSentHash] = useState<string | null>(null)
 
   const isValidAddress = to.length > 0 && ethers.isAddress(to)
   const isValidAmount  = amount.length > 0 && parseFloat(amount) > 0
+  const canSend        = isValidAddress && isValidAmount && !isSending && !isEstimating
 
   const estimateGas = async () => {
     if (!wallet.provider || !isValidAddress || !isValidAmount) return
@@ -33,97 +34,107 @@ export function SendEth({ wallet, onTransactionSent, onTransactionConfirmed }: P
       const gasPrice = feeData.maxFeePerGas ?? feeData.gasPrice ?? 0n
       setGasEth(ethers.formatEther(gasLimit * gasPrice))
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Estimation failed')
+      setError(err instanceof Error ? err.message : 'Gas estimation failed')
     } finally { setIsEstimating(false) }
   }
 
   const send = async () => {
     if (!wallet.provider || !isValidAddress || !isValidAmount) return
     setIsSending(true); setError(null); setSentHash(null)
-    let pendingHash: string | null = null
+    let hash: string | null = null
     try {
       const signer  = await wallet.provider.getSigner()
       const tx      = await signer.sendTransaction({ to, value: ethers.parseEther(amount) })
-      pendingHash   = tx.hash
-      setSentHash(tx.hash)
-      onTransactionSent({ hash: tx.hash, to, value: amount, chainId: wallet.chainId ?? 1 })
+      hash = tx.hash; setSentHash(hash)
+      onTransactionSent({ hash, to, value: amount, chainId: wallet.chainId ?? 1 })
       const receipt = await tx.wait()
       const status  = receipt === null ? 'failed' : receipt.status === 1 ? 'confirmed' : 'failed'
-      onTransactionConfirmed(tx.hash, status)
+      onTransactionConfirmed(hash, status)
       if (status === 'confirmed') { setTo(''); setAmount(''); setGasEth(null) }
       else setError('Transaction reverted on-chain')
     } catch (err) {
-      const msg = err instanceof Error ? (err.message.includes('rejected') ? 'Rejected by user' : err.message) : 'Transaction failed'
+      const msg = err instanceof Error ? (err.message.includes('rejected') ? 'Rejected by user' : err.message) : 'Failed'
       setError(msg)
-      if (pendingHash) onTransactionConfirmed(pendingHash, 'failed')
+      if (hash) onTransactionConfirmed(hash, 'failed')
     } finally { setIsSending(false) }
   }
 
   return (
-    <div className="rounded-3xl p-6" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}>
+    <div className="neon-card p-6 animate-slideUp">
+
+      {/* Guide */}
+      <div className="rounded-xl p-3 mb-5 flex items-start gap-2"
+           style={{ background: 'rgba(0,212,255,.04)', border: '1px solid rgba(0,212,255,.08)' }}>
+        <span>💡</span>
+        <p className="text-xs" style={{ color: '#1e3a4a' }}>
+          Enter an address and amount, then click <strong style={{ color: '#00d4ff' }}>Estimate Gas</strong> to preview the fee before sending.
+          Use Sepolia testnet to send without real ETH.
+        </p>
+      </div>
 
       <div className="space-y-4">
         {/* To */}
         <div>
-          <label className="block text-xs font-semibold mb-2" style={{ color: '#334155', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-            Recipient Address
+          <label className="flex items-center justify-between mb-1.5">
+            <span className="text-xs font-bold uppercase tracking-widest" style={{ color: '#1e3a4a', letterSpacing: '.12em' }}>Recipient Address</span>
+            {to.length > 0 && (
+              <span className="text-xs font-semibold px-2 py-0.5 rounded-full"
+                    style={isValidAddress ? { background: 'rgba(0,255,136,.08)', color: '#00ff88', border: '1px solid rgba(0,255,136,.2)' } : { background: 'rgba(255,51,102,.08)', color: '#ff3366', border: '1px solid rgba(255,51,102,.2)' }}>
+                {isValidAddress ? '✓ Valid address' : '✗ Invalid address'}
+              </span>
+            )}
           </label>
           <div className="relative">
             <input type="text" value={to} onChange={e => { setTo(e.target.value); setGasEth(null) }}
-              placeholder="0x…" spellCheck={false}
-              className="w-full py-3.5 px-4 pr-20 rounded-2xl font-mono text-sm text-white transition-all outline-none"
-              style={{ background: 'rgba(255,255,255,0.03)', border: `1px solid ${to.length > 0 ? (isValidAddress ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)') : 'rgba(255,255,255,0.06)'}`, color: '#e2e8f0' }} />
-            {to.length > 0 && (
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold px-2 py-0.5 rounded-full"
-                    style={isValidAddress ? { background: 'rgba(16,185,129,0.1)', color: '#10b981' } : { background: 'rgba(239,68,68,0.1)', color: '#ef4444' }}>
-                {isValidAddress ? '✓' : '✗'}
-              </span>
-            )}
+              placeholder="0x… paste wallet address" spellCheck={false}
+              className="cyber-input py-3.5 px-4 pr-4 font-mono text-sm"
+              style={{ borderColor: to.length > 0 ? (isValidAddress ? 'rgba(0,255,136,.25)' : 'rgba(255,51,102,.25)') : undefined }} />
           </div>
         </div>
 
         {/* Amount */}
         <div>
-          <label className="block text-xs font-semibold mb-2" style={{ color: '#334155', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-            Amount
+          <label className="flex items-center justify-between mb-1.5">
+            <span className="text-xs font-bold uppercase tracking-widest" style={{ color: '#1e3a4a', letterSpacing: '.12em' }}>Amount (ETH)</span>
+            {wallet.balance && (
+              <button onClick={() => setAmount(wallet.balance!)}
+                      className="text-xs font-semibold transition-all hover:opacity-80" style={{ color: '#7c3aed' }}>
+                Max: {wallet.balance} ETH
+              </button>
+            )}
           </label>
           <div className="relative">
             <input type="number" value={amount} onChange={e => { setAmount(e.target.value); setGasEth(null) }}
               placeholder="0.0" min="0" step="0.001"
-              className="w-full py-3.5 px-4 pr-16 rounded-2xl text-sm text-white outline-none transition-all"
-              style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }} />
-            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-semibold" style={{ color: '#475569' }}>ETH</span>
+              className="cyber-input py-3.5 px-4 pr-16 text-sm" />
+            <span className="absolute right-4 top-1/2 -translate-y-1/2 font-bold text-sm" style={{ color: '#1e3a4a' }}>ETH</span>
           </div>
-          {wallet.balance && (
-            <button onClick={() => setAmount(wallet.balance!)} className="mt-1 text-xs transition-colors hover:opacity-80" style={{ color: '#7c3aed' }}>
-              Max: {wallet.balance} ETH
-            </button>
-          )}
         </div>
 
-        {/* Gas estimate */}
+        {/* Gas */}
         {gasEth && (
-          <div className="rounded-2xl px-4 py-3 flex justify-between items-center"
-               style={{ background: 'rgba(124,58,237,0.06)', border: '1px solid rgba(124,58,237,0.15)' }}>
-            <span className="text-sm flex items-center gap-2" style={{ color: '#7c3aed' }}>⛽ Estimated gas</span>
-            <span className="font-mono text-sm font-semibold" style={{ color: '#a78bfa' }}>~{parseFloat(gasEth).toFixed(6)} ETH</span>
+          <div className="rounded-xl px-4 py-3 flex justify-between items-center animate-slideUp"
+               style={{ background: 'rgba(0,212,255,.05)', border: '1px solid rgba(0,212,255,.12)' }}>
+            <span className="text-sm flex items-center gap-2 text-neon-cyan">⛽ Estimated gas fee</span>
+            <span className="font-mono text-sm font-bold text-neon-cyan">~{parseFloat(gasEth).toFixed(6)} ETH</span>
           </div>
         )}
 
-        {/* Sent hash */}
+        {/* TX hash */}
         {sentHash && (
-          <div className="rounded-2xl px-4 py-3" style={{ background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.15)' }}>
-            <p className="text-xs font-semibold mb-1" style={{ color: '#10b981' }}>Transaction submitted</p>
+          <div className="rounded-xl px-4 py-3 animate-slideUp"
+               style={{ background: 'rgba(0,255,136,.05)', border: '1px solid rgba(0,255,136,.15)' }}>
+            <p className="text-xs font-bold text-neon-green mb-1">✓ Transaction submitted</p>
             <a href={getExplorerTxUrl(wallet.chainId ?? 1, sentHash)} target="_blank" rel="noopener noreferrer"
-               className="font-mono text-xs transition-colors hover:opacity-80" style={{ color: '#34d399' }}>
-              {shortenAddress(sentHash)} ↗
+               className="font-mono text-xs transition-all hover:opacity-80 text-neon-green">
+              {shortenAddress(sentHash)} — View on Etherscan ↗
             </a>
           </div>
         )}
 
         {/* Error */}
         {error && (
-          <div className="rounded-2xl px-4 py-3 flex gap-2 text-sm" style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.15)', color: '#fca5a5' }}>
+          <div className="rounded-xl px-4 py-3 flex gap-2 text-sm animate-slideUp badge-red">
             <span>⚠</span><span>{error}</span>
           </div>
         )}
@@ -131,15 +142,16 @@ export function SendEth({ wallet, onTransactionSent, onTransactionConfirmed }: P
         {/* Buttons */}
         <div className="flex gap-3 pt-1">
           <button onClick={estimateGas} disabled={!isValidAddress || !isValidAmount || isEstimating || isSending}
-            className="flex-1 py-3.5 rounded-2xl text-sm font-semibold transition-all disabled:opacity-30"
-            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: '#94a3b8' }}>
-            {isEstimating ? <span className="flex items-center justify-center gap-2"><span className="w-3 h-3 rounded-full border border-white/30 border-t-white/70 animate-spin"/>Estimating…</span> : '⛽ Estimate Gas'}
+            className="btn-cyber flex-1 py-4 text-sm">
+            {isEstimating
+              ? <span className="flex items-center justify-center gap-2"><span className="w-3 h-3 rounded-full border border-cyan-400/30 border-t-cyan-400 animate-spin"/>Estimating…</span>
+              : '⛽ Estimate Gas'}
           </button>
-
-          <button onClick={send} disabled={!isValidAddress || !isValidAmount || isSending || isEstimating}
-            className="flex-1 py-3.5 rounded-2xl text-sm font-semibold transition-all disabled:opacity-30 text-white"
-            style={{ background: 'linear-gradient(135deg, #7c3aed, #2563eb)', boxShadow: '0 8px 24px rgba(124,58,237,0.25)' }}>
-            {isSending ? <span className="flex items-center justify-center gap-2"><span className="w-3 h-3 rounded-full border border-white/30 border-t-white animate-spin"/>Sending…</span> : '↗ Send ETH'}
+          <button onClick={send} disabled={!canSend}
+            className="btn-primary flex-1 py-4 text-sm">
+            {isSending
+              ? <span className="flex items-center justify-center gap-2"><span className="w-3 h-3 rounded-full border-2 border-white/30 border-t-white animate-spin"/>Sending…</span>
+              : '↗ Send ETH'}
           </button>
         </div>
       </div>

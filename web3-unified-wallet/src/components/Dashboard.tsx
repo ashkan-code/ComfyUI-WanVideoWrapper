@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { WalletState, WalletActions } from '../hooks/useWallet'
 import { shortenAddress, NETWORKS, getExplorerAddressUrl } from '../lib/ethers'
 
@@ -7,12 +7,25 @@ interface Props { wallet: WalletState & WalletActions }
 const NETS = [
   { chainId: 1,        label: 'Mainnet', color: '#627EEA' },
   { chainId: 5,        label: 'Goerli',  color: '#F6C343' },
-  { chainId: 11155111, label: 'Sepolia', color: '#CFB5F0' },
+  { chainId: 11155111, label: 'Sepolia', color: '#a78bfa' },
 ]
+
+function Tip({ text }: { text: string }) {
+  return (
+    <div className="tooltip">
+      <span className="w-4 h-4 rounded-full flex items-center justify-center text-xs cursor-help"
+            style={{ background: 'rgba(0,212,255,.08)', border: '1px solid rgba(0,212,255,.15)', color: '#00d4ff', fontSize: '10px' }}>?</span>
+      <span className="tip">{text}</span>
+    </div>
+  )
+}
 
 export function Dashboard({ wallet }: Props) {
   const [copied, setCopied] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  const [balanceKey, setBalanceKey] = useState(0)
+
+  useEffect(() => { setBalanceKey(k => k + 1) }, [wallet.balance])
 
   const copy = () => {
     if (!wallet.address) return
@@ -27,103 +40,136 @@ export function Dashboard({ wallet }: Props) {
     setRefreshing(false)
   }
 
-  const netColor = wallet.chainId ? (NETWORKS[wallet.chainId]?.color ?? '#6366f1') : '#6366f1'
+  const netColor = wallet.chainId ? (NETWORKS[wallet.chainId]?.color ?? '#00d4ff') : '#00d4ff'
 
   return (
-    <div className="space-y-4">
-      {/* Balance Card */}
-      <div className="rounded-3xl p-px" style={{ background: `linear-gradient(135deg, ${netColor}40, rgba(37,99,235,0.2), rgba(0,0,0,0))` }}>
-        <div className="rounded-3xl p-6 relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #0d1117 0%, #0a0f1a 100%)' }}>
-          {/* Decorative glow */}
-          <div className="absolute -top-12 -right-12 w-48 h-48 rounded-full pointer-events-none"
-               style={{ background: `radial-gradient(circle, ${netColor}20, transparent 70%)` }} />
+    <div className="space-y-4 animate-slideUp">
 
-          <div className="relative">
-            <div className="flex justify-between items-start mb-6">
-              <div>
-                <p className="text-xs font-semibold mb-2" style={{ color: '#334155', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
-                  Connected Wallet
-                </p>
-                <button onClick={copy} className="flex items-center gap-2 transition-all group">
-                  <span className="font-mono text-base text-white group-hover:opacity-70 transition-opacity">
-                    {wallet.address ? shortenAddress(wallet.address) : '—'}
-                  </span>
-                  <span className="text-sm" style={{ color: copied ? '#10b981' : '#334155' }}>
-                    {copied ? '✓' : '⎘'}
-                  </span>
-                </button>
-                {wallet.address && wallet.chainId && (
-                  <a href={getExplorerAddressUrl(wallet.chainId, wallet.address)} target="_blank" rel="noopener noreferrer"
-                     className="text-xs mt-0.5 block transition-colors hover:opacity-80" style={{ color: '#475569' }}>
-                    View on Etherscan ↗
-                  </a>
-                )}
-              </div>
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium"
-                   style={{ background: `${netColor}15`, border: `1px solid ${netColor}30`, color: netColor }}>
-                <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: netColor }} />
-                {wallet.networkName}
-              </div>
-            </div>
+      {/* ── Balance Card ─────────────────────── */}
+      <div className="holo-card p-6 relative">
+        {/* Corner decoration */}
+        <div className="absolute top-4 right-4 w-16 h-16 opacity-10 pointer-events-none"
+             style={{ background: `radial-gradient(circle, ${netColor}, transparent 70%)` }} />
 
-            <div className="flex items-end justify-between">
-              <div>
-                <p className="text-xs font-semibold mb-2" style={{ color: '#334155', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
-                  Balance
-                </p>
-                <p className="text-5xl font-bold tracking-tight text-white">
-                  {wallet.balance ?? '—'}
-                  <span className="text-2xl font-medium ml-2" style={{ color: '#475569' }}>ETH</span>
-                </p>
-              </div>
-              <button onClick={refresh} disabled={refreshing} className="transition-all hover:opacity-60 disabled:opacity-30"
-                      style={{ color: '#475569' }}>
-                <span className={`text-xl block ${refreshing ? 'animate-spin' : ''}`}>↻</span>
-              </button>
+        {/* Header row */}
+        <div className="flex justify-between items-start mb-5">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-widest mb-1.5 flex items-center gap-2"
+               style={{ color: '#1e3a4a', letterSpacing: '.12em' }}>
+              Connected Wallet
+              <Tip text="Your Ethereum wallet address" />
+            </p>
+            <button onClick={copy} className="flex items-center gap-2 group" title="Copy full address">
+              <span className="font-mono font-semibold text-base" style={{ color: '#94a3b8' }}>
+                {wallet.address ? shortenAddress(wallet.address) : '—'}
+              </span>
+              <span className="text-sm transition-all" style={{ color: copied ? '#00ff88' : '#1e3a4a' }}>
+                {copied ? '✓ Copied' : '⎘'}
+              </span>
+            </button>
+            {wallet.address && wallet.chainId && (
+              <a href={getExplorerAddressUrl(wallet.chainId, wallet.address)} target="_blank" rel="noopener noreferrer"
+                 className="text-xs mt-0.5 flex items-center gap-1 transition-all hover:opacity-80"
+                 style={{ color: '#0d2030' }}>
+                <span>🔍</span> View on Etherscan
+              </a>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full"
+               style={{ background: `${netColor}12`, border: `1px solid ${netColor}30` }}>
+            <span className="w-2 h-2 rounded-full animate-pulse" style={{ background: netColor }} />
+            <span className="text-xs font-bold" style={{ color: netColor }}>{wallet.networkName}</span>
+          </div>
+        </div>
+
+        {/* Balance */}
+        <div className="flex items-end justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-widest mb-2 flex items-center gap-2"
+               style={{ color: '#1e3a4a', letterSpacing: '.12em' }}>
+              ETH Balance <Tip text="Native Ether balance on selected network" />
+            </p>
+            <div key={balanceKey} className="animate-ticker flex items-baseline gap-2">
+              <span className="text-5xl font-black text-white tracking-tight" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                {wallet.balance ?? '0.0000'}
+              </span>
+              <span className="text-xl font-semibold" style={{ color: '#1e3a4a' }}>ETH</span>
             </div>
+          </div>
+          <button onClick={refresh} disabled={refreshing} title="Refresh balance"
+            className="w-9 h-9 rounded-xl flex items-center justify-center transition-all hover:bg-white/5 disabled:opacity-30"
+            style={{ border: '1px solid rgba(0,212,255,.1)', color: '#00d4ff' }}>
+            <span className={`text-lg ${refreshing ? 'animate-spin' : ''}`}>↻</span>
+          </button>
+        </div>
+
+        {/* Chain detail strip */}
+        <div className="mt-5 pt-4 flex items-center gap-4" style={{ borderTop: '1px solid rgba(0,212,255,.06)' }}>
+          <div>
+            <p className="text-xs" style={{ color: '#0d2030' }}>Chain ID</p>
+            <p className="font-mono font-bold text-white">{wallet.chainId ?? '—'}</p>
+          </div>
+          <div style={{ width: 1, height: 28, background: 'rgba(0,212,255,.06)' }} />
+          <div>
+            <p className="text-xs" style={{ color: '#0d2030' }}>Wallet</p>
+            <p className="font-semibold text-white text-sm">{window.ethereum?.isMetaMask ? '🦊 MetaMask' : 'Web3'}</p>
+          </div>
+          <div style={{ width: 1, height: 28, background: 'rgba(0,212,255,.06)' }} />
+          <div>
+            <p className="text-xs" style={{ color: '#0d2030' }}>Status</p>
+            <p className="text-neon-green font-bold text-sm">● Live</p>
           </div>
         </div>
       </div>
 
-      {/* Network Switcher */}
-      <div className="rounded-2xl p-5" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}>
-        <p className="text-xs font-semibold mb-3" style={{ color: '#334155', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-          Switch Network
+      {/* ── Network Switcher ──────────────────── */}
+      <div className="neon-card p-5">
+        <p className="text-xs font-bold uppercase tracking-widest mb-3 flex items-center gap-2"
+           style={{ color: '#1e3a4a', letterSpacing: '.12em' }}>
+          Switch Network <Tip text="Switch between Ethereum networks. Sepolia is free for testing." />
         </p>
         <div className="flex gap-2">
           {NETS.map(n => (
             <button key={n.chainId} onClick={() => wallet.switchNetwork(n.chainId)}
-              className="flex-1 py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-200"
+              className="flex-1 py-3 rounded-2xl text-sm font-bold transition-all duration-200 relative overflow-hidden"
               style={wallet.chainId === n.chainId
-                ? { background: `${n.color}15`, border: `1px solid ${n.color}35`, color: n.color }
-                : { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', color: '#334155' }
+                ? { background: `${n.color}12`, border: `1px solid ${n.color}35`, color: n.color, boxShadow: `0 0 20px ${n.color}15` }
+                : { background: 'rgba(255,255,255,.02)', border: '1px solid rgba(255,255,255,.05)', color: '#1e3a4a' }
               }>
+              {wallet.chainId === n.chainId && (
+                <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: n.color }} />
+              )}
               {n.label}
             </button>
           ))}
         </div>
         {wallet.error && (
-          <p className="text-xs mt-2" style={{ color: '#ef4444' }}>⚠ {wallet.error}</p>
+          <p className="text-xs mt-3 flex items-center gap-1" style={{ color: 'var(--red)' }}>
+            ⚠ {wallet.error}
+          </p>
         )}
       </div>
 
-      {/* Info Grid */}
-      <div className="grid grid-cols-2 gap-3">
-        <div className="rounded-2xl p-4" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}>
-          <p className="text-xs mb-2" style={{ color: '#334155', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Chain ID</p>
-          <p className="font-mono font-bold text-white text-lg">{wallet.chainId ?? '—'}</p>
-        </div>
-        <div className="rounded-2xl p-4" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}>
-          <p className="text-xs mb-2" style={{ color: '#334155', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Wallet</p>
-          <p className="font-semibold text-white">{window.ethereum?.isMetaMask ? '🦊 MetaMask' : 'Web3'}</p>
+      {/* ── Guide strip ───────────────────────── */}
+      <div className="rounded-2xl p-4 flex items-start gap-3"
+           style={{ background: 'rgba(0,212,255,.03)', border: '1px solid rgba(0,212,255,.06)' }}>
+        <span className="text-xl shrink-0">💡</span>
+        <div>
+          <p className="text-xs font-bold text-white mb-0.5">Quick guide</p>
+          <p className="text-xs" style={{ color: '#1e3a4a' }}>
+            Use <span className="text-neon-cyan font-mono">↗ Send</span> to transfer ETH ·
+            Check <span className="text-neon-cyan font-mono">⬡ Contracts</span> to read any ERC-20 balance ·
+            Use Sepolia for free test transactions
+          </p>
         </div>
       </div>
 
       <button onClick={wallet.disconnect}
-        className="w-full py-3 rounded-2xl text-sm font-medium transition-all duration-200"
-        style={{ color: '#334155', border: '1px solid transparent' }}
-        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = '#ef4444'; (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(239,68,68,0.15)'; (e.currentTarget as HTMLButtonElement).style.background = 'rgba(239,68,68,0.05)' }}
-        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = '#334155'; (e.currentTarget as HTMLButtonElement).style.borderColor = 'transparent'; (e.currentTarget as HTMLButtonElement).style.background = 'transparent' }}>
+        className="w-full py-3 rounded-2xl text-sm font-semibold transition-all duration-200"
+        style={{ color: '#1e3a4a', border: '1px solid transparent' }}
+        onMouseEnter={e => { const b = e.currentTarget; b.style.color='var(--red)'; b.style.borderColor='rgba(255,51,102,.15)'; b.style.background='rgba(255,51,102,.04)' }}
+        onMouseLeave={e => { const b = e.currentTarget; b.style.color='#1e3a4a'; b.style.borderColor='transparent'; b.style.background='transparent' }}>
         Disconnect Wallet
       </button>
     </div>
