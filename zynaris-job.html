@@ -3,1059 +3,683 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ZYNARIS // FORCE MULTIPLIER PROTOCOL</title>
+<title>ZYNARIS // FORCE MULTIPLIER</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
+* { margin:0; padding:0; box-sizing:border-box; }
 
-  :root {
-    --cyan: #00f5ff;
-    --purple: #b400ff;
-    --green: #00ff88;
-    --red: #ff003c;
-    --gold: #ffd700;
-    --bg: #020008;
-  }
+body {
+  background: #03000f;
+  color: #fff;
+  font-family: 'Courier New', Courier, monospace;
+  overflow-x: hidden;
+}
 
-  * { margin: 0; padding: 0; box-sizing: border-box; }
+canvas#bg {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  z-index: 0;
+  pointer-events: none;
+}
 
-  body {
-    background: var(--bg);
-    color: #fff;
-    font-family: 'Share Tech Mono', monospace;
-    overflow-x: hidden;
-    cursor: none;
-  }
+.page {
+  position: relative;
+  z-index: 1;
+}
 
-  /* Custom cursor */
-  .cursor {
-    width: 20px; height: 20px;
-    border: 2px solid var(--cyan);
-    border-radius: 50%;
-    position: fixed;
-    pointer-events: none;
-    z-index: 9999;
-    transition: transform 0.1s ease;
-    mix-blend-mode: difference;
-  }
-  .cursor-dot {
-    width: 4px; height: 4px;
-    background: var(--cyan);
-    border-radius: 50%;
-    position: fixed;
-    pointer-events: none;
-    z-index: 9999;
-  }
+/* top bar */
+.topbar {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #b400ff, #00f5ff, #00ff88, #b400ff);
+  background-size: 300% 100%;
+  animation: bar 3s linear infinite;
+  z-index: 999;
+}
+@keyframes bar { to { background-position: -300% 0; } }
 
-  /* Starfield canvas */
-  #starfield {
-    position: fixed;
-    top: 0; left: 0;
-    width: 100%; height: 100%;
-    z-index: 0;
-  }
+/* ── HERO ── */
+.hero {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 60px 24px;
+}
 
-  /* Scanlines overlay */
-  body::after {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background: repeating-linear-gradient(
-      0deg,
-      transparent,
-      transparent 2px,
-      rgba(0,245,255,0.015) 2px,
-      rgba(0,245,255,0.015) 4px
-    );
-    pointer-events: none;
-    z-index: 100;
-  }
+.badge {
+  display: inline-block;
+  border: 1px solid #00f5ff;
+  color: #00f5ff;
+  font-size: 10px;
+  letter-spacing: 4px;
+  padding: 6px 20px;
+  margin-bottom: 48px;
+  animation: fadeUp 0.8s ease both;
+}
 
-  .container {
-    position: relative;
-    z-index: 10;
-    max-width: 1100px;
-    margin: 0 auto;
-    padding: 0 24px;
-  }
+.title {
+  font-size: clamp(48px, 11vw, 120px);
+  font-weight: 900;
+  letter-spacing: -3px;
+  line-height: 0.88;
+  animation: fadeUp 0.8s ease 0.2s both;
+}
+.title .t1 { display:block; color: #fff; }
+.title .t2 {
+  display: block;
+  background: linear-gradient(135deg, #00f5ff, #b400ff, #00ff88);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
 
-  /* ── HEADER ── */
-  header {
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    position: relative;
-    padding: 40px 20px;
-  }
+.sub {
+  margin-top: 28px;
+  font-size: 11px;
+  letter-spacing: 4px;
+  color: rgba(255,255,255,0.35);
+  animation: fadeUp 0.8s ease 0.4s both;
+}
 
-  .signal-bar {
-    position: fixed;
-    top: 0; left: 0; right: 0;
-    height: 3px;
-    background: linear-gradient(90deg, var(--purple), var(--cyan), var(--green), var(--purple));
-    background-size: 200%;
-    animation: signalFlow 3s linear infinite;
-    z-index: 200;
-  }
+.role-box {
+  margin-top: 44px;
+  padding: 18px 48px;
+  border: 1px solid rgba(0,245,255,0.35);
+  background: rgba(0,245,255,0.05);
+  font-size: clamp(12px, 2.5vw, 17px);
+  letter-spacing: 2px;
+  color: #00f5ff;
+  animation: fadeUp 0.8s ease 0.6s both;
+}
 
-  @keyframes signalFlow {
-    0% { background-position: 0% }
-    100% { background-position: 200% }
-  }
+.arrow {
+  margin-top: 60px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  opacity: 0;
+  animation: fadeIn 1s ease 1.5s forwards;
+}
+.arrow span { font-size: 9px; letter-spacing: 3px; color: rgba(255,255,255,0.25); }
+.arrow-line { width: 1px; height: 48px; background: linear-gradient(#00f5ff, transparent); animation: pulse 2s ease infinite; }
+@keyframes pulse { 0%,100%{opacity:.4} 50%{opacity:1} }
 
-  .org-badge {
-    display: inline-block;
-    border: 1px solid var(--cyan);
-    padding: 6px 18px;
-    font-size: 11px;
-    letter-spacing: 4px;
-    color: var(--cyan);
-    margin-bottom: 40px;
-    position: relative;
-    animation: fadeSlideDown 1s ease forwards;
-    opacity: 0;
-  }
-  .org-badge::before, .org-badge::after {
-    content: '';
-    position: absolute;
-    width: 6px; height: 6px;
-    border: 1px solid var(--cyan);
-    background: var(--bg);
-  }
-  .org-badge::before { top: -4px; left: -4px; border-right: none; border-bottom: none; }
-  .org-badge::after  { bottom: -4px; right: -4px; border-left: none; border-top: none; }
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeIn { to { opacity:1; } }
 
-  .hero-title {
-    font-family: 'Orbitron', sans-serif;
-    font-size: clamp(42px, 9vw, 110px);
-    font-weight: 900;
-    line-height: 0.9;
-    letter-spacing: -2px;
-    animation: fadeSlideDown 1.2s ease 0.3s forwards;
-    opacity: 0;
-  }
-  .hero-title .line1 { color: #fff; display: block; }
-  .hero-title .line2 {
-    display: block;
-    background: linear-gradient(135deg, var(--cyan) 0%, var(--purple) 50%, var(--green) 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    filter: drop-shadow(0 0 30px rgba(0,245,255,0.5));
-  }
+/* ── TICKER ── */
+.ticker-wrap {
+  overflow: hidden;
+  border-top: 1px solid rgba(0,245,255,0.12);
+  border-bottom: 1px solid rgba(0,245,255,0.12);
+  background: rgba(0,245,255,0.025);
+  padding: 12px 0;
+}
+.ticker-inner {
+  display: flex;
+  white-space: nowrap;
+  animation: ticker 30s linear infinite;
+}
+.ticker-inner span { font-size: 10px; letter-spacing: 3px; color: rgba(0,245,255,0.4); padding: 0 32px; }
+.ticker-inner span.hi { color: #00f5ff; }
+@keyframes ticker { to { transform: translateX(-50%); } }
 
-  .hero-sub {
-    margin-top: 28px;
-    font-size: 13px;
-    letter-spacing: 3px;
-    color: rgba(255,255,255,0.45);
-    animation: fadeSlideDown 1.2s ease 0.6s forwards;
-    opacity: 0;
-  }
+/* ── STATS ── */
+.stats {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0;
+  padding: 70px 24px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.stat {
+  text-align: center;
+  padding: 20px 50px;
+  border-right: 1px solid rgba(255,255,255,0.08);
+}
+.stat:last-child { border-right: none; }
+.stat-num {
+  font-size: clamp(36px, 6vw, 64px);
+  font-weight: 900;
+  background: linear-gradient(135deg, #00f5ff, #00ff88);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 1;
+  display: block;
+}
+.stat-label { font-size: 9px; letter-spacing: 3px; color: rgba(255,255,255,0.28); margin-top: 8px; }
 
-  .hero-role {
-    margin-top: 40px;
-    padding: 16px 40px;
-    border: 1px solid rgba(0,245,255,0.3);
-    background: rgba(0,245,255,0.04);
-    font-family: 'Orbitron', sans-serif;
-    font-size: clamp(13px, 2.5vw, 18px);
-    letter-spacing: 2px;
-    color: var(--cyan);
-    position: relative;
-    animation: fadeSlideDown 1.2s ease 0.9s forwards;
-    opacity: 0;
-    backdrop-filter: blur(10px);
-  }
-  .hero-role::before {
-    content: '[ POSITION OPEN ]';
-    position: absolute;
-    top: -10px; left: 20px;
-    font-size: 9px;
-    letter-spacing: 3px;
-    color: var(--purple);
-    background: var(--bg);
-    padding: 0 8px;
-  }
+/* ── SECTION ── */
+.section { padding: 90px 24px; max-width: 1080px; margin: 0 auto; }
+.sec-label { font-size: 9px; letter-spacing: 5px; color: #b400ff; margin-bottom: 6px; }
+.sec-title {
+  font-size: clamp(24px, 4vw, 44px);
+  font-weight: 900;
+  letter-spacing: -1px;
+  margin-bottom: 48px;
+  position: relative;
+  display: inline-block;
+}
+.sec-title::after {
+  content: '';
+  position: absolute;
+  left: 0; bottom: -10px;
+  width: 50px; height: 2px;
+  background: linear-gradient(90deg, #00f5ff, transparent);
+}
 
-  .scroll-hint {
-    position: absolute;
-    bottom: 40px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-    opacity: 0;
-    animation: fadeIn 1s ease 2s forwards;
-  }
-  .scroll-hint span { font-size: 9px; letter-spacing: 3px; color: rgba(255,255,255,0.3); }
-  .scroll-line {
-    width: 1px; height: 50px;
-    background: linear-gradient(to bottom, var(--cyan), transparent);
-    animation: scrollPulse 2s ease infinite;
-  }
+hr.sep { border:none; border-top: 1px solid rgba(255,255,255,0.05); }
 
-  @keyframes scrollPulse {
-    0%, 100% { transform: scaleY(1); opacity: 0.6; }
-    50% { transform: scaleY(0.5); opacity: 1; }
-  }
+/* ── PILLARS ── */
+.pillars { display: grid; grid-template-columns: repeat(3,1fr); gap: 18px; }
+@media(max-width:720px){ .pillars{ grid-template-columns:1fr; } }
 
-  /* ── SECTION BASE ── */
-  section {
-    padding: 100px 0;
-    position: relative;
-  }
+.pillar {
+  border: 1px solid rgba(255,255,255,0.07);
+  background: rgba(255,255,255,0.02);
+  padding: 36px 26px;
+  transition: all 0.35s ease;
+  position: relative;
+  overflow: hidden;
+}
+.pillar::before {
+  content:'';
+  position:absolute;
+  inset:0;
+  background: radial-gradient(circle at top left, rgba(0,245,255,0.07), transparent 60%);
+  opacity:0;
+  transition: opacity 0.35s;
+}
+.pillar:hover { border-color: #00f5ff; transform: translateY(-6px); }
+.pillar:hover::before { opacity:1; }
+.p-num { font-size: 56px; font-weight:900; color: rgba(0,245,255,0.07); line-height:1; margin-bottom:14px; letter-spacing:-2px; }
+.pillar:hover .p-num { color: rgba(0,245,255,0.15); }
+.p-title { font-size: 15px; color: #00f5ff; letter-spacing:1px; margin-bottom:12px; font-weight:700; }
+.p-desc { font-size: 12px; line-height:1.85; color: rgba(255,255,255,0.45); }
 
-  .section-label {
-    font-size: 9px;
-    letter-spacing: 5px;
-    color: var(--purple);
-    margin-bottom: 8px;
-  }
+/* ── ORBIT ── */
+.orbit-grid { display:grid; grid-template-columns:1fr 1fr; gap:15px; }
+@media(max-width:640px){ .orbit-grid{ grid-template-columns:1fr; } }
 
-  .section-title {
-    font-family: 'Orbitron', sans-serif;
-    font-size: clamp(22px, 4vw, 42px);
-    font-weight: 700;
-    color: #fff;
-    margin-bottom: 50px;
-    position: relative;
-    display: inline-block;
-  }
-  .section-title::after {
-    content: '';
-    position: absolute;
-    left: 0; bottom: -10px;
-    width: 60px; height: 2px;
-    background: linear-gradient(90deg, var(--cyan), transparent);
-  }
+.ocard {
+  border: 1px solid rgba(180,0,255,0.18);
+  background: rgba(180,0,255,0.03);
+  padding: 28px;
+  position: relative;
+  transition: all 0.3s ease;
+}
+.ocard::after { content:''; position:absolute; top:-1px; left:0; width:36px; height:2px; background:#b400ff; }
+.ocard:hover { border-color:#b400ff; background:rgba(180,0,255,0.07); }
+.o-tag { font-size:8px; letter-spacing:4px; color:#b400ff; margin-bottom:12px; display:block; }
+.o-title { font-size:13px; font-weight:700; color:#fff; margin-bottom:10px; letter-spacing:1px; }
+.o-desc { font-size:12px; line-height:1.9; color:rgba(255,255,255,0.42); }
 
-  /* ── PILLARS ── */
-  .pillars {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 20px;
-    margin-bottom: 80px;
-  }
+/* ── REQUIREMENTS ── */
+.req-list { list-style:none; display:grid; gap:14px; }
+.req-item {
+  display:flex; align-items:flex-start; gap:20px;
+  padding: 22px 24px;
+  border: 1px solid rgba(0,255,136,0.1);
+  background: rgba(0,255,136,0.02);
+  position:relative;
+  overflow:hidden;
+  transition: all 0.3s ease;
+}
+.req-item::before {
+  content:''; position:absolute; left:0; top:0; bottom:0;
+  width:2px; background:#00ff88;
+  transform:scaleY(0); transition:transform 0.3s ease;
+}
+.req-item:hover { border-color:rgba(0,255,136,0.38); background:rgba(0,255,136,0.05); transform:translateX(5px); }
+.req-item:hover::before { transform:scaleY(1); }
+.req-code { font-size:9px; letter-spacing:2px; color:#00ff88; min-width:52px; padding-top:2px; }
+.req-body { font-size:12px; line-height:1.85; color:rgba(255,255,255,0.6); }
+.req-body strong { color:#fff; }
 
-  .pillar {
-    border: 1px solid rgba(255,255,255,0.08);
-    background: rgba(255,255,255,0.02);
-    padding: 36px 28px;
-    position: relative;
-    overflow: hidden;
-    transition: all 0.4s ease;
-    backdrop-filter: blur(10px);
-  }
-  .pillar:hover {
-    border-color: var(--cyan);
-    background: rgba(0,245,255,0.05);
-    transform: translateY(-6px);
-  }
-  .pillar::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: radial-gradient(circle at top left, rgba(0,245,255,0.08) 0%, transparent 70%);
-    opacity: 0;
-    transition: opacity 0.4s;
-  }
-  .pillar:hover::before { opacity: 1; }
+/* ── PERKS ── */
+.perks-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+@media(max-width:640px){ .perks-grid{ grid-template-columns:1fr; } }
 
-  .pillar-num {
-    font-family: 'Orbitron', sans-serif;
-    font-size: 60px;
-    font-weight: 900;
-    color: rgba(0,245,255,0.08);
-    line-height: 1;
-    margin-bottom: 16px;
-    letter-spacing: -2px;
-  }
-  .pillar:hover .pillar-num { color: rgba(0,245,255,0.15); }
+.pcard {
+  border: 1px solid rgba(255,215,0,0.13);
+  background: rgba(255,215,0,0.02);
+  padding: 34px 22px;
+  text-align:center;
+  transition: all 0.35s ease;
+  position:relative;
+  overflow:hidden;
+}
+.pcard::before {
+  content:'';
+  position:absolute; inset:0;
+  background: radial-gradient(circle at center, rgba(255,215,0,0.08), transparent 70%);
+  opacity:0; transition:opacity 0.35s;
+}
+.pcard:hover { border-color:#ffd700; transform:scale(1.04); }
+.pcard:hover::before { opacity:1; }
+.p-icon { font-size:38px; display:block; margin-bottom:16px; }
+.p-title { font-size:12px; font-weight:700; color:#ffd700; letter-spacing:2px; margin-bottom:10px; }
+.p-desc { font-size:11px; line-height:1.85; color:rgba(255,255,255,0.38); }
 
-  .pillar-title {
-    font-family: 'Orbitron', sans-serif;
-    font-size: 16px;
-    color: var(--cyan);
-    margin-bottom: 12px;
-    letter-spacing: 1px;
-  }
-  .pillar-desc {
-    font-size: 13px;
-    line-height: 1.8;
-    color: rgba(255,255,255,0.5);
-  }
+/* ── SKILLS ── */
+.skills { display:flex; flex-wrap:wrap; gap:10px; margin-top:14px; }
+.skill {
+  padding: 8px 18px;
+  border: 1px solid rgba(0,245,255,0.2);
+  font-size:10px; letter-spacing:2px;
+  color:rgba(0,245,255,0.65);
+  cursor:default;
+  transition:all 0.25s ease;
+  position:relative; overflow:hidden;
+}
+.skill::before {
+  content:''; position:absolute; inset:0;
+  background:#00f5ff;
+  transform:translateX(-100%);
+  transition:transform 0.25s ease;
+  z-index:0;
+}
+.skill:hover { color:#03000f; border-color:#00f5ff; }
+.skill:hover::before { transform:translateX(0); }
+.skill span { position:relative; z-index:1; }
 
-  /* ── ORBIT GRID ── */
-  .orbit-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
-  }
+/* ── CTA ── */
+.cta-section {
+  text-align:center;
+  padding: 120px 24px;
+  position:relative;
+  overflow:hidden;
+}
+.ring {
+  position:absolute;
+  top:50%; left:50%;
+  border-radius:50%;
+  border: 1px solid rgba(0,245,255,0.06);
+  animation: ringAnim 4s ease infinite;
+  pointer-events:none;
+}
+.ring:nth-child(1){ width:520px;height:520px; margin:-260px 0 0 -260px; }
+.ring:nth-child(2){ width:380px;height:380px; margin:-190px 0 0 -190px; border-color:rgba(180,0,255,0.08); animation-delay:1.3s; }
+.ring:nth-child(3){ width:240px;height:240px; margin:-120px 0 0 -120px; border-color:rgba(0,255,136,0.1); animation-delay:2.6s; }
+@keyframes ringAnim { 0%,100%{transform:scale(1);opacity:.5} 50%{transform:scale(1.06);opacity:1} }
 
-  .orbit-card {
-    border: 1px solid rgba(180,0,255,0.2);
-    background: rgba(180,0,255,0.03);
-    padding: 28px;
-    position: relative;
-    overflow: hidden;
-    transition: all 0.3s ease;
-  }
-  .orbit-card:hover {
-    border-color: var(--purple);
-    background: rgba(180,0,255,0.08);
-  }
-  .orbit-card::after {
-    content: '';
-    position: absolute;
-    top: -1px; left: 0;
-    width: 40px; height: 2px;
-    background: var(--purple);
-  }
+.cta-inner { position:relative; z-index:2; }
+.cta-title {
+  font-size: clamp(32px, 6vw, 60px);
+  font-weight:900;
+  letter-spacing:-1px;
+  margin-bottom: 18px;
+}
+.cta-title span { color:#00f5ff; }
+.cta-sub { font-size:10px; letter-spacing:3px; color:rgba(255,255,255,0.3); margin-bottom:50px; }
 
-  .orbit-tag {
-    font-size: 8px;
-    letter-spacing: 4px;
-    color: var(--purple);
-    margin-bottom: 14px;
-    display: block;
-  }
-  .orbit-title {
-    font-family: 'Orbitron', sans-serif;
-    font-size: 14px;
-    color: #fff;
-    margin-bottom: 12px;
-  }
-  .orbit-desc {
-    font-size: 12px;
-    line-height: 1.9;
-    color: rgba(255,255,255,0.45);
-  }
+.btn {
+  display:inline-block;
+  padding: 18px 64px;
+  border: 2px solid #00f5ff;
+  color:#00f5ff;
+  font-size:12px;
+  letter-spacing:4px;
+  font-family: inherit;
+  cursor:pointer;
+  text-decoration:none;
+  position:relative;
+  overflow:hidden;
+  transition:all 0.35s ease;
+}
+.btn::before {
+  content:'';
+  position:absolute; inset:0;
+  background:#00f5ff;
+  transform:translateX(-100%);
+  transition:transform 0.35s ease;
+  z-index:0;
+}
+.btn:hover { color:#03000f; box-shadow: 0 0 40px rgba(0,245,255,0.35); }
+.btn:hover::before { transform:translateX(0); }
+.btn span { position:relative; z-index:1; }
 
-  /* ── REQUIREMENTS ── */
-  .req-list { list-style: none; display: grid; gap: 18px; }
-  .req-item {
-    display: flex;
-    align-items: flex-start;
-    gap: 20px;
-    padding: 22px 26px;
-    border: 1px solid rgba(0,255,136,0.1);
-    background: rgba(0,255,136,0.02);
-    transition: all 0.3s ease;
-    position: relative;
-    overflow: hidden;
-  }
-  .req-item:hover {
-    border-color: rgba(0,255,136,0.4);
-    background: rgba(0,255,136,0.05);
-    transform: translateX(6px);
-  }
-  .req-item::before {
-    content: '';
-    position: absolute;
-    left: 0; top: 0; bottom: 0;
-    width: 2px;
-    background: var(--green);
-    transform: scaleY(0);
-    transition: transform 0.3s ease;
-  }
-  .req-item:hover::before { transform: scaleY(1); }
+/* ── FOOTER ── */
+footer {
+  border-top: 1px solid rgba(255,255,255,0.05);
+  padding: 28px 24px;
+  max-width:1080px;
+  margin:0 auto;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:12px;
+}
+.f-logo { font-size:18px; font-weight:900; letter-spacing:5px; color:#00f5ff; }
+.f-copy { font-size:9px; letter-spacing:2px; color:rgba(255,255,255,0.18); }
 
-  .req-icon {
-    font-family: 'Orbitron', sans-serif;
-    font-size: 10px;
-    color: var(--green);
-    min-width: 50px;
-    padding-top: 2px;
-    letter-spacing: 1px;
-  }
-  .req-text { font-size: 13px; line-height: 1.8; color: rgba(255,255,255,0.65); }
-  .req-text strong { color: #fff; }
-
-  /* ── PERKS ── */
-  .perks-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 16px;
-  }
-
-  .perk-card {
-    padding: 32px 24px;
-    border: 1px solid rgba(255,215,0,0.15);
-    background: rgba(255,215,0,0.02);
-    text-align: center;
-    transition: all 0.4s ease;
-    position: relative;
-    overflow: hidden;
-  }
-  .perk-card::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: radial-gradient(circle at center, rgba(255,215,0,0.08), transparent 70%);
-    opacity: 0;
-    transition: opacity 0.4s;
-  }
-  .perk-card:hover { border-color: var(--gold); transform: scale(1.03); }
-  .perk-card:hover::before { opacity: 1; }
-
-  .perk-glyph {
-    font-size: 36px;
-    margin-bottom: 16px;
-    display: block;
-    filter: drop-shadow(0 0 10px rgba(255,215,0,0.5));
-  }
-  .perk-title {
-    font-family: 'Orbitron', sans-serif;
-    font-size: 13px;
-    color: var(--gold);
-    margin-bottom: 10px;
-    letter-spacing: 1px;
-  }
-  .perk-desc { font-size: 12px; color: rgba(255,255,255,0.4); line-height: 1.8; }
-
-  /* ── SKILLS ── */
-  .skills-cloud {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    margin-top: 16px;
-  }
-  .skill-tag {
-    padding: 8px 18px;
-    border: 1px solid rgba(0,245,255,0.2);
-    font-size: 11px;
-    letter-spacing: 1px;
-    color: rgba(0,245,255,0.7);
-    transition: all 0.3s ease;
-    position: relative;
-    overflow: hidden;
-    cursor: default;
-  }
-  .skill-tag::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: var(--cyan);
-    transform: translateX(-100%);
-    transition: transform 0.3s ease;
-    z-index: -1;
-  }
-  .skill-tag:hover {
-    color: var(--bg);
-    border-color: var(--cyan);
-  }
-  .skill-tag:hover::before { transform: translateX(0); }
-
-  /* ── CTA ── */
-  .cta-section {
-    text-align: center;
-    padding: 120px 0;
-    position: relative;
-  }
-
-  .cta-ring {
-    position: absolute;
-    top: 50%; left: 50%;
-    transform: translate(-50%, -50%);
-    width: 500px; height: 500px;
-    border-radius: 50%;
-    border: 1px solid rgba(0,245,255,0.05);
-    animation: ringPulse 4s ease infinite;
-  }
-  .cta-ring:nth-child(2) {
-    width: 380px; height: 380px;
-    border-color: rgba(180,0,255,0.08);
-    animation-delay: 1s;
-  }
-  .cta-ring:nth-child(3) {
-    width: 260px; height: 260px;
-    border-color: rgba(0,255,136,0.1);
-    animation-delay: 2s;
-  }
-
-  @keyframes ringPulse {
-    0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.5; }
-    50% { transform: translate(-50%, -50%) scale(1.05); opacity: 1; }
-  }
-
-  .cta-title {
-    font-family: 'Orbitron', sans-serif;
-    font-size: clamp(28px, 5vw, 56px);
-    font-weight: 900;
-    margin-bottom: 20px;
-    position: relative;
-    z-index: 2;
-  }
-  .cta-sub {
-    font-size: 13px;
-    color: rgba(255,255,255,0.4);
-    letter-spacing: 2px;
-    margin-bottom: 50px;
-    position: relative;
-    z-index: 2;
-  }
-
-  .cta-btn {
-    display: inline-block;
-    padding: 18px 60px;
-    background: transparent;
-    border: 2px solid var(--cyan);
-    color: var(--cyan);
-    font-family: 'Orbitron', sans-serif;
-    font-size: 14px;
-    letter-spacing: 3px;
-    cursor: pointer;
-    position: relative;
-    z-index: 2;
-    transition: all 0.4s ease;
-    text-decoration: none;
-    overflow: hidden;
-  }
-  .cta-btn::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: var(--cyan);
-    transform: scaleX(0);
-    transform-origin: left;
-    transition: transform 0.4s ease;
-    z-index: -1;
-  }
-  .cta-btn:hover {
-    color: var(--bg);
-    box-shadow: 0 0 40px rgba(0,245,255,0.4);
-  }
-  .cta-btn:hover::before { transform: scaleX(1); }
-
-  /* ── SEPARATOR ── */
-  .sep {
-    border: none;
-    height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.06), transparent);
-    margin: 0;
-  }
-
-  /* ── INVESTMENT STAT ── */
-  .investment-banner {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 60px;
-    padding: 60px 0;
-    flex-wrap: wrap;
-  }
-  .inv-stat {
-    text-align: center;
-  }
-  .inv-num {
-    font-family: 'Orbitron', sans-serif;
-    font-size: clamp(36px, 6vw, 64px);
-    font-weight: 900;
-    background: linear-gradient(135deg, var(--cyan), var(--green));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    display: block;
-    line-height: 1;
-  }
-  .inv-label {
-    font-size: 10px;
-    letter-spacing: 3px;
-    color: rgba(255,255,255,0.3);
-    margin-top: 8px;
-  }
-  .inv-divider {
-    width: 1px; height: 60px;
-    background: rgba(255,255,255,0.1);
-  }
-
-  /* ── FOOTER ── */
-  footer {
-    padding: 30px 0;
-    border-top: 1px solid rgba(255,255,255,0.05);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 16px;
-  }
-  footer .logo {
-    font-family: 'Orbitron', sans-serif;
-    font-size: 18px;
-    letter-spacing: 4px;
-    color: var(--cyan);
-  }
-  footer .copy {
-    font-size: 10px;
-    letter-spacing: 2px;
-    color: rgba(255,255,255,0.2);
-  }
-
-  /* ── ANIMATIONS ── */
-  @keyframes fadeSlideDown {
-    from { opacity: 0; transform: translateY(-20px); }
-    to   { opacity: 1; transform: translateY(0); }
-  }
-  @keyframes fadeIn {
-    to { opacity: 1; }
-  }
-
-  .reveal {
-    opacity: 0;
-    transform: translateY(30px);
-    transition: opacity 0.8s ease, transform 0.8s ease;
-  }
-  .reveal.visible {
-    opacity: 1;
-    transform: translateY(0);
-  }
-
-  /* ── GLITCH ── */
-  .glitch {
-    position: relative;
-  }
-  .glitch::before, .glitch::after {
-    content: attr(data-text);
-    position: absolute;
-    inset: 0;
-    font-family: inherit;
-    font-size: inherit;
-    font-weight: inherit;
-  }
-  .glitch::before {
-    color: var(--cyan);
-    clip-path: polygon(0 30%, 100% 30%, 100% 50%, 0 50%);
-    transform: translateX(-2px);
-    animation: glitch1 4s infinite;
-  }
-  .glitch::after {
-    color: var(--purple);
-    clip-path: polygon(0 65%, 100% 65%, 100% 80%, 0 80%);
-    transform: translateX(2px);
-    animation: glitch2 4s infinite;
-  }
-  @keyframes glitch1 {
-    0%, 90%, 100% { transform: translateX(0); opacity: 0; }
-    92% { transform: translateX(-3px); opacity: 0.7; }
-    94% { transform: translateX(3px); opacity: 0.7; }
-    96% { transform: translateX(0); opacity: 0; }
-  }
-  @keyframes glitch2 {
-    0%, 90%, 100% { transform: translateX(0); opacity: 0; }
-    93% { transform: translateX(3px); opacity: 0.7; }
-    95% { transform: translateX(-3px); opacity: 0.7; }
-    97% { transform: translateX(0); opacity: 0; }
-  }
-
-  /* ── TICKER ── */
-  .ticker-wrap {
-    overflow: hidden;
-    border-top: 1px solid rgba(0,245,255,0.1);
-    border-bottom: 1px solid rgba(0,245,255,0.1);
-    padding: 12px 0;
-    background: rgba(0,245,255,0.02);
-  }
-  .ticker {
-    display: flex;
-    white-space: nowrap;
-    animation: ticker 25s linear infinite;
-  }
-  .ticker span {
-    font-size: 11px;
-    letter-spacing: 3px;
-    color: rgba(0,245,255,0.4);
-    padding: 0 40px;
-  }
-  .ticker span.highlight { color: var(--cyan); }
-  @keyframes ticker {
-    from { transform: translateX(0); }
-    to   { transform: translateX(-50%); }
-  }
-
-  @media (max-width: 768px) {
-    .pillars { grid-template-columns: 1fr; }
-    .orbit-grid { grid-template-columns: 1fr; }
-    .perks-grid { grid-template-columns: 1fr; }
-    .inv-divider { display: none; }
-  }
+/* scroll reveal */
+.reveal { opacity:0; transform:translateY(28px); transition: opacity .7s ease, transform .7s ease; }
+.reveal.on { opacity:1; transform:translateY(0); }
 </style>
 </head>
 <body>
 
-<div class="cursor" id="cursor"></div>
-<div class="cursor-dot" id="cursorDot"></div>
-<div class="signal-bar"></div>
-<canvas id="starfield"></canvas>
+<div class="topbar"></div>
+<canvas id="bg"></canvas>
 
-<!-- ══════════ HERO ══════════ -->
-<header>
-  <div class="org-badge">ZYNARIS PROTOCOL // WEB3 CIVILIZATION LAYER</div>
+<div class="page">
 
-  <h1 class="hero-title glitch" data-text="ZYNARIS">
-    <span class="line1">ZYNARIS</span>
-    <span class="line2">FORCE MULTIPLIER</span>
+<!-- HERO -->
+<section class="hero">
+  <div class="badge">ZYNARIS PROTOCOL &nbsp;·&nbsp; WEB3 CIVILIZATION LAYER</div>
+  <h1 class="title">
+    <span class="t1">ZYNARIS</span>
+    <span class="t2">FORCE MULTIPLIER</span>
   </h1>
-
-  <p class="hero-sub">HACKATHON · ACCELERATOR · VENTURE FUND</p>
-
-  <div class="hero-role">
-    PROGRAM OPERATIONS LEAD — OPEN POSITION
+  <p class="sub">HACKATHON &nbsp;·&nbsp; ACCELERATOR &nbsp;·&nbsp; VENTURE FUND</p>
+  <div class="role-box">PROGRAM OPERATIONS LEAD &nbsp;—&nbsp; OPEN POSITION</div>
+  <div class="arrow">
+    <span>SCROLL TO INITIALIZE</span>
+    <div class="arrow-line"></div>
   </div>
+</section>
 
-  <div class="scroll-hint">
-    <span>INITIALIZE</span>
-    <div class="scroll-line"></div>
-  </div>
-</header>
-
-<!-- ══════════ TICKER ══════════ -->
+<!-- TICKER -->
 <div class="ticker-wrap">
-  <div class="ticker">
-    <span>HACKATHON</span><span class="highlight">◆</span>
-    <span>ACCELERATOR</span><span class="highlight">◆</span>
-    <span>VENTURE FUND</span><span class="highlight">◆</span>
-    <span>WEB3 ECOSYSTEM</span><span class="highlight">◆</span>
-    <span>SMART CONTRACTS</span><span class="highlight">◆</span>
-    <span>TOKENOMICS</span><span class="highlight">◆</span>
-    <span>DEFI PROTOCOLS</span><span class="highlight">◆</span>
-    <span>ONCHAIN ACTIVITY</span><span class="highlight">◆</span>
-    <span>HACKATHON</span><span class="highlight">◆</span>
-    <span>ACCELERATOR</span><span class="highlight">◆</span>
-    <span>VENTURE FUND</span><span class="highlight">◆</span>
-    <span>WEB3 ECOSYSTEM</span><span class="highlight">◆</span>
-    <span>SMART CONTRACTS</span><span class="highlight">◆</span>
-    <span>TOKENOMICS</span><span class="highlight">◆</span>
-    <span>DEFI PROTOCOLS</span><span class="highlight">◆</span>
-    <span>ONCHAIN ACTIVITY</span><span class="highlight">◆</span>
+  <div class="ticker-inner">
+    <span>HACKATHON</span><span class="hi">◆</span>
+    <span>ACCELERATOR</span><span class="hi">◆</span>
+    <span>VENTURE FUND</span><span class="hi">◆</span>
+    <span>WEB3 ECOSYSTEM</span><span class="hi">◆</span>
+    <span>SMART CONTRACTS</span><span class="hi">◆</span>
+    <span>TOKENOMICS</span><span class="hi">◆</span>
+    <span>DEFI PROTOCOLS</span><span class="hi">◆</span>
+    <span>ONCHAIN ACTIVITY</span><span class="hi">◆</span>
+    <span>L1 / L2 NETWORKS</span><span class="hi">◆</span>
+    <span>HACKATHON</span><span class="hi">◆</span>
+    <span>ACCELERATOR</span><span class="hi">◆</span>
+    <span>VENTURE FUND</span><span class="hi">◆</span>
+    <span>WEB3 ECOSYSTEM</span><span class="hi">◆</span>
+    <span>SMART CONTRACTS</span><span class="hi">◆</span>
+    <span>TOKENOMICS</span><span class="hi">◆</span>
+    <span>DEFI PROTOCOLS</span><span class="hi">◆</span>
+    <span>ONCHAIN ACTIVITY</span><span class="hi">◆</span>
+    <span>L1 / L2 NETWORKS</span><span class="hi">◆</span>
   </div>
 </div>
 
-<!-- ══════════ INVESTMENT STATS ══════════ -->
-<section>
-  <div class="container">
-    <div class="investment-banner reveal">
-      <div class="inv-stat">
-        <span class="inv-num">$250K</span>
-        <div class="inv-label">UPFRONT INVESTMENT PER TEAM</div>
-      </div>
-      <div class="inv-divider"></div>
-      <div class="inv-stat">
-        <span class="inv-num">500+</span>
-        <div class="inv-label">GLOBAL APPLICATIONS</div>
-      </div>
-      <div class="inv-divider"></div>
-      <div class="inv-stat">
-        <span class="inv-num">8WK</span>
-        <div class="inv-label">HYBRID ACCELERATOR PROGRAM</div>
-      </div>
-      <div class="inv-divider"></div>
-      <div class="inv-stat">
-        <span class="inv-num">∞</span>
-        <div class="inv-label">ECOSYSTEM CONNECTIONS</div>
-      </div>
-    </div>
+<!-- STATS -->
+<div class="stats reveal">
+  <div class="stat">
+    <span class="stat-num">$250K</span>
+    <div class="stat-label">UPFRONT PER TEAM</div>
   </div>
-</section>
+  <div class="stat">
+    <span class="stat-num">500+</span>
+    <div class="stat-label">GLOBAL APPLICATIONS</div>
+  </div>
+  <div class="stat">
+    <span class="stat-num">8WK</span>
+    <div class="stat-label">ACCELERATOR PROGRAM</div>
+  </div>
+  <div class="stat">
+    <span class="stat-num">∞</span>
+    <div class="stat-label">ECOSYSTEM ACCESS</div>
+  </div>
+</div>
 
 <hr class="sep">
 
-<!-- ══════════ THREE PILLARS ══════════ -->
-<section>
-  <div class="container">
-    <div class="reveal">
-      <div class="section-label">// ORGANIZATIONAL ARCHITECTURE</div>
-      <h2 class="section-title">THREE PILLARS</h2>
+<!-- PILLARS -->
+<div class="section">
+  <div class="reveal">
+    <div class="sec-label">// ORGANIZATIONAL ARCHITECTURE</div>
+    <h2 class="sec-title">THREE PILLARS</h2>
+  </div>
+  <div class="pillars reveal">
+    <div class="pillar">
+      <div class="p-num">01</div>
+      <div class="p-title">HACKATHON</div>
+      <div class="p-desc">Multi-week global build sprints. The best mechanism for discovering the most talented crypto builders. A level playing field where raw code becomes the future of onchain activity.</div>
     </div>
-    <div class="pillars">
-      <div class="pillar reveal">
-        <div class="pillar-num">01</div>
-        <div class="pillar-title">HACKATHON</div>
-        <div class="pillar-desc">
-          Multi-week global build sprints attracting the most talented crypto builders on the planet. A level playing field where raw code becomes the future of onchain activity.
-        </div>
-      </div>
-      <div class="pillar reveal">
-        <div class="pillar-num">02</div>
-        <div class="pillar-title">ACCELERATOR</div>
-        <div class="pillar-desc">
-          Hybrid program — 2 weeks in-person, 6 weeks online. Elite founder community with 1:1 mentorship from L1/L2 founders. Breakout momentum or bust.
-        </div>
-      </div>
-      <div class="pillar reveal">
-        <div class="pillar-num">03</div>
-        <div class="pillar-title">VENTURE FUND</div>
-        <div class="pillar-desc">
-          $250,000 upfront per team. Program culminates in a private Demo Day where the best protocols pitch to the top VCs in the space.
-        </div>
-      </div>
+    <div class="pillar">
+      <div class="p-num">02</div>
+      <div class="p-title">ACCELERATOR</div>
+      <div class="p-desc">Hybrid format — 2 weeks in-person, 6 weeks online. Elite founder community, 1:1 mentorship from L1/L2 founders. Breakout momentum is the only acceptable outcome.</div>
+    </div>
+    <div class="pillar">
+      <div class="p-num">03</div>
+      <div class="p-title">VENTURE FUND</div>
+      <div class="p-desc">$250,000 upfront investment per accepted team. Program culminates in a private Demo Day where founders pitch to the top VCs in the space.</div>
     </div>
   </div>
-</section>
+</div>
 
 <hr class="sep">
 
-<!-- ══════════ YOUR ORBIT ══════════ -->
-<section>
-  <div class="container">
-    <div class="reveal">
-      <div class="section-label">// MISSION PARAMETERS</div>
-      <h2 class="section-title">YOUR ORBIT</h2>
+<!-- ORBIT -->
+<div class="section">
+  <div class="reveal">
+    <div class="sec-label">// MISSION PARAMETERS</div>
+    <h2 class="sec-title">YOUR ORBIT</h2>
+  </div>
+  <div class="orbit-grid reveal">
+    <div class="ocard">
+      <span class="o-tag">MODULE 01 // COHORT</span>
+      <div class="o-title">Cohort Management</div>
+      <div class="o-desc">Lead 10–12 week sprints as the primary contact for founders. Ensure teams hit build milestones across every time zone.</div>
     </div>
-    <div class="orbit-grid reveal">
-      <div class="orbit-card">
-        <span class="orbit-tag">MODULE 01 // COHORT OPS</span>
-        <div class="orbit-title">Cohort Management</div>
-        <div class="orbit-desc">Lead 10–12 week build sprints as the primary point of contact for founders. Ensure teams hit milestones and maintain velocity across time zones.</div>
-      </div>
-      <div class="orbit-card">
-        <span class="orbit-tag">MODULE 02 // NETWORK</span>
-        <div class="orbit-title">Ecosystem Coordination</div>
-        <div class="orbit-desc">Sync with top L1/L2 founders acting as mentors. Schedule 1:1s that generate real signal — not calendar noise. Build the graph of trust.</div>
-      </div>
-      <div class="orbit-card">
-        <span class="orbit-tag">MODULE 03 // EVENTS</span>
-        <div class="orbit-title">Hackathon Lead</div>
-        <div class="orbit-desc">Run multi-week global competitions end-to-end. Manage judging panels, prize distribution, and developer support infrastructure at scale.</div>
-      </div>
-      <div class="orbit-card">
-        <span class="orbit-tag">MODULE 04 // RESOURCES</span>
-        <div class="orbit-title">Founder Toolbox</div>
-        <div class="orbit-desc">Administer legal, audit, and infrastructure credits across the portfolio — AWS, Alchemy, QuickNode. Your job is to remove friction, not create it.</div>
-      </div>
+    <div class="ocard">
+      <span class="o-tag">MODULE 02 // NETWORK</span>
+      <div class="o-title">Ecosystem Coordination</div>
+      <div class="o-desc">Sync with L1/L2 founders acting as mentors. Schedule 1:1s that generate real signal — not calendar noise.</div>
+    </div>
+    <div class="ocard">
+      <span class="o-tag">MODULE 03 // EVENTS</span>
+      <div class="o-title">Hackathon Lead</div>
+      <div class="o-desc">Run multi-week global competitions end-to-end. Manage judging panels, prize distribution, and dev-support infrastructure.</div>
+    </div>
+    <div class="ocard">
+      <span class="o-tag">MODULE 04 // RESOURCES</span>
+      <div class="o-title">Founder Toolbox</div>
+      <div class="o-desc">Administer legal, audit, and infrastructure credits — AWS, Alchemy, QuickNode. Remove friction, not create it.</div>
     </div>
   </div>
-</section>
+</div>
 
 <hr class="sep">
 
-<!-- ══════════ REQUIREMENTS ══════════ -->
-<section>
-  <div class="container">
-    <div class="reveal">
-      <div class="section-label">// CANDIDATE PROFILE</div>
-      <h2 class="section-title">REQUIREMENTS</h2>
-    </div>
-    <ul class="req-list reveal">
-      <li class="req-item">
-        <span class="req-icon">SYS.01</span>
-        <div class="req-text">
-          <strong>Execution Machine</strong> — You've managed complex projects (accelerators, startup ops, devrel programs) and never miss a beat. Chaos is your operating environment, not an obstacle.
-        </div>
-      </li>
-      <li class="req-item">
-        <span class="req-icon">SYS.02</span>
-        <div class="req-text">
-          <strong>Technical Literacy</strong> — You don't write Solidity, but you know what a smart contract audit costs, why liquidity provisioning matters, and what a rug pull looks like from 3 miles away.
-        </div>
-      </li>
-      <li class="req-item">
-        <span class="req-icon">SYS.03</span>
-        <div class="req-text">
-          <strong>Systems Thinker</strong> — You live in Notion and Airtable. If a process isn't automated, you consider it broken. You build infrastructure, not workflows.
-        </div>
-      </li>
-      <li class="req-item">
-        <span class="req-icon">SYS.04</span>
-        <div class="req-text">
-          <strong>Resilient Core</strong> — You thrive in the 24/7 global market. Crypto doesn't sleep and neither does your sense of urgency. You adapt, not react.
-        </div>
-      </li>
-    </ul>
+<!-- REQUIREMENTS -->
+<div class="section">
+  <div class="reveal">
+    <div class="sec-label">// CANDIDATE PROFILE</div>
+    <h2 class="sec-title">REQUIREMENTS</h2>
   </div>
-</section>
+  <ul class="req-list reveal">
+    <li class="req-item">
+      <span class="req-code">SYS.01</span>
+      <div class="req-body"><strong>Execution Machine</strong> — You've managed complex projects (accelerators, startup ops, devrel) and never miss a beat. Chaos is your operating system.</div>
+    </li>
+    <li class="req-item">
+      <span class="req-code">SYS.02</span>
+      <div class="req-body"><strong>Technical Literacy</strong> — You don't write Solidity, but you understand smart contract audits, liquidity provisioning, and what a rug pull looks like from 3 miles away.</div>
+    </li>
+    <li class="req-item">
+      <span class="req-code">SYS.03</span>
+      <div class="req-body"><strong>Systems Thinker</strong> — You live in Notion and Airtable. If a process isn't automated, you consider it broken. You build infrastructure, not to-do lists.</div>
+    </li>
+    <li class="req-item">
+      <span class="req-code">SYS.04</span>
+      <div class="req-body"><strong>Resilient Core</strong> — Crypto doesn't sleep. Neither does your sense of urgency. You adapt, not react. 24/7 global market is your natural habitat.</div>
+    </li>
+  </ul>
+</div>
 
 <hr class="sep">
 
-<!-- ══════════ PERKS ══════════ -->
-<section>
-  <div class="container">
-    <div class="reveal">
-      <div class="section-label">// COMPENSATION PACKAGE</div>
-      <h2 class="section-title">PERKS</h2>
+<!-- PERKS -->
+<div class="section">
+  <div class="reveal">
+    <div class="sec-label">// COMPENSATION PACKAGE</div>
+    <h2 class="sec-title">PERKS</h2>
+  </div>
+  <div class="perks-grid reveal">
+    <div class="pcard">
+      <span class="p-icon">◈</span>
+      <div class="p-title">FULL OWNERSHIP</div>
+      <div class="p-desc">Own one of the most active accelerator programs in Web3. Your decisions shape the next generation of protocols.</div>
     </div>
-    <div class="perks-grid reveal">
-      <div class="perk-card">
-        <span class="perk-glyph">◈</span>
-        <div class="perk-title">Ownership</div>
-        <div class="perk-desc">Full ownership over one of the most active accelerator programs in the Web3 space. Your decisions shape the next generation of protocols.</div>
-      </div>
-      <div class="perk-card">
-        <span class="perk-glyph">⬡</span>
-        <div class="perk-title">Kitchen Access</div>
-        <div class="perk-desc">Direct access to how Web3 unicorns are built from the inside — deal flow, founder dynamics, and the real mechanics of protocol scaling.</div>
-      </div>
-      <div class="perk-card">
-        <span class="perk-glyph">◉</span>
-        <div class="perk-title">Salary + Token</div>
-        <div class="perk-desc">Competitive base salary plus token incentives. Upside aligned with the ecosystems you help build — skin in the game, not just payroll.</div>
-      </div>
+    <div class="pcard">
+      <span class="p-icon">⬡</span>
+      <div class="p-title">KITCHEN ACCESS</div>
+      <div class="p-desc">Direct view into how Web3 unicorns are built — deal flow, founder dynamics, and the real mechanics of protocol scaling.</div>
+    </div>
+    <div class="pcard">
+      <span class="p-icon">◉</span>
+      <div class="p-title">SALARY + TOKEN</div>
+      <div class="p-desc">Competitive base salary plus token incentives. Your upside is tied to the ecosystems you help build.</div>
     </div>
   </div>
-</section>
+</div>
 
 <hr class="sep">
 
-<!-- ══════════ SKILLS ══════════ -->
-<section>
-  <div class="container reveal">
-    <div class="section-label">// DOMAIN SIGNALS</div>
-    <h2 class="section-title">SKILLS</h2>
-    <div class="skills-cloud">
-      <div class="skill-tag">ANALYTICAL THINKING</div>
-      <div class="skill-tag">BUDGETING</div>
-      <div class="skill-tag">BUSINESS RELATIONS</div>
-      <div class="skill-tag">COMMUNICATIONS</div>
-      <div class="skill-tag">CRITICAL THINKING</div>
-      <div class="skill-tag">CRYPTOCURRENCY</div>
-      <div class="skill-tag">PROBLEM SOLVING</div>
-      <div class="skill-tag">PRODUCT MANAGEMENT</div>
-      <div class="skill-tag">PRODUCT PLANNING</div>
-      <div class="skill-tag">BLOCKCHAIN</div>
-      <div class="skill-tag">SMART CONTRACTS</div>
-      <div class="skill-tag">TOKENOMICS</div>
-      <div class="skill-tag">WEB3</div>
-      <div class="skill-tag">DEVREL</div>
-      <div class="skill-tag">DEFI</div>
+<!-- SKILLS -->
+<div class="section">
+  <div class="reveal">
+    <div class="sec-label">// DOMAIN SIGNALS</div>
+    <h2 class="sec-title">SKILLS</h2>
+    <div class="skills">
+      <div class="skill"><span>ANALYTICAL THINKING</span></div>
+      <div class="skill"><span>BUDGETING</span></div>
+      <div class="skill"><span>BUSINESS RELATIONS</span></div>
+      <div class="skill"><span>COMMUNICATIONS</span></div>
+      <div class="skill"><span>CRITICAL THINKING</span></div>
+      <div class="skill"><span>CRYPTOCURRENCY</span></div>
+      <div class="skill"><span>PROBLEM SOLVING</span></div>
+      <div class="skill"><span>PRODUCT MANAGEMENT</span></div>
+      <div class="skill"><span>PRODUCT PLANNING</span></div>
+      <div class="skill"><span>BLOCKCHAIN</span></div>
+      <div class="skill"><span>SMART CONTRACTS</span></div>
+      <div class="skill"><span>TOKENOMICS</span></div>
+      <div class="skill"><span>WEB3</span></div>
+      <div class="skill"><span>DEFI</span></div>
+      <div class="skill"><span>DEVREL</span></div>
     </div>
   </div>
-</section>
+</div>
 
-<!-- ══════════ CTA ══════════ -->
+<!-- CTA -->
 <section class="cta-section">
-  <div class="cta-ring"></div>
-  <div class="cta-ring"></div>
-  <div class="cta-ring"></div>
-  <div class="container reveal" style="position:relative;z-index:2;">
-    <div class="section-label">// INITIATE SEQUENCE</div>
-    <h2 class="cta-title">
-      READY TO<br>
-      <span style="color:var(--cyan)">TRANSMIT?</span>
-    </h2>
-    <p class="cta-sub">YOUR SIGNAL HAS BEEN DETECTED // COORDINATES LOCKED</p>
-    <a class="cta-btn" href="#">APPLY NOW</a>
+  <div class="ring"></div>
+  <div class="ring"></div>
+  <div class="ring"></div>
+  <div class="cta-inner reveal">
+    <div class="sec-label">// INITIATE SEQUENCE</div>
+    <h2 class="cta-title">READY TO<br><span>TRANSMIT?</span></h2>
+    <p class="cta-sub">YOUR SIGNAL HAS BEEN DETECTED &nbsp;//&nbsp; COORDINATES LOCKED</p>
+    <a class="btn" href="#"><span>APPLY NOW</span></a>
   </div>
 </section>
 
-<!-- ══════════ FOOTER ══════════ -->
+<!-- FOOTER -->
 <footer>
-  <div class="container" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;width:100%">
-    <div class="logo">ZYNARIS</div>
-    <div class="copy">© 2024 ZYNARIS PROTOCOL // ALL SYSTEMS OPERATIONAL</div>
-  </div>
+  <div class="f-logo">ZYNARIS</div>
+  <div class="f-copy">© 2024 ZYNARIS PROTOCOL &nbsp;// &nbsp;ALL SYSTEMS OPERATIONAL</div>
 </footer>
 
+</div><!-- .page -->
+
 <script>
-// ── Starfield
-const canvas = document.getElementById('starfield');
-const ctx = canvas.getContext('2d');
-let W, H, stars = [], nebulas = [];
+// ── STARFIELD
+(function(){
+  var c = document.getElementById('bg');
+  var ctx = c.getContext('2d');
+  var W, H, stars=[], nebs=[];
 
-function resize() {
-  W = canvas.width = window.innerWidth;
-  H = canvas.height = window.innerHeight;
-}
+  function resize(){
+    W = c.width = window.innerWidth;
+    H = c.height = window.innerHeight;
+  }
 
-function initStars() {
-  stars = Array.from({length: 220}, () => ({
-    x: Math.random() * W,
-    y: Math.random() * H,
-    r: Math.random() * 1.5 + 0.2,
-    speed: Math.random() * 0.3 + 0.05,
-    opacity: Math.random() * 0.7 + 0.1,
-    twinkle: Math.random() * Math.PI * 2,
-    twinkleSpeed: (Math.random() * 0.02 + 0.005)
-  }));
-  nebulas = Array.from({length: 5}, () => ({
-    x: Math.random() * W,
-    y: Math.random() * H,
-    r: Math.random() * 200 + 100,
-    hue: [180, 270, 120, 300, 200][Math.floor(Math.random()*5)],
-    opacity: Math.random() * 0.04 + 0.01
-  }));
-}
-
-function drawFrame() {
-  ctx.clearRect(0, 0, W, H);
-
-  // Nebulas
-  nebulas.forEach(n => {
-    const g = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, n.r);
-    g.addColorStop(0, `hsla(${n.hue},100%,60%,${n.opacity})`);
-    g.addColorStop(1, 'transparent');
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
-    ctx.fill();
-  });
-
-  // Stars
-  stars.forEach(s => {
-    s.twinkle += s.twinkleSpeed;
-    const opacity = s.opacity * (0.5 + 0.5 * Math.sin(s.twinkle));
-    ctx.beginPath();
-    ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
-    ctx.fillStyle = `rgba(200,230,255,${opacity})`;
-    ctx.fill();
-
-    // Occasional glow
-    if (s.r > 1.2) {
-      const g = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, s.r * 5);
-      g.addColorStop(0, `rgba(0,245,255,${opacity * 0.3})`);
-      g.addColorStop(1, 'transparent');
-      ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.arc(s.x, s.y, s.r * 5, 0, Math.PI * 2);
-      ctx.fill();
+  function init(){
+    stars = [];
+    for(var i=0;i<200;i++){
+      stars.push({
+        x: Math.random()*W,
+        y: Math.random()*H,
+        r: Math.random()*1.4+0.2,
+        s: Math.random()*0.25+0.04,
+        o: Math.random()*0.7+0.1,
+        t: Math.random()*Math.PI*2,
+        ts: Math.random()*0.018+0.004
+      });
     }
+    nebs = [];
+    var hues=[180,270,120,200,300];
+    for(var i=0;i<4;i++){
+      nebs.push({
+        x:Math.random()*W, y:Math.random()*H,
+        r:150+Math.random()*180,
+        h:hues[i], o:0.018+Math.random()*0.025
+      });
+    }
+  }
 
-    s.y += s.speed;
-    if (s.y > H) { s.y = 0; s.x = Math.random() * W; }
-  });
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    // nebulae
+    nebs.forEach(function(n){
+      var g=ctx.createRadialGradient(n.x,n.y,0,n.x,n.y,n.r);
+      g.addColorStop(0,'hsla('+n.h+',100%,55%,'+n.o+')');
+      g.addColorStop(1,'transparent');
+      ctx.fillStyle=g;
+      ctx.beginPath(); ctx.arc(n.x,n.y,n.r,0,Math.PI*2); ctx.fill();
+    });
+    // stars
+    stars.forEach(function(s){
+      s.t+=s.ts;
+      var o=s.o*(0.5+0.5*Math.sin(s.t));
+      ctx.beginPath(); ctx.arc(s.x,s.y,s.r,0,Math.PI*2);
+      ctx.fillStyle='rgba(200,225,255,'+o+')'; ctx.fill();
+      if(s.r>1.1){
+        var g=ctx.createRadialGradient(s.x,s.y,0,s.x,s.y,s.r*5);
+        g.addColorStop(0,'rgba(0,245,255,'+(o*0.25)+')');
+        g.addColorStop(1,'transparent');
+        ctx.fillStyle=g;
+        ctx.beginPath(); ctx.arc(s.x,s.y,s.r*5,0,Math.PI*2); ctx.fill();
+      }
+      s.y+=s.s;
+      if(s.y>H){ s.y=0; s.x=Math.random()*W; }
+    });
+    requestAnimationFrame(draw);
+  }
 
-  requestAnimationFrame(drawFrame);
-}
-
-resize();
-initStars();
-drawFrame();
-window.addEventListener('resize', () => { resize(); initStars(); });
-
-// ── Custom cursor
-const cursor = document.getElementById('cursor');
-const dot = document.getElementById('cursorDot');
-let mx = 0, my = 0, cx = 0, cy = 0;
-
-document.addEventListener('mousemove', e => { mx = e.clientX; my = e.clientY; });
-
-(function animCursor() {
-  cx += (mx - cx) * 0.12;
-  cy += (my - cy) * 0.12;
-  cursor.style.left = (cx - 10) + 'px';
-  cursor.style.top  = (cy - 10) + 'px';
-  dot.style.left = (mx - 2) + 'px';
-  dot.style.top  = (my - 2) + 'px';
-  requestAnimationFrame(animCursor);
+  resize(); init(); draw();
+  window.addEventListener('resize',function(){ resize(); init(); });
 })();
 
-document.querySelectorAll('a, button, .pillar, .orbit-card, .perk-card, .skill-tag, .req-item').forEach(el => {
-  el.addEventListener('mouseenter', () => cursor.style.transform = 'scale(2)');
-  el.addEventListener('mouseleave', () => cursor.style.transform = 'scale(1)');
-});
-
-// ── Scroll reveal
-const reveals = document.querySelectorAll('.reveal');
-const obs = new IntersectionObserver(entries => {
-  entries.forEach((e, i) => {
-    if (e.isIntersecting) {
-      setTimeout(() => e.target.classList.add('visible'), i * 80);
-      obs.unobserve(e.target);
-    }
-  });
-}, { threshold: 0.1 });
-reveals.forEach(r => obs.observe(r));
+// ── SCROLL REVEAL
+(function(){
+  var items = document.querySelectorAll('.reveal');
+  var obs = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+      if(e.isIntersecting){
+        e.target.classList.add('on');
+        obs.unobserve(e.target);
+      }
+    });
+  },{threshold:0.1});
+  items.forEach(function(el){ obs.observe(el); });
+})();
 </script>
 </body>
 </html>
