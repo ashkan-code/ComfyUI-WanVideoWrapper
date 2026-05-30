@@ -60,13 +60,24 @@
     <div class="api-panel-inner">
       <div class="api-panel-header">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
-        <span>Anthropic API Key</span>
+        <span>AI Provider & API Key</span>
+      </div>
+      <div class="provider-tabs">
+        <button class="provider-tab active" data-provider="groq">
+          <span class="free-badge">رایگان</span> Groq
+        </button>
+        <button class="provider-tab" data-provider="gemini">
+          <span class="free-badge">رایگان</span> Gemini
+        </button>
+        <button class="provider-tab" data-provider="anthropic">Anthropic</button>
       </div>
       <div class="api-input-row">
-        <input type="password" id="apiKeyInput" placeholder="sk-ant-api03-..." class="api-input" />
-        <button class="btn-save-api" id="saveApiBtn">Save Key</button>
+        <input type="password" id="apiKeyInput" placeholder="کلید API رو اینجا بذار..." class="api-input" />
+        <button class="btn-save-api" id="saveApiBtn">ذخیره</button>
       </div>
-      <p class="api-note">Your key is stored locally in your browser and never sent anywhere except directly to Anthropic.</p>
+      <p class="api-note" id="apiNote">
+        🆓 <strong>Groq رایگانه!</strong> برو <strong>console.groq.com</strong> — ایمیل بزن، API Key بگیر، اینجا بذار. تموم.
+      </p>
     </div>
   </div>
 

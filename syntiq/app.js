@@ -6,6 +6,7 @@
 // ---- State ----
 const state = {
   apiKey: localStorage.getItem('syntiq_api_key') || '',
+  provider: localStorage.getItem('syntiq_provider') || 'groq',
   currentAgent: 'nova',
   history: {
     nova: JSON.parse(localStorage.getItem('syntiq_history_nova') || '[]'),
@@ -24,6 +25,7 @@ document.addEventListener('DOMContentLoaded', () => {
   spawnParticles();
   setupNav();
   setupApiPanel();
+  setupProviderTabs();
   setupTypeBtns();
   setupGenerateBtns();
   setupCopyBtns();
@@ -69,6 +71,18 @@ function switchAgent(agent) {
   document.querySelectorAll('.agent-section').forEach(s => s.classList.toggle('active', s.id === `section-${agent}`));
 }
 
+// ---- Provider notes ----
+const providerNotes = {
+  groq: '🆓 <strong>Groq رایگانه!</strong> برو <strong>console.groq.com</strong> — ثبت‌نام کن، API Key بگیر، اینجا بذار. بدون کارت بانکی.',
+  gemini: '🆓 <strong>Gemini رایگانه!</strong> برو <strong>aistudio.google.com</strong> — با گوگل لاگین کن، Get API Key بزن، کپی کن بیار.',
+  anthropic: '💳 <strong>Anthropic پولیه.</strong> برو <strong>console.anthropic.com</strong> — ثبت‌نام کن، کارت بزن، API Key بگیر.',
+};
+const providerPlaceholders = {
+  groq: 'gsk_...',
+  gemini: 'AIzaSy...',
+  anthropic: 'sk-ant-api03-...',
+};
+
 // ---- API Panel ----
 function setupApiPanel() {
   const panel = $('apiPanel');
@@ -77,6 +91,7 @@ function setupApiPanel() {
   const saveBtn = $('saveApiBtn');
 
   if (state.apiKey) input.value = state.apiKey;
+  input.placeholder = providerPlaceholders[state.provider];
 
   toggleBtn.addEventListener('click', () => panel.classList.toggle('open'));
 
@@ -87,13 +102,34 @@ function setupApiPanel() {
       localStorage.setItem('syntiq_api_key', key);
       updateApiStatus(true);
       panel.classList.remove('open');
-      showToast('API key saved!');
+      showToast('API key ذخیره شد!');
     } else {
-      showToast('Please enter a valid API key', 'error');
+      showToast('لطفاً API Key وارد کن', 'error');
     }
   });
 
   input.addEventListener('keydown', e => { if (e.key === 'Enter') saveBtn.click(); });
+}
+
+// ---- Provider Tabs ----
+function setupProviderTabs() {
+  document.querySelectorAll('.provider-tab').forEach(btn => {
+    if (btn.dataset.provider === state.provider) btn.classList.add('active');
+    else btn.classList.remove('active');
+
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.provider-tab').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.provider = btn.dataset.provider;
+      localStorage.setItem('syntiq_provider', state.provider);
+      $('apiNote').innerHTML = providerNotes[state.provider];
+      $('apiKeyInput').placeholder = providerPlaceholders[state.provider];
+      $('apiKeyInput').value = '';
+      state.apiKey = '';
+      updateApiStatus(false);
+    });
+  });
+  $('apiNote').innerHTML = providerNotes[state.provider];
 }
 
 function updateApiStatus(active) {
@@ -447,14 +483,65 @@ Return ONLY the complete HTML code. No explanation before or after. Start with <
   };
 }
 
-// ---- Anthropic API Call ----
-async function callAnthropic(agent, prompt) {
-  const systemPrompts = {
-    nova: "You are Nova, the world's #1 social media content strategist. You've helped brands go from zero to millions of followers. Your content is psychologically engineered to go viral. You write exclusively in American English. You are precise, creative, and your outputs are always structured and immediately usable. Never apologize. Never hedge. Just deliver world-class content.",
-    rex: "You are Rex, a top-tier B2B sales copywriter and strategist. You've written cold emails that generated $10M+ in closed deals. You understand buyer psychology, SPIN selling, Cialdini's principles, and what makes small business owners actually respond. You're direct, sharp, and your copy sounds human. Never generic, always specific. Write in American English.",
-    pixel: "You are Pixel, the world's best front-end web designer and developer. You create websites that win awards and convert visitors into customers. Your HTML/CSS/JS code is clean, modern, and production-ready. You use cutting-edge design patterns. Every website you create looks like it costs $10,000+. When asked to build a website, return ONLY the complete HTML code — no explanation, no markdown code fences, just raw HTML starting with <!DOCTYPE html>."
-  };
+// ---- System Prompts ----
+const systemPrompts = {
+  nova: "You are Nova, the world's #1 social media content strategist. You've helped brands go from zero to millions of followers. Your content is psychologically engineered to go viral. You write exclusively in American English. You are precise, creative, and your outputs are always structured and immediately usable. Never apologize. Never hedge. Just deliver world-class content.",
+  rex: "You are Rex, a top-tier B2B sales copywriter and strategist. You've written cold emails that generated $10M+ in closed deals. You understand buyer psychology, SPIN selling, Cialdini's principles, and what makes small business owners actually respond. You're direct, sharp, and your copy sounds human. Never generic, always specific. Write in American English.",
+  pixel: "You are Pixel, the world's best front-end web designer and developer. You create websites that win awards and convert visitors into customers. Your HTML/CSS/JS code is clean, modern, and production-ready. You use cutting-edge design patterns. Every website you create looks like it costs $10,000+. When asked to build a website, return ONLY the complete HTML code — no explanation, no markdown code fences, just raw HTML starting with <!DOCTYPE html>."
+};
 
+// ---- Universal AI Call ----
+async function callAnthropic(agent, prompt) {
+  if (state.provider === 'groq') return callGroq(agent, prompt);
+  if (state.provider === 'gemini') return callGemini(agent, prompt);
+  return callAnthropicDirect(agent, prompt);
+}
+
+async function callGroq(agent, prompt) {
+  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${state.apiKey}`,
+    },
+    body: JSON.stringify({
+      model: 'llama-3.3-70b-versatile',
+      max_tokens: 8192,
+      messages: [
+        { role: 'system', content: systemPrompts[agent] },
+        { role: 'user', content: prompt.content }
+      ]
+    })
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error?.message || `Groq error ${response.status}`);
+  }
+  const data = await response.json();
+  return data.choices[0].message.content;
+}
+
+async function callGemini(agent, prompt) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${state.apiKey}`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{
+        parts: [{ text: `${systemPrompts[agent]}\n\n${prompt.content}` }]
+      }],
+      generationConfig: { maxOutputTokens: 8192 }
+    })
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error?.message || `Gemini error ${response.status}`);
+  }
+  const data = await response.json();
+  return data.candidates[0].content.parts[0].text;
+}
+
+async function callAnthropicDirect(agent, prompt) {
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -470,12 +557,10 @@ async function callAnthropic(agent, prompt) {
       messages: [{ role: 'user', content: prompt.content }]
     })
   });
-
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
-    throw new Error(err.error?.message || `API error ${response.status}`);
+    throw new Error(err.error?.message || `Anthropic error ${response.status}`);
   }
-
   const data = await response.json();
   return data.content[0].text;
 }
