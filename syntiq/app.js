@@ -34,6 +34,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupClearBtns();
   setupPixelDownload();
   setupTracker();
+  setupNovaPreview();
   renderAllHistories();
   renderTracker();
   if (state.apiKey) updateApiStatus(true);
@@ -489,6 +490,176 @@ Return ONLY the complete HTML code. No explanation before or after. Start with <
   };
 }
 
+// ============================================================
+// NOVA PREVIEW PANEL
+// ============================================================
+
+const igTypeConfig = {
+  post:      { icon: '📸', name: 'Post',      sub: 'پست فید اینستاگرام',   hint: 'تصویر / کاروسل', mediaClass: '',        reel: false, story: false },
+  reel:      { icon: '🎬', name: 'Reel',      sub: 'ویدیو کوتاه ۹:۱۶',     hint: 'ویدیو کوتاه ۳۰-۹۰ ثانیه', mediaClass: 'story-mode', reel: true,  story: false },
+  story:     { icon: '📱', name: 'Story',     sub: 'استوری ۲۴ ساعته',      hint: 'تصویر یا ویدیو ۱۵ ثانیه', mediaClass: 'story-mode', reel: false, story: true  },
+  video:     { icon: '🎥', name: 'Video',     sub: 'ویدیو بلند (IGTV)',     hint: 'ویدیو بالای ۱ دقیقه', mediaClass: '',        reel: true,  story: false },
+  highlight: { icon: '⭐', name: 'Highlight', sub: 'استوری دائمی (Highlight)', hint: 'استوری‌های ذخیره شده', mediaClass: 'story-mode', reel: false, story: true  },
+};
+
+let novaPreviewState = {
+  igType: 'post',
+  caption: '',
+  hashtags: '',
+  approved: false,
+};
+
+function setupNovaPreview() {
+  // IG type pills
+  document.querySelectorAll('.ig-type-pill').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.ig-type-pill').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      novaPreviewState.igType = btn.dataset.igType;
+      updateIgTypeUI();
+    });
+  });
+
+  // Sync preview button
+  $('btnSyncPreview').addEventListener('click', () => {
+    novaPreviewState.caption = $('novaEditCaption').value;
+    novaPreviewState.hashtags = $('novaEditHashtags').value;
+    updatePreviewContent();
+    showToast('پیش‌نمایش آپدیت شد');
+  });
+
+  // Approve button
+  $('nova-approve-btn').addEventListener('click', () => {
+    novaPreviewState.approved = true;
+    const cfg = igTypeConfig[novaPreviewState.igType];
+    $('nova-approved-banner').classList.add('visible');
+    $('approved-type-final').textContent = `${cfg.name} (${cfg.sub})`;
+    $('approveRow').style.opacity = '0.4';
+    $('approveRow').style.pointerEvents = 'none';
+    showToast('محتوا تأیید شد ✅');
+  });
+
+  // Revoke button
+  $('nova-revoke-btn').addEventListener('click', () => {
+    novaPreviewState.approved = false;
+    $('nova-approved-banner').classList.remove('visible');
+    $('approveRow').style.opacity = '';
+    $('approveRow').style.pointerEvents = '';
+    showToast('تأیید لغو شد');
+  });
+
+  // Regenerate button
+  $('nova-regenerate-btn').addEventListener('click', () => {
+    resetNovaPreview();
+    runAgent('nova');
+  });
+
+  // Live sync: typing in edit areas syncs to preview after short pause
+  let syncTimer;
+  ['novaEditCaption', 'novaEditHashtags'].forEach(id => {
+    $(id).addEventListener('input', () => {
+      clearTimeout(syncTimer);
+      syncTimer = setTimeout(() => {
+        novaPreviewState.caption = $('novaEditCaption').value;
+        novaPreviewState.hashtags = $('novaEditHashtags').value;
+        updatePreviewContent();
+      }, 600);
+    });
+  });
+}
+
+function updateIgTypeUI() {
+  const cfg = igTypeConfig[novaPreviewState.igType];
+
+  // badge
+  $('igTypeBadgeBig').textContent = `${cfg.icon} ${cfg.name} — ${cfg.sub}`;
+
+  // media area class
+  const mediaArea = $('igMediaArea');
+  mediaArea.className = 'ig-media-area ' + cfg.mediaClass;
+
+  // media hint
+  $('igMediaHint').textContent = cfg.hint;
+
+  // story bars
+  $('igStoryFrame').style.display = cfg.story ? 'flex' : 'none';
+
+  // reel icon
+  const reelIcon = $('igReelIcon');
+  if (cfg.reel) reelIcon.classList.add('visible');
+  else reelIcon.classList.remove('visible');
+
+  // hide post actions for story
+  $('igPostActions').style.display = cfg.story ? 'none' : 'flex';
+
+  // approve info
+  $('approveTypeIcon').textContent = cfg.icon;
+  $('approveTypeName').textContent = cfg.name;
+  $('approveTypeSub').textContent = cfg.sub;
+}
+
+function showNovaPreview(rawOutput) {
+  // Extract caption (first big text block) and hashtags
+  const hashtagMatch = rawOutput.match(/(#\w+[\s#\w]*)/g);
+  const hashtags = hashtagMatch ? hashtagMatch.join(' ').substring(0, 300) : '';
+
+  // Strip markdown headers and get main text
+  let caption = rawOutput
+    .replace(/^##.+$/gm, '')
+    .replace(/\*\*/g, '')
+    .replace(/#\w+/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+    .substring(0, 400);
+
+  novaPreviewState.caption = caption;
+  novaPreviewState.hashtags = hashtags;
+  novaPreviewState.approved = false;
+
+  // Sync business name to username fields
+  const biz = $('nova-business').value.trim();
+  if (biz) {
+    const slug = biz.toLowerCase().replace(/\s+/g, '.').replace(/[^a-z0-9.]/g, '');
+    ['ig-preview-username', 'ig-cap-username'].forEach(id => {
+      $(id).textContent = slug || 'yourbrand';
+    });
+  }
+
+  // Fill edit areas
+  $('novaEditCaption').value = caption;
+  $('novaEditHashtags').value = hashtags;
+
+  updatePreviewContent();
+  updateIgTypeUI();
+
+  // Reset approve state
+  $('nova-approved-banner').classList.remove('visible');
+  $('approveRow').style.opacity = '';
+  $('approveRow').style.pointerEvents = '';
+
+  // Show panel
+  $('nova-preview-panel').classList.add('visible');
+}
+
+function updatePreviewContent() {
+  const cap = novaPreviewState.caption;
+  const tags = novaPreviewState.hashtags;
+
+  const previewCap = cap.length > 120 ? cap.substring(0, 120) + '...' : cap;
+  $('igCaptionPreview').textContent = previewCap || 'کپشن اینجا نمایش داده می‌شه...';
+
+  // Show first 5 hashtags in preview
+  const tagList = (tags.match(/#\w+/g) || []).slice(0, 6);
+  $('igHashtagsPreview').textContent = tagList.join(' ');
+}
+
+function resetNovaPreview() {
+  $('nova-preview-panel').classList.remove('visible');
+  novaPreviewState = { igType: novaPreviewState.igType, caption: '', hashtags: '', approved: false };
+}
+
+// ============================================================
+
 function buildAtlasPrompt() {
   const niche = $('atlas-niche').value.trim();
   const target = $('atlas-target').value.trim();
@@ -791,6 +962,11 @@ function renderOutput(agent, text) {
   const outputEl = $(`${agent}-output`);
   const isPixel = agent === 'pixel';
 
+  // Nova: show preview panel after render
+  if (agent === 'nova') {
+    showNovaPreview(text);
+  }
+
   if (isPixel && text.includes('<!DOCTYPE html>')) {
     // Clean: remove any markdown code fences if present
     let html = text.replace(/^```html\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim();
@@ -893,6 +1069,7 @@ function setupClearBtns() {
       </div>`;
       state.lastOutputs[agent] = '';
       if (agent === 'pixel') $('pixel-download').style.display = 'none';
+      if (agent === 'nova') resetNovaPreview();
     });
   });
 }
