@@ -12,9 +12,11 @@ const state = {
     nova: JSON.parse(localStorage.getItem('syntiq_history_nova') || '[]'),
     rex: JSON.parse(localStorage.getItem('syntiq_history_rex') || '[]'),
     pixel: JSON.parse(localStorage.getItem('syntiq_history_pixel') || '[]'),
+    atlas: JSON.parse(localStorage.getItem('syntiq_history_atlas') || '[]'),
   },
-  selectedTypes: { nova: 'instagram-caption', rex: 'cold-email', pixel: 'modern-dark' },
-  lastOutputs: { nova: '', rex: '', pixel: '' },
+  selectedTypes: { nova: 'instagram-caption', rex: 'cold-email', pixel: 'modern-dark', atlas: 'hashtag-strategy' },
+  lastOutputs: { nova: '', rex: '', pixel: '', atlas: '' },
+  tracker: JSON.parse(localStorage.getItem('syntiq_tracker') || '[]'),
 };
 
 // ---- DOM refs ----
@@ -31,7 +33,9 @@ document.addEventListener('DOMContentLoaded', () => {
   setupCopyBtns();
   setupClearBtns();
   setupPixelDownload();
+  setupTracker();
   renderAllHistories();
+  renderTracker();
   if (state.apiKey) updateApiStatus(true);
 });
 
@@ -163,6 +167,7 @@ function setupGenerateBtns() {
   $('nova-generate').addEventListener('click', () => runAgent('nova'));
   $('rex-generate').addEventListener('click', () => runAgent('rex'));
   $('pixel-generate').addEventListener('click', () => runAgent('pixel'));
+  $('atlas-generate').addEventListener('click', () => runAgent('atlas'));
 }
 
 async function runAgent(agent) {
@@ -198,6 +203,7 @@ function buildPrompt(agent) {
   if (agent === 'nova') return buildNovaPrompt();
   if (agent === 'rex') return buildRexPrompt();
   if (agent === 'pixel') return buildPixelPrompt();
+  if (agent === 'atlas') return buildAtlasPrompt();
 }
 
 function buildNovaPrompt() {
@@ -483,11 +489,226 @@ Return ONLY the complete HTML code. No explanation before or after. Start with <
   };
 }
 
+function buildAtlasPrompt() {
+  const niche = $('atlas-niche').value.trim();
+  const target = $('atlas-target').value.trim();
+  const location = $('atlas-location').value.trim();
+  const style = $('atlas-style').value;
+  const type = state.selectedTypes.atlas;
+
+  if (!niche) return null;
+
+  const loc = location || 'USA (general)';
+  const aud = target || 'American general audience';
+
+  const typeMap = {
+    'hashtag-strategy': `Create a COMPLETE American Instagram hashtag strategy for a ${niche} account targeting ${aud} in ${loc}. Content style: ${style}.
+
+## 🇺🇸 AMERICAN HASHTAG MASTER LIST
+
+### Mega Hashtags (1M+ posts) — use 3 max
+[10 hashtags popular in the US for this niche]
+
+### Large US Hashtags (100K–1M posts)
+[15 hashtags trending with American audiences]
+
+### Medium Niche Hashtags (10K–100K)
+[15 targeted hashtags for this specific niche in America]
+
+### Location-Based Hashtags
+[10 city/state/region hashtags for ${loc}]
+
+### Community Hashtags (under 10K — high engagement)
+[10 tight-knit community tags Americans use]
+
+## ⏰ BEST TIMES TO POST FOR US AUDIENCE
+
+[Breakdown by timezone: EST, CST, PST — best days and hours for maximum reach with Americans]
+
+## 📈 HASHTAG ROTATION STRATEGY
+
+[How to rotate hashtags across posts to avoid shadowban. Give 3 sets of 30 hashtags to rotate weekly.]
+
+## 🚫 HASHTAGS TO AVOID
+
+[10 banned or shadowbanned hashtags in this niche that Americans use but hurt reach]`,
+
+    'follow-targets': `You are Atlas. Build a PRECISE manual follow targeting guide for a ${niche} Instagram account wanting to reach ${aud} in ${loc}. Style: ${style}.
+
+## 🎯 ACCOUNT TYPES TO FOLLOW MANUALLY
+
+### Category 1: Direct Competitors (small, engaged)
+[What to look for: follower range, engagement rate, bio keywords. Give 5 example search terms to find them.]
+
+### Category 2: Complementary Accounts
+[Non-competing accounts whose followers are your ideal US audience. Give 5 account types with example search terms.]
+
+### Category 3: US Micro-Influencers
+[Influencers with 5K–50K followers in this niche. How to find them. What engagement rate means they're real.]
+
+### Category 4: Active American Commenters
+[How to find highly engaged Americans in this niche by going through competitor comment sections. Step-by-step process.]
+
+## 🔍 HOW TO FIND THEM (Step-by-Step)
+
+[Exact Instagram search strategy: hashtags to browse, explore page technique, competitor follower lists]
+
+## 📊 FOLLOW/UNFOLLOW STRATEGY (Manual, Safe)
+
+[Daily limits to stay safe: how many to follow per day, when to unfollow, what ratios to maintain. Be specific with numbers.]
+
+## 🇺🇸 AMERICAN TIMEZONE ACTIVITY WINDOWS
+
+[Best hours to do manual following for each US timezone to catch people when they're active]`,
+
+    'engagement-templates': `Create 20 GENUINE, HIGH-CONVERTING comment templates for a ${niche} account to engage with American ${aud} audience. Style: ${style}.
+
+## 💬 COMMENT TEMPLATES BY TYPE
+
+### Appreciation Comments (leave on target accounts)
+[5 genuine comments that feel human, specific, and invite a reply. NOT generic. Must feel personal.]
+
+### Question Comments (spark conversation)
+[5 questions that open dialogue and make the account owner want to reply AND follow back]
+
+### Value-Add Comments (show expertise)
+[5 comments that add real value to the post and establish authority in ${niche}]
+
+### Story Reply Templates
+[5 templates to reply to stories that feel casual and start a DM conversation]
+
+### DM Opener Templates (after they follow back)
+[5 short, warm DM openers that DON'T pitch anything — just build rapport]
+
+## ⚠️ WHAT NOT TO SAY
+
+[10 comment styles Americans hate — emojis spam, "nice post!", generic compliments — what kills engagement]
+
+## 📅 ENGAGEMENT SCHEDULE
+
+[How many comments/stories to respond to per day, what time, to stay under Instagram's radar while building real connections]`,
+
+    'growth-schedule': `Build a COMPLETE 30-day Instagram growth schedule for a ${niche} account targeting ${aud} in ${loc}. Content style: ${style}.
+
+## 📅 WEEK 1 — Foundation (Days 1–7)
+
+[Daily actions: what to post, what hashtags, how many accounts to follow manually, what to comment on. Be SPECIFIC with numbers.]
+
+## 📅 WEEK 2 — Momentum (Days 8–14)
+
+[Daily actions with slight scaling. Include story frequency, engagement target, follow count.]
+
+## 📅 WEEK 3 — Acceleration (Days 15–21)
+
+[Increased activity. Introduce collaborations, US-targeted content formats, Reels push.]
+
+## 📅 WEEK 4 — Optimization (Days 22–30)
+
+[Analyze, double down on what worked. Unfollow non-followers. Refine targeting.]
+
+## 📊 DAILY LIMITS (Stay Safe from Instagram)
+
+[Exact safe limits per day for: follows, unfollows, likes, comments, story views, DMs]
+
+## 🎯 30-DAY TARGETS
+
+[Realistic follower growth, engagement rate, and reach targets for a US audience in this niche]
+
+## 🇺🇸 US CULTURAL CONTENT CALENDAR
+
+[Key American dates, holidays, and events in the next 30 days to tie content to for maximum relevance]`
+  };
+
+  return { label: `${niche} — ${type}`, content: typeMap[type] };
+}
+
+// ---- Tracker ----
+function setupTracker() {
+  $('btnTrackFollow').addEventListener('click', () => addTrackerEntry('follow'));
+  $('btnTrackUnfollow').addEventListener('click', () => addTrackerEntry('unfollow'));
+  $('btnClearTracker').addEventListener('click', () => {
+    if (confirm('همه رو پاک کنم؟')) {
+      state.tracker = [];
+      saveTracker();
+      renderTracker();
+      showToast('تراکر پاک شد');
+    }
+  });
+  $('btnExportTracker').addEventListener('click', exportTrackerCSV);
+}
+
+function addTrackerEntry(type) {
+  const input = $('trackerUsername');
+  const username = input.value.trim().replace(/^@/, '');
+  if (!username) { showToast('یه یوزرنیم وارد کن', 'error'); return; }
+  const entry = {
+    username,
+    type,
+    time: new Date().toLocaleString('fa-IR', { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' }),
+    id: Date.now(),
+  };
+  state.tracker.unshift(entry);
+  saveTracker();
+  renderTracker();
+  input.value = '';
+  showToast(type === 'follow' ? `@${username} فالو ثبت شد` : `@${username} انفالو ثبت شد`);
+}
+
+function saveTracker() {
+  localStorage.setItem('syntiq_tracker', JSON.stringify(state.tracker));
+}
+
+function renderTracker() {
+  const list = $('trackerList');
+  const followed = state.tracker.filter(e => e.type === 'follow').length;
+  const unfollowed = state.tracker.filter(e => e.type === 'unfollow').length;
+  const pending = state.tracker.filter(e => e.type === 'follow' && !state.tracker.find(u => u.type === 'unfollow' && u.username === e.username)).length;
+
+  $('trackerFollowCount').textContent = followed;
+  $('trackerUnfollowCount').textContent = unfollowed;
+  $('trackerPendingCount').textContent = pending;
+
+  if (!state.tracker.length) {
+    list.innerHTML = '<p class="history-empty">هنوز کسی ثبت نشده</p>';
+    return;
+  }
+  list.innerHTML = state.tracker.slice(0, 30).map(e => `
+    <div class="tracker-entry ${e.type}">
+      <span class="tracker-entry-name">@${escapeHtml(e.username)}</span>
+      <span class="tracker-entry-status">${e.type === 'follow' ? '✓ فالو' : '✗ انفالو'}</span>
+      <span class="tracker-entry-time">${e.time}</span>
+      <button class="tracker-entry-del" data-id="${e.id}" title="حذف">×</button>
+    </div>
+  `).join('');
+  list.querySelectorAll('.tracker-entry-del').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.tracker = state.tracker.filter(e => e.id !== parseInt(btn.dataset.id));
+      saveTracker();
+      renderTracker();
+    });
+  });
+}
+
+function exportTrackerCSV() {
+  if (!state.tracker.length) { showToast('تراکر خالیه', 'error'); return; }
+  const rows = ['Username,Type,Time'];
+  state.tracker.forEach(e => rows.push(`@${e.username},${e.type},${e.time}`));
+  const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `syntiq-tracker-${Date.now()}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('CSV دانلود شد!');
+}
+
 // ---- System Prompts ----
 const systemPrompts = {
   nova: "You are Nova, the world's #1 social media content strategist. You've helped brands go from zero to millions of followers. Your content is psychologically engineered to go viral. You write exclusively in American English. You are precise, creative, and your outputs are always structured and immediately usable. Never apologize. Never hedge. Just deliver world-class content.",
   rex: "You are Rex, a top-tier B2B sales copywriter and strategist. You've written cold emails that generated $10M+ in closed deals. You understand buyer psychology, SPIN selling, Cialdini's principles, and what makes small business owners actually respond. You're direct, sharp, and your copy sounds human. Never generic, always specific. Write in American English.",
-  pixel: "You are Pixel, the world's best front-end web designer and developer. You create websites that win awards and convert visitors into customers. Your HTML/CSS/JS code is clean, modern, and production-ready. You use cutting-edge design patterns. Every website you create looks like it costs $10,000+. When asked to build a website, return ONLY the complete HTML code — no explanation, no markdown code fences, just raw HTML starting with <!DOCTYPE html>."
+  pixel: "You are Pixel, the world's best front-end web designer and developer. You create websites that win awards and convert visitors into customers. Your HTML/CSS/JS code is clean, modern, and production-ready. You use cutting-edge design patterns. Every website you create looks like it costs $10,000+. When asked to build a website, return ONLY the complete HTML code — no explanation, no markdown code fences, just raw HTML starting with <!DOCTYPE html>.",
+  atlas: "You are Atlas, a world-class Instagram growth strategist specializing in targeting American audiences. You have deep knowledge of US Instagram culture, trending niches, community hashtags, timezone engagement windows, and organic growth tactics. You only recommend manual, safe, human-led strategies — never bots. Your strategies are data-driven, culturally aware, and immediately actionable. Be specific with numbers, times, and examples. Write in a clear, expert tone."
 };
 
 // ---- Universal AI Call ----
@@ -617,7 +838,7 @@ function saveToHistory(agent, content, label) {
 }
 
 function renderAllHistories() {
-  ['nova', 'rex', 'pixel'].forEach(renderHistory);
+  ['nova', 'rex', 'pixel', 'atlas'].forEach(renderHistory);
 }
 
 function renderHistory(agent) {
@@ -645,7 +866,7 @@ function renderHistory(agent) {
 
 // ---- Copy Buttons ----
 function setupCopyBtns() {
-  ['nova', 'rex', 'pixel'].forEach(agent => {
+  ['nova', 'rex', 'pixel', 'atlas'].forEach(agent => {
     $(`${agent}-copy`).addEventListener('click', () => {
       const text = state.lastOutputs[agent];
       if (!text) { showToast('Nothing to copy yet', 'error'); return; }
@@ -664,7 +885,7 @@ function setupCopyBtns() {
 
 // ---- Clear Buttons ----
 function setupClearBtns() {
-  ['nova', 'rex', 'pixel'].forEach(agent => {
+  ['nova', 'rex', 'pixel', 'atlas'].forEach(agent => {
     $(`${agent}-clear`).addEventListener('click', () => {
       $(`${agent}-output`).innerHTML = `<div class="output-placeholder">
         <div class="placeholder-icon ${agent}-placeholder-icon"></div>
@@ -695,6 +916,14 @@ function setupPixelDownload() {
 
 // ---- Loading ----
 const thinkingMessages = {
+  atlas: [
+    'Mapping the American Instagram landscape...',
+    'Analyzing US niche communities...',
+    'Finding your ideal American targets...',
+    'Calculating timezone engagement windows...',
+    'Building your growth roadmap...',
+    'Almost ready — this strategy is 🇺🇸 gold...',
+  ],
   nova: [
     'Analyzing viral content patterns...',
     'Studying the Instagram algorithm...',
@@ -721,7 +950,7 @@ const thinkingMessages = {
   ],
 };
 
-const agentEmojis = { nova: '⭐', rex: '⚡', pixel: '🎨' };
+const agentEmojis = { nova: '⭐', rex: '⚡', pixel: '🎨', atlas: '🌎' };
 
 let thinkingInterval = null;
 

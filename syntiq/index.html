@@ -42,6 +42,9 @@
       <button class="nav-tab" data-agent="pixel">
         <span class="tab-dot pixel-dot"></span>Pixel
       </button>
+      <button class="nav-tab" data-agent="atlas">
+        <span class="tab-dot atlas-dot"></span>Atlas
+      </button>
     </div>
     <div class="nav-actions">
       <button class="btn-api" id="apiToggleBtn">
@@ -491,6 +494,185 @@
                   </svg>
                 </div>
                 <p class="placeholder-text">Pixel is ready to build something stunning.<br/>Describe your business and hit <strong>Build</strong>.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ATLAS SECTION -->
+    <section class="agent-section" id="section-atlas">
+      <div class="agent-hero atlas-hero">
+        <div class="agent-hero-content">
+          <div class="agent-avatar atlas-avatar">
+            <div class="avatar-ring"></div>
+            <div class="avatar-inner">
+              <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+                <circle cx="20" cy="20" r="18" fill="url(#atlasGrad)"/>
+                <circle cx="20" cy="20" r="9" fill="none" stroke="white" stroke-width="1.5" opacity="0.8"/>
+                <ellipse cx="20" cy="20" rx="5" ry="9" fill="none" stroke="white" stroke-width="1.5" opacity="0.6"/>
+                <line x1="11" y1="20" x2="29" y2="20" stroke="white" stroke-width="1.5" opacity="0.6"/>
+                <circle cx="20" cy="20" r="2.5" fill="white"/>
+                <defs>
+                  <linearGradient id="atlasGrad" x1="0" y1="0" x2="40" y2="40">
+                    <stop offset="0%" stop-color="#10b981"/>
+                    <stop offset="100%" stop-color="#0ea5e9"/>
+                  </linearGradient>
+                </defs>
+              </svg>
+            </div>
+          </div>
+          <div class="agent-info">
+            <div class="agent-name-row">
+              <h1 class="agent-name atlas-name">ATLAS</h1>
+              <span class="agent-badge atlas-badge">Instagram Growth Strategist</span>
+              <span class="agent-status-pill online">● Online</span>
+            </div>
+            <p class="agent-bio">من نقشه‌ی رشد اینستاگرام تو رو می‌کشم. هشتگ‌های امریکایی، بهترین اکانت‌ها برای فالو دستی، ساعت‌های طلایی، و قالب کامنت که اینگیجمنت بگیری — همه رو بهت میدم. <em>تو کنترل داری، من نقشه رو می‌دم.</em></p>
+            <div class="agent-stats">
+              <div class="stat"><span class="stat-val">🇺🇸</span><span class="stat-label">US Targeting</span></div>
+              <div class="stat"><span class="stat-val">24/7</span><span class="stat-label">Strategy Ready</span></div>
+              <div class="stat"><span class="stat-val">100%</span><span class="stat-label">Manual & Safe</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="agent-workspace">
+        <div class="workspace-left">
+          <div class="form-card">
+            <h3 class="form-title">اطلاعات اکانتت رو بده</h3>
+            <div class="form-group">
+              <label>نیچ / حوزه کاری</label>
+              <input type="text" class="form-input" id="atlas-niche" placeholder="e.g. Fitness, Food, Real Estate" />
+            </div>
+            <div class="form-group">
+              <label>مخاطب هدف امریکایی</label>
+              <input type="text" class="form-input" id="atlas-target" placeholder="e.g. Women 25-40 in California" />
+            </div>
+            <div class="form-group">
+              <label>شهر / ایالت هدف (اختیاری)</label>
+              <input type="text" class="form-input" id="atlas-location" placeholder="e.g. New York, Texas, Miami" />
+            </div>
+            <div class="form-group">
+              <label>سبک محتوای تو</label>
+              <select class="form-select" id="atlas-style">
+                <option value="motivational">Motivational / Inspiring</option>
+                <option value="educational">Educational / Tips</option>
+                <option value="entertainment">Entertainment / Humor</option>
+                <option value="business">Business / Professional</option>
+                <option value="lifestyle">Lifestyle / Aesthetic</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>چی میخوای؟</label>
+              <div class="content-type-grid">
+                <button class="type-btn active" data-type="hashtag-strategy">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/></svg>
+                  هشتگ امریکایی
+                </button>
+                <button class="type-btn" data-type="follow-targets">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                  اکانت‌های هدف
+                </button>
+                <button class="type-btn" data-type="engagement-templates">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                  قالب کامنت
+                </button>
+                <button class="type-btn" data-type="growth-schedule">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                  برنامه رشد
+                </button>
+              </div>
+            </div>
+            <button class="btn-generate atlas-btn" id="atlas-generate">
+              <span class="btn-text">Generate with Atlas</span>
+              <svg class="btn-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+            </button>
+          </div>
+
+          <!-- Follow/Unfollow Tracker -->
+          <div class="form-card tracker-card">
+            <h3 class="form-title">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+              تراکر دستی فالو/انفالو
+            </h3>
+            <div class="tracker-stats">
+              <div class="tracker-stat followed">
+                <span class="tracker-num" id="trackerFollowCount">0</span>
+                <span class="tracker-label">فالو کردم</span>
+              </div>
+              <div class="tracker-stat unfollowed">
+                <span class="tracker-num" id="trackerUnfollowCount">0</span>
+                <span class="tracker-label">انفالو کردم</span>
+              </div>
+              <div class="tracker-stat pending">
+                <span class="tracker-num" id="trackerPendingCount">0</span>
+                <span class="tracker-label">در انتظار</span>
+              </div>
+            </div>
+            <div class="tracker-input-row">
+              <input type="text" class="form-input" id="trackerUsername" placeholder="@username" />
+              <button class="btn-track-follow" id="btnTrackFollow" title="ثبت فالو">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+                فالو
+              </button>
+              <button class="btn-track-unfollow" id="btnTrackUnfollow" title="ثبت انفالو">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+                انفالو
+              </button>
+            </div>
+            <div class="tracker-list" id="trackerList"></div>
+            <div class="tracker-footer">
+              <button class="btn-clear-tracker" id="btnClearTracker">پاک کردن همه</button>
+              <button class="btn-export-tracker" id="btnExportTracker">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                خروجی CSV
+              </button>
+            </div>
+          </div>
+
+          <div class="history-card" id="atlas-history-card">
+            <h4 class="history-title">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              Recent Outputs
+            </h4>
+            <div class="history-list" id="atlas-history-list"></div>
+          </div>
+        </div>
+
+        <div class="workspace-right">
+          <div class="output-card">
+            <div class="output-header">
+              <div class="output-header-left">
+                <div class="output-title-row">
+                  <span class="output-agent-dot atlas-dot"></span>
+                  <span class="output-title">Atlas's Output</span>
+                </div>
+                <span class="output-type-label" id="atlas-output-type">Hashtag Strategy</span>
+              </div>
+              <div class="output-actions">
+                <button class="btn-copy" id="atlas-copy">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                  Copy
+                </button>
+                <button class="btn-clear" id="atlas-clear">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                </button>
+              </div>
+            </div>
+            <div class="output-body" id="atlas-output">
+              <div class="output-placeholder">
+                <div class="placeholder-icon atlas-placeholder-icon">
+                  <svg width="48" height="48" viewBox="0 0 40 40" fill="none">
+                    <circle cx="20" cy="20" r="18" fill="rgba(16,185,129,0.1)"/>
+                    <circle cx="20" cy="20" r="9" fill="none" stroke="#10b981" stroke-width="1.5" opacity="0.6"/>
+                    <ellipse cx="20" cy="20" rx="5" ry="9" fill="none" stroke="#10b981" stroke-width="1.5" opacity="0.4"/>
+                    <circle cx="20" cy="20" r="2.5" fill="#10b981" opacity="0.7"/>
+                  </svg>
+                </div>
+                <p class="placeholder-text">Atlas آماده‌ست نقشه رشد اینستاگرامت رو بکشه.<br/>نیچت رو بده و بزن <strong>Generate</strong>.</p>
               </div>
             </div>
           </div>
