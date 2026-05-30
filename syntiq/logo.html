@@ -2,540 +2,520 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Syntiq — Brand Identity</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{
-  --p1:#5b21b6;--p2:#7c3aed;--p3:#a855f7;--p4:#c084fc;
-  --c1:#0891b2;--c2:#06b6d4;--c3:#22d3ee;--c4:#67e8f9;
-  --white:#fff;--dark:#050508;
-}
-body{font-family:'Inter',sans-serif;background:var(--dark);color:#fff;min-height:100vh}
+html,body{width:100%;min-height:100vh;background:#030305;font-family:'Space Grotesk',sans-serif;color:#fff;overflow-x:hidden}
+a{color:inherit;text-decoration:none}
 
-/* ---- NAV ---- */
-.nav{display:flex;align-items:center;justify-content:space-between;padding:20px 40px;border-bottom:1px solid rgba(255,255,255,0.06)}
-.nav-brand{display:flex;align-items:center;gap:8px;font-size:18px;font-weight:800;letter-spacing:-0.5px}
-.nav-btns{display:flex;gap:10px}
-.btn{padding:9px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;font-family:'Inter',sans-serif}
-.btn-outline{background:transparent;border:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.7)}
-.btn-outline:hover{border-color:rgba(255,255,255,0.4);color:#fff}
-.btn-primary{background:linear-gradient(135deg,#7c3aed,#06b6d4);border:none;color:#fff;box-shadow:0 4px 20px rgba(124,58,237,0.3)}
-.btn-primary:hover{opacity:.85}
+/* ── GRID ── */
+.page{display:flex;flex-direction:column;align-items:center;gap:0}
 
-/* ---- HERO ---- */
-.hero{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 40px 60px;text-align:center;position:relative;overflow:hidden}
-.hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 0%,rgba(124,58,237,0.12),transparent);pointer-events:none}
-.hero-eyebrow{font-size:11px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:rgba(167,139,250,0.7);margin-bottom:16px}
-.hero-title{font-size:13px;color:rgba(255,255,255,0.4);margin-top:16px;letter-spacing:2px;text-transform:uppercase}
+/* ── TOP BAR ── */
+.topbar{width:100%;display:flex;align-items:center;justify-content:space-between;padding:20px 48px;border-bottom:1px solid rgba(255,255,255,0.05);position:sticky;top:0;z-index:50;background:rgba(3,3,5,0.92);backdrop-filter:blur(16px)}
+.topbar-brand{display:flex;align-items:center;gap:10px;font-size:15px;font-weight:700;letter-spacing:-.3px}
+.topbar-btns{display:flex;gap:8px}
+.tbtn{padding:8px 18px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .2s;letter-spacing:.2px}
+.tbtn-ghost{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,.7)}
+.tbtn-ghost:hover{background:rgba(255,255,255,0.09);color:#fff}
+.tbtn-fill{background:linear-gradient(135deg,#7c3aed,#0891b2);border:none;color:#fff;box-shadow:0 4px 16px rgba(124,58,237,.25)}
+.tbtn-fill:hover{opacity:.85}
 
-/* ---- LOGO DISPLAY ---- */
-.logo-showcase{display:flex;flex-direction:column;align-items:center;gap:60px;padding:40px}
+/* ── HERO SLAB ── */
+.hero{width:100%;padding:100px 48px 80px;display:flex;flex-direction:column;align-items:center;gap:24px;position:relative;overflow:hidden}
+.hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 70% 55% at 50% -5%,rgba(124,58,237,.1),transparent 65%),radial-gradient(ellipse 40% 30% at 80% 80%,rgba(8,145,178,.07),transparent 60%);pointer-events:none}
+.hero-tag{font-size:10px;font-weight:600;letter-spacing:3px;text-transform:uppercase;color:rgba(167,139,250,.55);background:rgba(124,58,237,.08);border:1px solid rgba(124,58,237,.2);padding:5px 14px;border-radius:20px}
+.hero-title{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,.2);margin-top:8px}
 
-/* Dark slab */
-.slab{border-radius:20px;padding:60px;display:flex;flex-direction:column;align-items:center;gap:40px;position:relative;overflow:hidden}
-.slab-dark{background:linear-gradient(135deg,#0a0a12,#0f0f1a);border:1px solid rgba(255,255,255,0.06)}
-.slab-light{background:linear-gradient(135deg,#f0f0f5,#e8e8f0);border:1px solid rgba(0,0,0,0.08)}
-.slab-mid{background:linear-gradient(135deg,#1a1a2e,#16213e);border:1px solid rgba(124,58,237,0.2)}
-.slab-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:rgba(255,255,255,0.25);align-self:flex-start}
-.slab-title.dark-text{color:rgba(0,0,0,0.35)}
+/* ── SHOWCASE PANELS ── */
+.panels{width:100%;max-width:1100px;padding:0 48px 80px;display:flex;flex-direction:column;gap:32px}
+.panel{border-radius:20px;padding:56px 48px;display:flex;flex-direction:column;gap:40px;position:relative;overflow:hidden}
+.panel-dark{background:linear-gradient(160deg,#08080f 0%,#0c0c18 100%);border:1px solid rgba(255,255,255,0.055)}
+.panel-mid{background:linear-gradient(160deg,#100820,#091420);border:1px solid rgba(124,58,237,.18)}
+.panel-light{background:linear-gradient(160deg,#f4f4f8,#eaeaf2);border:1px solid rgba(0,0,0,.08)}
+.panel-label{font-size:10px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:rgba(255,255,255,.18)}
+.panel-label-dk{color:rgba(0,0,0,.3)}
 
-/* ---- THE MARK SVG ---- */
-.mark-sizes{display:flex;align-items:center;gap:40px;flex-wrap:wrap;justify-content:center}
-.mark-item{display:flex;flex-direction:column;align-items:center;gap:10px}
-.mark-label{font-size:10px;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:1px}
-.mark-label.dark-text{color:rgba(0,0,0,0.4)}
+/* ── LOGO HORIZONTAL ── */
+.logo-h{display:flex;align-items:center;gap:22px}
+.wordmark-wrap{display:flex;flex-direction:column;gap:1px}
+.wordmark-name{font-family:'Syne',sans-serif;font-weight:800;letter-spacing:-.5px;line-height:1}
+.wordmark-name-lg{font-size:58px}
+.wordmark-name-md{font-size:40px}
+.wordmark-name-sm{font-size:28px}
+.wordmark-sub{font-size:10px;font-weight:600;letter-spacing:3.5px;text-transform:uppercase;color:rgba(255,255,255,.28);padding-left:3px}
+.wordmark-sub-dk{color:rgba(0,0,0,.32)}
 
-/* ---- WORDMARK ---- */
-.wordmark-row{display:flex;align-items:center;gap:18px}
-.wordmark-text{display:flex;flex-direction:column;gap:2px}
-.wordmark-name{font-family:'Space Grotesk',sans-serif;font-size:38px;font-weight:700;letter-spacing:-1px;background:linear-gradient(135deg,#c084fc 0%,#a855f7 35%,#7c3aed 60%,#06b6d4 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;line-height:1}
-.wordmark-name.sm{font-size:26px}
-.wordmark-name.xs{font-size:18px}
-.wordmark-tag{font-size:10px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:rgba(255,255,255,0.35);padding-left:2px}
-.wordmark-tag.dark-text{color:rgba(0,0,0,0.4)}
+/* gradient text */
+.gtext{background:linear-gradient(110deg,#c084fc 0%,#a855f7 28%,#7c3aed 56%,#0ea5e9 82%,#06b6d4 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.gtext-dk{background:linear-gradient(110deg,#6d28d9 0%,#7c3aed 40%,#0891b2 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
 
-/* Light version wordmark */
-.wordmark-name.on-light{background:linear-gradient(135deg,#5b21b6 0%,#7c3aed 40%,#0891b2 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+/* ── SIZES ROW ── */
+.sizes-row{display:flex;align-items:flex-end;gap:32px;flex-wrap:wrap}
+.size-item{display:flex;flex-direction:column;align-items:center;gap:10px}
+.size-label{font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,.22)}
 
-/* ---- COLOUR PALETTE ---- */
-.palette-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:8px;width:100%;max-width:680px}
-.swatch{border-radius:10px;height:64px;display:flex;flex-direction:column;justify-content:flex-end;padding:8px;overflow:hidden;position:relative}
-.swatch-label{font-size:9px;font-weight:700;color:rgba(255,255,255,0.8);text-shadow:0 1px 3px rgba(0,0,0,0.5);letter-spacing:.5px}
-.swatch-hex{font-family:'Space Grotesk',monospace;font-size:9px;color:rgba(255,255,255,0.6)}
+/* ── APP ICON ── */
+.app-icon-wrap{width:96px;height:96px;border-radius:22px;display:flex;align-items:center;justify-content:center;background:linear-gradient(145deg,#130926,#091624);box-shadow:0 12px 40px rgba(124,58,237,.35),inset 0 1px 0 rgba(255,255,255,.07)}
 
-/* ---- USAGE GRID ---- */
-.usage-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;width:100%;max-width:900px}
-.usage-card{border-radius:16px;padding:28px;display:flex;flex-direction:column;gap:16px;align-items:center;border:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.02)}
-.usage-label{font-size:11px;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:1.5px;font-weight:700}
-.usage-preview{border-radius:10px;overflow:hidden;width:100%;aspect-ratio:1;display:flex;align-items:center;justify-content:center}
+/* ── COLOUR SWATCHES ── */
+.swatches{display:flex;gap:10px;flex-wrap:wrap}
+.swatch{height:60px;flex:1;min-width:70px;border-radius:12px;display:flex;flex-direction:column;justify-content:flex-end;padding:10px;overflow:hidden}
+.sw-name{font-size:9px;font-weight:700;letter-spacing:.5px;color:rgba(255,255,255,.7)}
+.sw-hex{font-family:'Space Grotesk',monospace;font-size:9px;color:rgba(255,255,255,.45)}
 
-/* ---- APP ICON VARIANTS ---- */
-.icon-row{display:flex;gap:20px;align-items:flex-end;flex-wrap:wrap;justify-content:center}
-.icon-wrap{display:flex;flex-direction:column;align-items:center;gap:8px}
+/* ── TAGLINE ── */
+.tagline-block{display:flex;flex-direction:column;align-items:center;gap:10px;padding:60px 0 40px}
+.tagline-text{font-family:'Syne',sans-serif;font-size:32px;font-weight:800;letter-spacing:-.5px;background:linear-gradient(100deg,#e9d5ff,#a855f7 40%,#7c3aed 65%,#06b6d4);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.tagline-byline{font-size:13px;color:rgba(255,255,255,.3);letter-spacing:.3px}
 
-/* ---- TAGLINE ---- */
-.tagline-section{display:flex;flex-direction:column;align-items:center;gap:12px;padding:20px 0}
-.tagline-main{font-size:28px;font-weight:800;letter-spacing:-0.5px;text-align:center}
-.tagline-sub{font-size:14px;color:rgba(255,255,255,0.4);text-align:center}
+/* ── DIVIDER ── */
+.divider{width:100%;max-width:1100px;padding:0 48px}
+.divider hr{border:none;border-top:1px solid rgba(255,255,255,.05)}
 
-/* ---- FOOTER ---- */
-.footer{border-top:1px solid rgba(255,255,255,0.06);padding:24px 40px;display:flex;align-items:center;justify-content:space-between}
-.footer-copy{font-size:12px;color:rgba(255,255,255,0.25)}
-
-/* ---- DIVIDER ---- */
-.section-divider{width:100%;max-width:900px;border:none;border-top:1px solid rgba(255,255,255,0.06);margin:0}
-.section-label{font-size:11px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:rgba(255,255,255,0.2);align-self:flex-start;padding-left:4px}
+/* ── FOOTER ── */
+.footer{width:100%;padding:24px 48px;border-top:1px solid rgba(255,255,255,.05);display:flex;align-items:center;justify-content:space-between}
+.footer-text{font-size:11px;color:rgba(255,255,255,.2)}
 </style>
 </head>
 <body>
+<div class="page">
 
-<!-- NAV -->
-<nav class="nav">
-  <div class="nav-brand">
-    <!-- tiny mark -->
-    <svg width="28" height="28" viewBox="0 0 100 100" fill="none">
-      <defs>
-        <linearGradient id="nG" x1="0" y1="0" x2="100" y2="100" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stop-color="#a855f7"/>
-          <stop offset="100%" stop-color="#06b6d4"/>
-        </linearGradient>
-      </defs>
-      <polygon points="50,10 84.6,30 84.6,70 50,90 15.4,70 15.4,30" fill="none" stroke="url(#nG)" stroke-width="3"/>
-      <circle cx="50" cy="50" r="10" fill="url(#nG)"/>
-    </svg>
+<!-- TOP BAR -->
+<header class="topbar">
+  <div class="topbar-brand">
+    <!-- micro mark inline -->
+    <svg width="26" height="26" viewBox="0 0 100 100" fill="none"><defs><linearGradient id="tg" x1="10" y1="10" x2="90" y2="90" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#c084fc"/><stop offset="100%" stop-color="#06b6d4"/></linearGradient><clipPath id="tca"><rect x="0" y="0" width="64" height="100"/></clipPath><clipPath id="tcb"><rect x="36" y="0" width="64" height="100"/></clipPath></defs><circle cx="50" cy="50" r="45" fill="none" stroke="url(#tg)" stroke-width="1.5" opacity=".35"/><circle cx="64" cy="28" r="22" fill="none" stroke="url(#tg)" stroke-width="10" clip-path="url(#tca)"/><circle cx="36" cy="72" r="22" fill="none" stroke="url(#tg)" stroke-width="10" clip-path="url(#tcb)"/><circle cx="64" cy="6" r="4.5" fill="#c084fc"/><circle cx="36" cy="94" r="4.5" fill="#06b6d4"/></svg>
     Syntiq
   </div>
-  <div class="nav-btns">
-    <button class="btn btn-outline" onclick="downloadSVG()">Download SVG</button>
-    <button class="btn btn-primary" onclick="downloadPNG()">Download PNG</button>
+  <div class="topbar-btns">
+    <button class="tbtn tbtn-ghost" onclick="dlSVG()">↓ SVG</button>
+    <button class="tbtn tbtn-fill" onclick="dlPNG()">↓ PNG 2x</button>
   </div>
-</nav>
+</header>
 
 <!-- HERO -->
-<div class="hero">
-  <div class="hero-eyebrow">Brand Identity System</div>
-  <!-- MAIN LOGO -->
-  <svg id="mainLogoSVG" width="360" height="120" viewBox="0 0 360 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+<section class="hero">
+  <div class="hero-tag">Brand Identity System · v1.0</div>
+
+  <!-- PRIMARY LOGO — large -->
+  <svg id="mainLogo" width="460" height="130" viewBox="0 0 460 130" fill="none" xmlns="http://www.w3.org/2000/svg">
     <defs>
-      <!-- Main gradient: purple → cyan -->
-      <linearGradient id="grad1" x1="0" y1="0" x2="120" y2="120" gradientUnits="userSpaceOnUse">
-        <stop offset="0%" stop-color="#a855f7"/>
-        <stop offset="45%" stop-color="#7c3aed"/>
+      <!-- Master gradient (used everywhere) -->
+      <linearGradient id="mg" x1="5" y1="5" x2="125" y2="125" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stop-color="#c084fc"/>
+        <stop offset="28%" stop-color="#a855f7"/>
+        <stop offset="58%" stop-color="#7c3aed"/>
+        <stop offset="85%" stop-color="#0ea5e9"/>
         <stop offset="100%" stop-color="#06b6d4"/>
-      </linearGradient>
-      <!-- Facet gradients -->
-      <linearGradient id="fTop" x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0%" stop-color="#c084fc"/><stop offset="100%" stop-color="#7c3aed"/>
-      </linearGradient>
-      <linearGradient id="fTR" x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0%" stop-color="#9333ea"/><stop offset="100%" stop-color="#0ea5e9"/>
-      </linearGradient>
-      <linearGradient id="fBR" x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0%" stop-color="#7c3aed"/><stop offset="100%" stop-color="#06b6d4"/>
-      </linearGradient>
-      <linearGradient id="fBot" x1="1" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="#0891b2"/><stop offset="100%" stop-color="#06b6d4"/>
-      </linearGradient>
-      <linearGradient id="fBL" x1="1" y1="1" x2="0" y2="0">
-        <stop offset="0%" stop-color="#0ea5e9"/><stop offset="100%" stop-color="#5b21b6"/>
-      </linearGradient>
-      <linearGradient id="fTL" x1="0" y1="1" x2="1" y2="0">
-        <stop offset="0%" stop-color="#6d28d9"/><stop offset="100%" stop-color="#a855f7"/>
       </linearGradient>
       <!-- Text gradient -->
-      <linearGradient id="textGrad" x1="130" y1="20" x2="350" y2="100" gradientUnits="userSpaceOnUse">
-        <stop offset="0%" stop-color="#c084fc"/>
-        <stop offset="30%" stop-color="#a855f7"/>
-        <stop offset="65%" stop-color="#7c3aed"/>
+      <linearGradient id="tg2" x1="145" y1="20" x2="455" y2="110" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stop-color="#e9d5ff"/>
+        <stop offset="22%" stop-color="#c084fc"/>
+        <stop offset="48%" stop-color="#a855f7"/>
+        <stop offset="72%" stop-color="#7c3aed"/>
         <stop offset="100%" stop-color="#06b6d4"/>
       </linearGradient>
-      <!-- Glow filter -->
-      <filter id="glowMark" x="-30%" y="-30%" width="160%" height="160%">
-        <feGaussianBlur stdDeviation="3" result="blur"/>
-        <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+      <!-- Clip: left half (for upper S bowl) -->
+      <clipPath id="cl">
+        <rect x="0" y="0" width="64" height="130"/>
+      </clipPath>
+      <!-- Clip: right half (for lower S bowl) -->
+      <clipPath id="cr">
+        <rect x="36" y="0" width="100" height="130"/>
+      </clipPath>
+      <!-- Glow filters -->
+      <filter id="fg1" x="-60%" y="-60%" width="220%" height="220%">
+        <feGaussianBlur stdDeviation="4" result="b"/>
+        <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
       </filter>
-      <filter id="glowCenter" x="-80%" y="-80%" width="260%" height="260%">
-        <feGaussianBlur stdDeviation="5" result="blur"/>
-        <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+      <filter id="fg2" x="-100%" y="-100%" width="300%" height="300%">
+        <feGaussianBlur stdDeviation="7" result="b"/>
+        <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
       </filter>
-      <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
-        <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="rgba(124,58,237,0.4)"/>
+      <filter id="fg3" x="-200%" y="-200%" width="500%" height="500%">
+        <feGaussianBlur stdDeviation="12"/>
       </filter>
     </defs>
 
-    <!-- =================== MARK (60x100 area, centered at 60,60) =================== -->
-    <!-- Hexagon vertices: center(60,57), r=38 -->
-    <!-- Top(60,19) TR(92.9,38) BR(92.9,76) Bot(60,95) BL(27.1,76) TL(27.1,38) -->
+    <!-- ════════════════════════════
+         MARK  (S inside Q)
+         Center of mark: (65, 65)
+         Q outer ring: r=58
+         S: two circles at (79,42) r=27 and (51,88) r=27
+         ════════════════════════════ -->
+    <g transform="translate(65,65)">
 
-    <g filter="url(#softShadow)">
-      <!-- 6 facets -->
-      <!-- Top facet -->
-      <polygon points="60,57 60,19 92.9,38" fill="url(#fTop)" opacity="0.95"/>
-      <!-- Top-right facet -->
-      <polygon points="60,57 92.9,38 92.9,76" fill="url(#fTR)" opacity="0.9"/>
-      <!-- Bottom-right facet -->
-      <polygon points="60,57 92.9,76 60,95" fill="url(#fBR)" opacity="0.88"/>
-      <!-- Bottom facet -->
-      <polygon points="60,57 60,95 27.1,76" fill="url(#fBot)" opacity="0.92"/>
-      <!-- Bottom-left facet -->
-      <polygon points="60,57 27.1,76 27.1,38" fill="url(#fBL)" opacity="0.9"/>
-      <!-- Top-left facet -->
-      <polygon points="60,57 27.1,38 60,19" fill="url(#fTL)" opacity="0.95"/>
+      <!-- Ambient pulse behind mark -->
+      <circle cx="0" cy="0" r="55" fill="url(#mg)" opacity=".04" filter="url(#fg3)"/>
+
+      <!-- ─ Q outer ring ─ -->
+      <!-- Main ring -->
+      <circle cx="0" cy="0" r="54" fill="none" stroke="url(#mg)" stroke-width="2.2"/>
+      <!-- Q tail (bottom-right) -->
+      <line x1="35" y1="44" x2="52" y2="62" stroke="url(#mg)" stroke-width="3.5" stroke-linecap="round"/>
+      <!-- Extra tail segment (makes it feel more like a Q) -->
+      <line x1="42" y1="50" x2="56" y2="56" stroke="url(#mg)" stroke-width="2" stroke-linecap="round" opacity=".45"/>
+
+      <!-- ─ S body (3 nested layers) ─ -->
+
+      <!-- Layer 3: outer glow halo -->
+      <g clip-path="none" opacity=".1">
+        <circle cx="14" cy="-23" r="27" fill="none" stroke="url(#mg)" stroke-width="24" clip-path="url(#cl)" transform="translate(-65,-65)"/>
+        <circle cx="-14" cy="23" r="27" fill="none" stroke="url(#mg)" stroke-width="24" clip-path="url(#cr)" transform="translate(-65,-65)"/>
+      </g>
+
+      <!-- Layer 2: main S body -->
+      <circle cx="14" cy="-23" r="27" fill="none" stroke="url(#mg)" stroke-width="13.5"
+        clip-path="url(#cl)" transform="translate(-65,-65)" filter="url(#fg1)"/>
+      <circle cx="-14" cy="23" r="27" fill="none" stroke="url(#mg)" stroke-width="13.5"
+        clip-path="url(#cr)" transform="translate(-65,-65)" filter="url(#fg1)"/>
+
+      <!-- Layer 1: inner highlight groove -->
+      <circle cx="14" cy="-23" r="27" fill="none" stroke="rgba(255,255,255,0.22)" stroke-width="1.8"
+        clip-path="url(#cl)" transform="translate(-65,-65)"/>
+      <circle cx="-14" cy="23" r="27" fill="none" stroke="rgba(255,255,255,0.22)" stroke-width="1.8"
+        clip-path="url(#cr)" transform="translate(-65,-65)"/>
+
+      <!-- Inner nested S (smaller, subtle) -->
+      <circle cx="14" cy="-23" r="17" fill="none" stroke="url(#mg)" stroke-width="3.5"
+        clip-path="url(#cl)" transform="translate(-65,-65)" opacity=".38"/>
+      <circle cx="-14" cy="23" r="17" fill="none" stroke="url(#mg)" stroke-width="3.5"
+        clip-path="url(#cr)" transform="translate(-65,-65)" opacity=".38"/>
+
+      <!-- ─ Terminal caps (where S begins and ends) ─ -->
+      <!-- Top terminal (upper-right area: circle center 79,42 top = 79,15 → in mark coords: 14,-50) -->
+      <circle cx="14" cy="-50" r="5.5" fill="#e9d5ff" filter="url(#fg2)"/>
+      <circle cx="14" cy="-50" r="3" fill="#fff"/>
+      <!-- Bottom terminal (lower-left: circle center 51,88 bottom = 51,115 → in mark coords: -14,50) -->
+      <circle cx="-14" cy="50" r="5.5" fill="#67e8f9" filter="url(#fg2)"/>
+      <circle cx="-14" cy="50" r="3" fill="#fff"/>
     </g>
 
-    <!-- Facet edges (thin white lines for definition) -->
-    <g stroke="rgba(255,255,255,0.18)" stroke-width="0.7" fill="none">
-      <line x1="60" y1="57" x2="60" y2="19"/>
-      <line x1="60" y1="57" x2="92.9" y2="38"/>
-      <line x1="60" y1="57" x2="92.9" y2="76"/>
-      <line x1="60" y1="57" x2="60" y2="95"/>
-      <line x1="60" y1="57" x2="27.1" y2="76"/>
-      <line x1="60" y1="57" x2="27.1" y2="38"/>
-    </g>
-
-    <!-- Outer hexagon border -->
-    <polygon points="60,19 92.9,38 92.9,76 60,95 27.1,76 27.1,38"
-             fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="1"/>
-
-    <!-- Vertex glow dots -->
-    <g filter="url(#glowMark)">
-      <circle cx="60" cy="19" r="3.5" fill="#c084fc"/>
-      <circle cx="92.9" cy="38" r="3" fill="#a855f7"/>
-      <circle cx="92.9" cy="76" r="3" fill="#7c3aed"/>
-      <circle cx="60" cy="95" r="3.5" fill="#0ea5e9"/>
-      <circle cx="27.1" cy="76" r="3" fill="#06b6d4"/>
-      <circle cx="27.1" cy="38" r="3" fill="#22d3ee"/>
-    </g>
-
-    <!-- Center glow + dot -->
-    <circle cx="60" cy="57" r="10" fill="rgba(167,139,250,0.2)" filter="url(#glowCenter)"/>
-    <circle cx="60" cy="57" r="5" fill="url(#grad1)" filter="url(#glowMark)"/>
-    <circle cx="60" cy="57" r="2.5" fill="white" opacity="0.95"/>
-
-    <!-- =================== WORDMARK =================== -->
-    <!-- "syntiq" — Space Grotesk Bold -->
-    <text x="128" y="72"
-          font-family="'Space Grotesk', 'Inter', sans-serif"
-          font-size="52"
-          font-weight="700"
-          letter-spacing="-2"
-          fill="url(#textGrad)">syntiq</text>
+    <!-- ════════════════════════════
+         WORDMARK  "syntiq"
+         x-start: 148  baseline: 92
+         ════════════════════════════ -->
+    <!-- Primary wordmark in Syne ExtraBold -->
+    <text
+      x="148" y="90"
+      font-family="'Syne', 'Space Grotesk', sans-serif"
+      font-size="72"
+      font-weight="800"
+      letter-spacing="-2.5"
+      fill="url(#tg2)">syntiq</text>
 
     <!-- Tagline -->
-    <text x="132" y="92"
-          font-family="'Inter', sans-serif"
-          font-size="10"
-          font-weight="700"
-          letter-spacing="4"
-          fill="rgba(255,255,255,0.3)"
-          text-transform="uppercase">AI AGENCY</text>
+    <text
+      x="153" y="113"
+      font-family="'Space Grotesk', sans-serif"
+      font-size="11"
+      font-weight="500"
+      letter-spacing="4.5"
+      fill="rgba(255,255,255,0.22)">AI AGENCY</text>
   </svg>
 
-  <div class="hero-title">Official Brand Mark — v1.0</div>
-</div>
+  <div class="hero-title">Primary Logo — Dark</div>
+</section>
 
-<!-- SHOWCASE SLABS -->
-<div class="logo-showcase">
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+     PANEL 1 — Dark (full system)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+<div class="panels">
+<div class="panel panel-dark">
+  <div class="panel-label">Dark Background · Full System</div>
 
-  <!-- Dark background -->
-  <div class="slab slab-dark" style="width:100%;max-width:900px">
-    <div class="slab-title">Dark Background</div>
-
-    <!-- Horizontal full -->
-    <svg width="320" height="106" viewBox="0 0 360 120" fill="none">
+  <!-- Horizontal logo – medium -->
+  <div class="logo-h">
+    <svg width="90" height="90" viewBox="7 7 116 116" fill="none">
       <defs>
-        <linearGradient id="g2" x1="0" y1="0" x2="120" y2="120" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stop-color="#a855f7"/><stop offset="100%" stop-color="#06b6d4"/>
-        </linearGradient>
-        <linearGradient id="t2" x1="130" y1="20" x2="350" y2="100" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stop-color="#c084fc"/><stop offset="50%" stop-color="#a855f7"/>
+        <linearGradient id="mg2" x1="7" y1="7" x2="123" y2="123" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stop-color="#c084fc"/>
+          <stop offset="45%" stop-color="#7c3aed"/>
           <stop offset="100%" stop-color="#06b6d4"/>
         </linearGradient>
-        <filter id="gw2"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-        <filter id="gc2"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-        <filter id="sd2"><feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="rgba(124,58,237,0.35)"/></filter>
-        <linearGradient id="f1b" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#c084fc"/><stop offset="100%" stop-color="#7c3aed"/></linearGradient>
-        <linearGradient id="f2b" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#9333ea"/><stop offset="100%" stop-color="#0ea5e9"/></linearGradient>
-        <linearGradient id="f3b" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#7c3aed"/><stop offset="100%" stop-color="#06b6d4"/></linearGradient>
-        <linearGradient id="f4b" x1="1" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#0891b2"/><stop offset="100%" stop-color="#06b6d4"/></linearGradient>
-        <linearGradient id="f5b" x1="1" y1="1" x2="0" y2="0"><stop offset="0%" stop-color="#0ea5e9"/><stop offset="100%" stop-color="#5b21b6"/></linearGradient>
-        <linearGradient id="f6b" x1="0" y1="1" x2="1" y2="0"><stop offset="0%" stop-color="#6d28d9"/><stop offset="100%" stop-color="#a855f7"/></linearGradient>
+        <clipPath id="c2l"><rect x="0" y="0" width="65" height="130"/></clipPath>
+        <clipPath id="c2r"><rect x="35" y="0" width="95" height="130"/></clipPath>
+        <filter id="fgg"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        <filter id="fgg2"><feGaussianBlur stdDeviation="6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
       </defs>
-      <g filter="url(#sd2)">
-        <polygon points="60,57 60,19 92.9,38" fill="url(#f1b)" opacity="0.95"/>
-        <polygon points="60,57 92.9,38 92.9,76" fill="url(#f2b)" opacity="0.9"/>
-        <polygon points="60,57 92.9,76 60,95" fill="url(#f3b)" opacity="0.88"/>
-        <polygon points="60,57 60,95 27.1,76" fill="url(#f4b)" opacity="0.92"/>
-        <polygon points="60,57 27.1,76 27.1,38" fill="url(#f5b)" opacity="0.9"/>
-        <polygon points="60,57 27.1,38 60,19" fill="url(#f6b)" opacity="0.95"/>
+      <g transform="translate(65,65)">
+        <circle cx="0" cy="0" r="54" fill="none" stroke="url(#mg2)" stroke-width="2"/>
+        <line x1="35" y1="44" x2="51" y2="61" stroke="url(#mg2)" stroke-width="3.2" stroke-linecap="round"/>
+        <circle cx="14" cy="-23" r="27" fill="none" stroke="url(#mg2)" stroke-width="13"
+          clip-path="url(#c2l)" transform="translate(-65,-65)" filter="url(#fgg)"/>
+        <circle cx="-14" cy="23" r="27" fill="none" stroke="url(#mg2)" stroke-width="13"
+          clip-path="url(#c2r)" transform="translate(-65,-65)" filter="url(#fgg)"/>
+        <circle cx="14" cy="-23" r="27" fill="none" stroke="rgba(255,255,255,.2)" stroke-width="1.5"
+          clip-path="url(#c2l)" transform="translate(-65,-65)"/>
+        <circle cx="-14" cy="23" r="27" fill="none" stroke="rgba(255,255,255,.2)" stroke-width="1.5"
+          clip-path="url(#c2r)" transform="translate(-65,-65)"/>
+        <circle cx="14" cy="-50" r="5" fill="#e9d5ff" filter="url(#fgg2)"/>
+        <circle cx="14" cy="-50" r="2.8" fill="#fff"/>
+        <circle cx="-14" cy="50" r="5" fill="#67e8f9" filter="url(#fgg2)"/>
+        <circle cx="-14" cy="50" r="2.8" fill="#fff"/>
       </g>
-      <g stroke="rgba(255,255,255,0.18)" stroke-width="0.7" fill="none">
-        <line x1="60" y1="57" x2="60" y2="19"/><line x1="60" y1="57" x2="92.9" y2="38"/>
-        <line x1="60" y1="57" x2="92.9" y2="76"/><line x1="60" y1="57" x2="60" y2="95"/>
-        <line x1="60" y1="57" x2="27.1" y2="76"/><line x1="60" y1="57" x2="27.1" y2="38"/>
-      </g>
-      <polygon points="60,19 92.9,38 92.9,76 60,95 27.1,76 27.1,38" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="1"/>
-      <g filter="url(#gw2)">
-        <circle cx="60" cy="19" r="3.5" fill="#c084fc"/>
-        <circle cx="92.9" cy="38" r="3" fill="#a855f7"/>
-        <circle cx="92.9" cy="76" r="3" fill="#7c3aed"/>
-        <circle cx="60" cy="95" r="3.5" fill="#0ea5e9"/>
-        <circle cx="27.1" cy="76" r="3" fill="#06b6d4"/>
-        <circle cx="27.1" cy="38" r="3" fill="#22d3ee"/>
-      </g>
-      <circle cx="60" cy="57" r="10" fill="rgba(167,139,250,0.2)" filter="url(#gc2)"/>
-      <circle cx="60" cy="57" r="5" fill="url(#g2)" filter="url(#gw2)"/>
-      <circle cx="60" cy="57" r="2.5" fill="white" opacity="0.95"/>
-      <text x="128" y="72" font-family="'Space Grotesk','Inter',sans-serif" font-size="52" font-weight="700" letter-spacing="-2" fill="url(#t2)">syntiq</text>
-      <text x="132" y="92" font-family="'Inter',sans-serif" font-size="10" font-weight="700" letter-spacing="4" fill="rgba(255,255,255,0.3)">AI AGENCY</text>
     </svg>
-
-    <!-- Sizes row -->
-    <div class="mark-sizes">
-      <div class="mark-item"><svg width="96" height="96" viewBox="20 17 80 80"><use href="#markPath"/></svg><div class="mark-label">96px</div></div>
-      <div class="mark-item"><svg width="64" height="64" viewBox="20 17 80 80"><use href="#markPath"/></svg><div class="mark-label">64px</div></div>
-      <div class="mark-item"><svg width="40" height="40" viewBox="20 17 80 80"><use href="#markPath"/></svg><div class="mark-label">40px</div></div>
-      <div class="mark-item"><svg width="24" height="24" viewBox="20 17 80 80"><use href="#markPath"/></svg><div class="mark-label">24px</div></div>
+    <div class="wordmark-wrap">
+      <div class="wordmark-name wordmark-name-md gtext" style="font-family:'Syne',sans-serif;font-weight:800;letter-spacing:-.5px">syntiq</div>
+      <div class="wordmark-sub">AI AGENCY</div>
     </div>
   </div>
 
-  <!-- Light background -->
-  <div class="slab slab-light" style="width:100%;max-width:900px">
-    <div class="slab-title dark-text">Light Background</div>
-    <svg width="300" height="100" viewBox="0 0 360 120" fill="none">
+  <!-- Sizes -->
+  <div class="sizes-row">
+
+    <!-- 64px mark -->
+    <div class="size-item">
+      <svg width="64" height="64" viewBox="7 7 116 116" fill="none">
+        <defs>
+          <linearGradient id="mg3" x1="7" y1="7" x2="123" y2="123" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#c084fc"/><stop offset="100%" stop-color="#06b6d4"/></linearGradient>
+          <clipPath id="c3l"><rect x="0" y="0" width="65" height="130"/></clipPath>
+          <clipPath id="c3r"><rect x="35" y="0" width="95" height="130"/></clipPath>
+          <filter id="fg3a"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        </defs>
+        <g transform="translate(65,65)">
+          <circle cx="0" cy="0" r="54" fill="none" stroke="url(#mg3)" stroke-width="2.5" opacity=".7"/>
+          <line x1="35" y1="44" x2="51" y2="61" stroke="url(#mg3)" stroke-width="3.5" stroke-linecap="round" opacity=".7"/>
+          <circle cx="14" cy="-23" r="27" fill="none" stroke="url(#mg3)" stroke-width="13" clip-path="url(#c3l)" transform="translate(-65,-65)" filter="url(#fg3a)"/>
+          <circle cx="-14" cy="23" r="27" fill="none" stroke="url(#mg3)" stroke-width="13" clip-path="url(#c3r)" transform="translate(-65,-65)" filter="url(#fg3a)"/>
+          <circle cx="14" cy="-50" r="4.5" fill="#fff" opacity=".9"/>
+          <circle cx="-14" cy="50" r="4.5" fill="#67e8f9" opacity=".9"/>
+        </g>
+      </svg>
+      <div class="size-label">64 px</div>
+    </div>
+
+    <!-- App icon 96px -->
+    <div class="size-item">
+      <div class="app-icon-wrap">
+        <svg width="62" height="62" viewBox="7 7 116 116" fill="none">
+          <defs>
+            <linearGradient id="mg4" x1="7" y1="7" x2="123" y2="123" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#c084fc"/><stop offset="55%" stop-color="#7c3aed"/><stop offset="100%" stop-color="#06b6d4"/></linearGradient>
+            <clipPath id="c4l"><rect x="0" y="0" width="65" height="130"/></clipPath>
+            <clipPath id="c4r"><rect x="35" y="0" width="95" height="130"/></clipPath>
+            <filter id="fg4"><feGaussianBlur stdDeviation="3.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+            <filter id="fg4b"><feGaussianBlur stdDeviation="7" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+          </defs>
+          <g transform="translate(65,65)">
+            <circle cx="0" cy="0" r="56" fill="rgba(167,139,250,0.06)"/>
+            <circle cx="0" cy="0" r="54" fill="none" stroke="url(#mg4)" stroke-width="2.2"/>
+            <line x1="35" y1="44" x2="52" y2="62" stroke="url(#mg4)" stroke-width="3.5" stroke-linecap="round"/>
+            <circle cx="14" cy="-23" r="27" fill="none" stroke="url(#mg4)" stroke-width="13.5" clip-path="url(#c4l)" transform="translate(-65,-65)" filter="url(#fg4)"/>
+            <circle cx="-14" cy="23" r="27" fill="none" stroke="url(#mg4)" stroke-width="13.5" clip-path="url(#c4r)" transform="translate(-65,-65)" filter="url(#fg4)"/>
+            <circle cx="14" cy="-23" r="17" fill="none" stroke="url(#mg4)" stroke-width="3" clip-path="url(#c4l)" transform="translate(-65,-65)" opacity=".3"/>
+            <circle cx="-14" cy="23" r="17" fill="none" stroke="url(#mg4)" stroke-width="3" clip-path="url(#c4r)" transform="translate(-65,-65)" opacity=".3"/>
+            <circle cx="14" cy="-50" r="5.5" fill="#f0e7ff" filter="url(#fg4b)"/>
+            <circle cx="14" cy="-50" r="2.8" fill="#fff"/>
+            <circle cx="-14" cy="50" r="5.5" fill="#a5f3fc" filter="url(#fg4b)"/>
+            <circle cx="-14" cy="50" r="2.8" fill="#fff"/>
+          </g>
+        </svg>
+      </div>
+      <div class="size-label">App Icon</div>
+    </div>
+
+    <!-- 40px -->
+    <div class="size-item">
+      <svg width="40" height="40" viewBox="7 7 116 116" fill="none">
+        <defs>
+          <linearGradient id="mg5" x1="7" y1="7" x2="123" y2="123" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#c084fc"/><stop offset="100%" stop-color="#06b6d4"/></linearGradient>
+          <clipPath id="c5l"><rect x="0" y="0" width="65" height="130"/></clipPath>
+          <clipPath id="c5r"><rect x="35" y="0" width="95" height="130"/></clipPath>
+        </defs>
+        <g transform="translate(65,65)">
+          <circle cx="0" cy="0" r="54" fill="none" stroke="url(#mg5)" stroke-width="2.5" opacity=".65"/>
+          <line x1="35" y1="44" x2="51" y2="61" stroke="url(#mg5)" stroke-width="3.5" stroke-linecap="round" opacity=".65"/>
+          <circle cx="14" cy="-23" r="27" fill="none" stroke="url(#mg5)" stroke-width="14" clip-path="url(#c5l)" transform="translate(-65,-65)"/>
+          <circle cx="-14" cy="23" r="27" fill="none" stroke="url(#mg5)" stroke-width="14" clip-path="url(#c5r)" transform="translate(-65,-65)"/>
+          <circle cx="14" cy="-50" r="4" fill="#fff" opacity=".85"/>
+          <circle cx="-14" cy="50" r="4" fill="#67e8f9" opacity=".85"/>
+        </g>
+      </svg>
+      <div class="size-label">40 px</div>
+    </div>
+
+    <!-- 24px favicon -->
+    <div class="size-item">
+      <div style="width:32px;height:32px;background:#0c0c1a;border-radius:7px;display:flex;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,.08)">
+        <svg width="22" height="22" viewBox="7 7 116 116" fill="none">
+          <defs>
+            <linearGradient id="mg6" x1="7" y1="7" x2="123" y2="123" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#c084fc"/><stop offset="100%" stop-color="#06b6d4"/></linearGradient>
+            <clipPath id="c6l"><rect x="0" y="0" width="65" height="130"/></clipPath>
+            <clipPath id="c6r"><rect x="35" y="0" width="95" height="130"/></clipPath>
+          </defs>
+          <g transform="translate(65,65)">
+            <circle cx="0" cy="0" r="54" fill="none" stroke="url(#mg6)" stroke-width="3" opacity=".6"/>
+            <line x1="35" y1="44" x2="51" y2="61" stroke="url(#mg6)" stroke-width="4" stroke-linecap="round" opacity=".6"/>
+            <circle cx="14" cy="-23" r="27" fill="none" stroke="url(#mg6)" stroke-width="16" clip-path="url(#c6l)" transform="translate(-65,-65)"/>
+            <circle cx="-14" cy="23" r="27" fill="none" stroke="url(#mg6)" stroke-width="16" clip-path="url(#c6r)" transform="translate(-65,-65)"/>
+          </g>
+        </svg>
+      </div>
+      <div class="size-label">Favicon</div>
+    </div>
+  </div>
+</div>
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+     PANEL 2 — Light
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+<div class="panel panel-light">
+  <div class="panel-label panel-label-dk">Light Background</div>
+  <div class="logo-h">
+    <svg width="80" height="80" viewBox="7 7 116 116" fill="none">
       <defs>
-        <linearGradient id="g3" x1="0" y1="0" x2="120" y2="120" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stop-color="#a855f7"/><stop offset="100%" stop-color="#0891b2"/>
-        </linearGradient>
-        <linearGradient id="t3" x1="130" y1="20" x2="350" y2="100" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stop-color="#6d28d9"/><stop offset="50%" stop-color="#7c3aed"/>
-          <stop offset="100%" stop-color="#0891b2"/>
-        </linearGradient>
-        <filter id="sd3"><feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="rgba(124,58,237,0.25)"/></filter>
-        <filter id="gw3"><feGaussianBlur stdDeviation="2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-        <linearGradient id="f1c" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#c084fc"/><stop offset="100%" stop-color="#7c3aed"/></linearGradient>
-        <linearGradient id="f2c" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#9333ea"/><stop offset="100%" stop-color="#0ea5e9"/></linearGradient>
-        <linearGradient id="f3c" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#7c3aed"/><stop offset="100%" stop-color="#0891b2"/></linearGradient>
-        <linearGradient id="f4c" x1="1" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#0891b2"/><stop offset="100%" stop-color="#06b6d4"/></linearGradient>
-        <linearGradient id="f5c" x1="1" y1="1" x2="0" y2="0"><stop offset="0%" stop-color="#0ea5e9"/><stop offset="100%" stop-color="#5b21b6"/></linearGradient>
-        <linearGradient id="f6c" x1="0" y1="1" x2="1" y2="0"><stop offset="0%" stop-color="#6d28d9"/><stop offset="100%" stop-color="#a855f7"/></linearGradient>
+        <linearGradient id="mg7" x1="7" y1="7" x2="123" y2="123" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#7c3aed"/><stop offset="55%" stop-color="#6d28d9"/><stop offset="100%" stop-color="#0891b2"/></linearGradient>
+        <clipPath id="c7l"><rect x="0" y="0" width="65" height="130"/></clipPath>
+        <clipPath id="c7r"><rect x="35" y="0" width="95" height="130"/></clipPath>
+        <filter id="fg7"><feGaussianBlur stdDeviation="2.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
       </defs>
-      <g filter="url(#sd3)">
-        <polygon points="60,57 60,19 92.9,38" fill="url(#f1c)" opacity="0.95"/>
-        <polygon points="60,57 92.9,38 92.9,76" fill="url(#f2c)" opacity="0.9"/>
-        <polygon points="60,57 92.9,76 60,95" fill="url(#f3c)" opacity="0.88"/>
-        <polygon points="60,57 60,95 27.1,76" fill="url(#f4c)" opacity="0.92"/>
-        <polygon points="60,57 27.1,76 27.1,38" fill="url(#f5c)" opacity="0.9"/>
-        <polygon points="60,57 27.1,38 60,19" fill="url(#f6c)" opacity="0.95"/>
+      <g transform="translate(65,65)">
+        <circle cx="0" cy="0" r="54" fill="none" stroke="url(#mg7)" stroke-width="2"/>
+        <line x1="35" y1="44" x2="51" y2="61" stroke="url(#mg7)" stroke-width="3.2" stroke-linecap="round"/>
+        <circle cx="14" cy="-23" r="27" fill="none" stroke="url(#mg7)" stroke-width="13" clip-path="url(#c7l)" transform="translate(-65,-65)" filter="url(#fg7)"/>
+        <circle cx="-14" cy="23" r="27" fill="none" stroke="url(#mg7)" stroke-width="13" clip-path="url(#c7r)" transform="translate(-65,-65)" filter="url(#fg7)"/>
+        <circle cx="14" cy="-23" r="17" fill="none" stroke="url(#mg7)" stroke-width="2.5" clip-path="url(#c7l)" transform="translate(-65,-65)" opacity=".28"/>
+        <circle cx="-14" cy="23" r="17" fill="none" stroke="url(#mg7)" stroke-width="2.5" clip-path="url(#c7r)" transform="translate(-65,-65)" opacity=".28"/>
+        <circle cx="14" cy="-50" r="4.5" fill="#7c3aed"/>
+        <circle cx="-14" cy="50" r="4.5" fill="#0891b2"/>
       </g>
-      <g stroke="rgba(255,255,255,0.3)" stroke-width="0.8" fill="none">
-        <line x1="60" y1="57" x2="60" y2="19"/><line x1="60" y1="57" x2="92.9" y2="38"/>
-        <line x1="60" y1="57" x2="92.9" y2="76"/><line x1="60" y1="57" x2="60" y2="95"/>
-        <line x1="60" y1="57" x2="27.1" y2="76"/><line x1="60" y1="57" x2="27.1" y2="38"/>
-      </g>
-      <polygon points="60,19 92.9,38 92.9,76 60,95 27.1,76 27.1,38" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="1"/>
-      <g filter="url(#gw3)">
-        <circle cx="60" cy="19" r="3.5" fill="#c084fc"/>
-        <circle cx="92.9" cy="38" r="3" fill="#a855f7"/>
-        <circle cx="92.9" cy="76" r="3" fill="#7c3aed"/>
-        <circle cx="60" cy="95" r="3.5" fill="#0ea5e9"/>
-        <circle cx="27.1" cy="76" r="3" fill="#06b6d4"/>
-        <circle cx="27.1" cy="38" r="3" fill="#22d3ee"/>
-      </g>
-      <circle cx="60" cy="57" r="5" fill="url(#g3)" filter="url(#gw3)"/>
-      <circle cx="60" cy="57" r="2.5" fill="white" opacity="0.9"/>
-      <text x="128" y="72" font-family="'Space Grotesk','Inter',sans-serif" font-size="52" font-weight="700" letter-spacing="-2" fill="url(#t3)">syntiq</text>
-      <text x="132" y="92" font-family="'Inter',sans-serif" font-size="10" font-weight="700" letter-spacing="4" fill="rgba(0,0,0,0.3)">AI AGENCY</text>
     </svg>
-  </div>
-
-  <!-- Gradient / mid -->
-  <div class="slab slab-mid" style="width:100%;max-width:900px">
-    <div class="slab-title">Gradient Background</div>
-    <div style="display:flex;gap:40px;align-items:center;flex-wrap:wrap;justify-content:center">
-      <!-- Icon only - large -->
-      <div style="padding:24px;background:rgba(255,255,255,0.04);border-radius:20px;border:1px solid rgba(255,255,255,0.08)">
-        <svg width="80" height="80" viewBox="20 17 80 80" fill="none">
-          <defs>
-            <linearGradient id="g4" x1="20" y1="17" x2="100" y2="97" gradientUnits="userSpaceOnUse">
-              <stop offset="0%" stop-color="#a855f7"/><stop offset="100%" stop-color="#06b6d4"/>
-            </linearGradient>
-            <filter id="gw4"><feGaussianBlur stdDeviation="2.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-            <filter id="sd4"><feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="rgba(124,58,237,0.5)"/></filter>
-            <linearGradient id="fa1" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#c084fc"/><stop offset="100%" stop-color="#7c3aed"/></linearGradient>
-            <linearGradient id="fa2" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#9333ea"/><stop offset="100%" stop-color="#0ea5e9"/></linearGradient>
-            <linearGradient id="fa3" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#7c3aed"/><stop offset="100%" stop-color="#06b6d4"/></linearGradient>
-            <linearGradient id="fa4" x1="1" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#0891b2"/><stop offset="100%" stop-color="#06b6d4"/></linearGradient>
-            <linearGradient id="fa5" x1="1" y1="1" x2="0" y2="0"><stop offset="0%" stop-color="#0ea5e9"/><stop offset="100%" stop-color="#5b21b6"/></linearGradient>
-            <linearGradient id="fa6" x1="0" y1="1" x2="1" y2="0"><stop offset="0%" stop-color="#6d28d9"/><stop offset="100%" stop-color="#a855f7"/></linearGradient>
-          </defs>
-          <g filter="url(#sd4)">
-            <polygon points="60,57 60,19 92.9,38" fill="url(#fa1)"/>
-            <polygon points="60,57 92.9,38 92.9,76" fill="url(#fa2)"/>
-            <polygon points="60,57 92.9,76 60,95" fill="url(#fa3)"/>
-            <polygon points="60,57 60,95 27.1,76" fill="url(#fa4)"/>
-            <polygon points="60,57 27.1,76 27.1,38" fill="url(#fa5)"/>
-            <polygon points="60,57 27.1,38 60,19" fill="url(#fa6)"/>
-          </g>
-          <g stroke="rgba(255,255,255,0.2)" stroke-width="0.6" fill="none">
-            <line x1="60" y1="57" x2="60" y2="19"/><line x1="60" y1="57" x2="92.9" y2="38"/>
-            <line x1="60" y1="57" x2="92.9" y2="76"/><line x1="60" y1="57" x2="60" y2="95"/>
-            <line x1="60" y1="57" x2="27.1" y2="76"/><line x1="60" y1="57" x2="27.1" y2="38"/>
-          </g>
-          <polygon points="60,19 92.9,38 92.9,76 60,95 27.1,76 27.1,38" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="1"/>
-          <g filter="url(#gw4)">
-            <circle cx="60" cy="19" r="4" fill="#e9d5ff"/>
-            <circle cx="92.9" cy="38" r="3.5" fill="#c084fc"/>
-            <circle cx="92.9" cy="76" r="3.5" fill="#a855f7"/>
-            <circle cx="60" cy="95" r="4" fill="#7dd3fc"/>
-            <circle cx="27.1" cy="76" r="3.5" fill="#22d3ee"/>
-            <circle cx="27.1" cy="38" r="3.5" fill="#67e8f9"/>
-          </g>
-          <circle cx="60" cy="57" r="12" fill="rgba(167,139,250,0.25)" filter="url(#gw4)"/>
-          <circle cx="60" cy="57" r="6" fill="url(#g4)" filter="url(#gw4)"/>
-          <circle cx="60" cy="57" r="3" fill="white"/>
-        </svg>
-      </div>
-
-      <!-- App icon rounded -->
-      <div style="width:96px;height:96px;background:linear-gradient(135deg,#1a0a2e,#0a1628);border-radius:22px;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 32px rgba(124,58,237,0.4),inset 0 1px 0 rgba(255,255,255,0.1)">
-        <svg width="62" height="62" viewBox="20 17 80 80" fill="none">
-          <defs>
-            <linearGradient id="g5" x1="20" y1="17" x2="100" y2="97" gradientUnits="userSpaceOnUse">
-              <stop offset="0%" stop-color="#a855f7"/><stop offset="100%" stop-color="#06b6d4"/>
-            </linearGradient>
-            <filter id="gw5"><feGaussianBlur stdDeviation="2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-            <linearGradient id="fb1" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#c084fc"/><stop offset="100%" stop-color="#7c3aed"/></linearGradient>
-            <linearGradient id="fb2" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#9333ea"/><stop offset="100%" stop-color="#0ea5e9"/></linearGradient>
-            <linearGradient id="fb3" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#7c3aed"/><stop offset="100%" stop-color="#06b6d4"/></linearGradient>
-            <linearGradient id="fb4" x1="1" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#0891b2"/><stop offset="100%" stop-color="#06b6d4"/></linearGradient>
-            <linearGradient id="fb5" x1="1" y1="1" x2="0" y2="0"><stop offset="0%" stop-color="#0ea5e9"/><stop offset="100%" stop-color="#5b21b6"/></linearGradient>
-            <linearGradient id="fb6" x1="0" y1="1" x2="1" y2="0"><stop offset="0%" stop-color="#6d28d9"/><stop offset="100%" stop-color="#a855f7"/></linearGradient>
-          </defs>
-          <polygon points="60,57 60,19 92.9,38" fill="url(#fb1)"/>
-          <polygon points="60,57 92.9,38 92.9,76" fill="url(#fb2)"/>
-          <polygon points="60,57 92.9,76 60,95" fill="url(#fb3)"/>
-          <polygon points="60,57 60,95 27.1,76" fill="url(#fb4)"/>
-          <polygon points="60,57 27.1,76 27.1,38" fill="url(#fb5)"/>
-          <polygon points="60,57 27.1,38 60,19" fill="url(#fb6)"/>
-          <g stroke="rgba(255,255,255,0.2)" stroke-width="0.6" fill="none">
-            <line x1="60" y1="57" x2="60" y2="19"/><line x1="60" y1="57" x2="92.9" y2="38"/>
-            <line x1="60" y1="57" x2="92.9" y2="76"/><line x1="60" y1="57" x2="60" y2="95"/>
-            <line x1="60" y1="57" x2="27.1" y2="76"/><line x1="60" y1="57" x2="27.1" y2="38"/>
-          </g>
-          <polygon points="60,19 92.9,38 92.9,76 60,95 27.1,76 27.1,38" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="1"/>
-          <g filter="url(#gw5)">
-            <circle cx="60" cy="19" r="3.5" fill="#e9d5ff"/>
-            <circle cx="92.9" cy="38" r="3" fill="#c084fc"/>
-            <circle cx="92.9" cy="76" r="3" fill="#a855f7"/>
-            <circle cx="60" cy="95" r="3.5" fill="#7dd3fc"/>
-            <circle cx="27.1" cy="76" r="3" fill="#22d3ee"/>
-            <circle cx="27.1" cy="38" r="3" fill="#67e8f9"/>
-          </g>
-          <circle cx="60" cy="57" r="6" fill="url(#g5)" filter="url(#gw5)"/>
-          <circle cx="60" cy="57" r="3" fill="white"/>
-        </svg>
-      </div>
-
-      <!-- Favicon size -->
-      <div style="display:flex;flex-direction:column;gap:12px;align-items:center">
-        <div style="width:48px;height:48px;background:#0f0f18;border-radius:10px;display:flex;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,0.1)">
-          <svg width="32" height="32" viewBox="20 17 80 80" fill="none">
-            <polygon points="60,57 60,19 92.9,38" fill="#c084fc"/>
-            <polygon points="60,57 92.9,38 92.9,76" fill="#9333ea"/>
-            <polygon points="60,57 92.9,76 60,95" fill="#7c3aed"/>
-            <polygon points="60,57 60,95 27.1,76" fill="#0ea5e9"/>
-            <polygon points="60,57 27.1,76 27.1,38" fill="#06b6d4"/>
-            <polygon points="60,57 27.1,38 60,19" fill="#6d28d9"/>
-            <circle cx="60" cy="57" r="6" fill="white" opacity="0.9"/>
-          </svg>
-        </div>
-        <div style="font-size:10px;color:rgba(255,255,255,0.3)">favicon</div>
-      </div>
+    <div class="wordmark-wrap">
+      <div class="wordmark-name wordmark-name-md gtext-dk" style="font-family:'Syne',sans-serif;font-weight:800;letter-spacing:-.5px">syntiq</div>
+      <div class="wordmark-sub wordmark-sub-dk">AI AGENCY</div>
     </div>
   </div>
+</div>
 
-  <!-- Colour Palette -->
-  <div style="width:100%;max-width:900px;display:flex;flex-direction:column;gap:16px">
-    <div class="section-label">Colour Palette</div>
-    <div class="palette-grid">
-      <div class="swatch" style="background:#5b21b6"><div class="swatch-label">Primary</div><div class="swatch-hex">#5B21B6</div></div>
-      <div class="swatch" style="background:#7c3aed"><div class="swatch-label">Purple</div><div class="swatch-hex">#7C3AED</div></div>
-      <div class="swatch" style="background:#a855f7"><div class="swatch-label">Violet</div><div class="swatch-hex">#A855F7</div></div>
-      <div class="swatch" style="background:#c084fc"><div class="swatch-label">Lavender</div><div class="swatch-hex">#C084FC</div></div>
-      <div class="swatch" style="background:#0891b2"><div class="swatch-label">Deep Cyan</div><div class="swatch-hex">#0891B2</div></div>
-      <div class="swatch" style="background:#06b6d4"><div class="swatch-label">Cyan</div><div class="swatch-hex">#06B6D4</div></div>
-      <div class="swatch" style="background:#050508"><div class="swatch-label">Dark BG</div><div class="swatch-hex">#050508</div></div>
-      <div class="swatch" style="background:linear-gradient(135deg,#7c3aed,#06b6d4)"><div class="swatch-label">Gradient</div><div class="swatch-hex">Primary</div></div>
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+     PANEL 3 — Gradient / Brand bg
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+<div class="panel panel-mid">
+  <div class="panel-label" style="color:rgba(255,255,255,.3)">Premium Dark · Brand Background</div>
+
+  <!-- Wordmark only — stacked -->
+  <div style="display:flex;flex-direction:column;align-items:center;gap:12px">
+    <svg width="100" height="100" viewBox="7 7 116 116" fill="none">
+      <defs>
+        <linearGradient id="mg8" x1="7" y1="7" x2="123" y2="123" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#f0e7ff"/><stop offset="45%" stop-color="#c084fc"/><stop offset="75%" stop-color="#7c3aed"/><stop offset="100%" stop-color="#67e8f9"/></linearGradient>
+        <clipPath id="c8l"><rect x="0" y="0" width="65" height="130"/></clipPath>
+        <clipPath id="c8r"><rect x="35" y="0" width="95" height="130"/></clipPath>
+        <filter id="fg8a"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        <filter id="fg8b"><feGaussianBlur stdDeviation="9" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        <filter id="fg8c"><feGaussianBlur stdDeviation="16"/></filter>
+      </defs>
+      <g transform="translate(65,65)">
+        <circle cx="0" cy="0" r="52" fill="rgba(124,58,237,.06)"/>
+        <circle cx="0" cy="0" r="54" fill="none" stroke="url(#mg8)" stroke-width="1.8" opacity=".7"/>
+        <line x1="35" y1="44" x2="52" y2="62" stroke="url(#mg8)" stroke-width="3" stroke-linecap="round" opacity=".7"/>
+        <!-- Outer glow -->
+        <circle cx="14" cy="-23" r="27" fill="none" stroke="url(#mg8)" stroke-width="20" clip-path="url(#c8l)" transform="translate(-65,-65)" opacity=".08"/>
+        <circle cx="-14" cy="23" r="27" fill="none" stroke="url(#mg8)" stroke-width="20" clip-path="url(#c8r)" transform="translate(-65,-65)" opacity=".08"/>
+        <!-- Main -->
+        <circle cx="14" cy="-23" r="27" fill="none" stroke="url(#mg8)" stroke-width="13.5" clip-path="url(#c8l)" transform="translate(-65,-65)" filter="url(#fg8a)"/>
+        <circle cx="-14" cy="23" r="27" fill="none" stroke="url(#mg8)" stroke-width="13.5" clip-path="url(#c8r)" transform="translate(-65,-65)" filter="url(#fg8a)"/>
+        <!-- Highlight -->
+        <circle cx="14" cy="-23" r="27" fill="none" stroke="rgba(255,255,255,.25)" stroke-width="1.5" clip-path="url(#c8l)" transform="translate(-65,-65)"/>
+        <circle cx="-14" cy="23" r="27" fill="none" stroke="rgba(255,255,255,.25)" stroke-width="1.5" clip-path="url(#c8r)" transform="translate(-65,-65)"/>
+        <!-- Inner nested S -->
+        <circle cx="14" cy="-23" r="17" fill="none" stroke="url(#mg8)" stroke-width="3.5" clip-path="url(#c8l)" transform="translate(-65,-65)" opacity=".4"/>
+        <circle cx="-14" cy="23" r="17" fill="none" stroke="url(#mg8)" stroke-width="3.5" clip-path="url(#c8r)" transform="translate(-65,-65)" opacity=".4"/>
+        <!-- Terminals -->
+        <circle cx="14" cy="-50" r="4" fill="#f0e7ff" opacity=".2" filter="url(#fg8c)"/>
+        <circle cx="14" cy="-50" r="6" fill="#f0e7ff" filter="url(#fg8b)"/>
+        <circle cx="14" cy="-50" r="3.2" fill="#fff"/>
+        <circle cx="-14" cy="50" r="4" fill="#67e8f9" opacity=".2" filter="url(#fg8c)"/>
+        <circle cx="-14" cy="50" r="6" fill="#67e8f9" filter="url(#fg8b)"/>
+        <circle cx="-14" cy="50" r="3.2" fill="#fff"/>
+      </g>
+    </svg>
+    <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:36px;letter-spacing:-.5px;background:linear-gradient(110deg,#f0e7ff,#c084fc 35%,#a855f7 60%,#67e8f9);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">syntiq</div>
+    <div style="font-size:10px;letter-spacing:4px;text-transform:uppercase;color:rgba(255,255,255,.3)">AI AGENCY</div>
+  </div>
+</div>
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+     COLOUR PALETTE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+<div class="panel panel-dark" style="gap:20px">
+  <div class="panel-label">Colour Palette</div>
+  <div class="swatches">
+    <div class="swatch" style="background:#5b21b6"><div class="sw-name">Deep Purple</div><div class="sw-hex">#5B21B6</div></div>
+    <div class="swatch" style="background:#7c3aed"><div class="sw-name">Violet</div><div class="sw-hex">#7C3AED</div></div>
+    <div class="swatch" style="background:#a855f7"><div class="sw-name">Purple</div><div class="sw-hex">#A855F7</div></div>
+    <div class="swatch" style="background:#c084fc"><div class="sw-name">Lavender</div><div class="sw-hex">#C084FC</div></div>
+    <div class="swatch" style="background:#0891b2"><div class="sw-name">Teal</div><div class="sw-hex">#0891B2</div></div>
+    <div class="swatch" style="background:#06b6d4"><div class="sw-name">Cyan</div><div class="sw-hex">#06B6D4</div></div>
+    <div class="swatch" style="background:#030305"><div class="sw-name">Near Black</div><div class="sw-hex">#030305</div></div>
+    <div class="swatch" style="background:linear-gradient(135deg,#7c3aed,#06b6d4)"><div class="sw-name">Brand Gradient</div><div class="sw-hex">Primary</div></div>
+  </div>
+</div>
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+     CONCEPT NOTE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+<div class="panel panel-dark" style="gap:18px">
+  <div class="panel-label">Mark Concept</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px">
+    <div style="padding:20px;background:rgba(124,58,237,.06);border:1px solid rgba(124,58,237,.15);border-radius:12px">
+      <div style="font-size:22px;margin-bottom:8px">⬤ inside ⬡</div>
+      <div style="font-size:12px;color:rgba(255,255,255,.6);line-height:1.6">حرف S داخل حرف Q — دو حرف اول و آخر اسم Syn<strong>t</strong>i<strong>q</strong> با هم قفل شدن</div>
+    </div>
+    <div style="padding:20px;background:rgba(6,182,212,.05);border:1px solid rgba(6,182,212,.15);border-radius:12px">
+      <div style="font-size:22px;margin-bottom:8px">تو در تو</div>
+      <div style="font-size:12px;color:rgba(255,255,255,.6);line-height:1.6">سه لایه S تو در تو: هاله بیرونی، بدنه اصلی، خط داخلی — هر چقدر نزدیک‌تر نگاه کنی جزئیات بیشتر می‌بینی</div>
+    </div>
+    <div style="padding:20px;background:rgba(167,139,250,.05);border:1px solid rgba(167,139,250,.12);border-radius:12px">
+      <div style="font-size:22px;margin-bottom:8px">◉ ◎</div>
+      <div style="font-size:12px;color:rgba(255,255,255,.6);line-height:1.6">نقطه‌های ترمینال: بنفش روشن بالا، سیان پایین — جهت جریان گرادیان رو تعریف می‌کنن</div>
     </div>
   </div>
+</div>
 
-  <!-- Typography -->
-  <div style="width:100%;max-width:900px;display:flex;flex-direction:column;gap:20px">
-    <div class="section-label">Typography</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-      <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:24px;display:flex;flex-direction:column;gap:8px">
-        <div style="font-size:10px;color:rgba(255,255,255,0.3);letter-spacing:2px;text-transform:uppercase">Display / Logo</div>
-        <div style="font-family:'Space Grotesk',sans-serif;font-size:32px;font-weight:700;letter-spacing:-1px;background:linear-gradient(135deg,#c084fc,#06b6d4);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">Space Grotesk</div>
-        <div style="font-size:12px;color:rgba(255,255,255,0.3)">Bold 700 · Logo wordmark</div>
-      </div>
-      <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:24px;display:flex;flex-direction:column;gap:8px">
-        <div style="font-size:10px;color:rgba(255,255,255,0.3);letter-spacing:2px;text-transform:uppercase">UI / Body</div>
-        <div style="font-family:'Inter',sans-serif;font-size:28px;font-weight:700;color:#fff">Inter</div>
-        <div style="font-size:12px;color:rgba(255,255,255,0.3)">300–900 · All UI text</div>
-      </div>
-    </div>
-  </div>
+</div><!-- /panels -->
 
-</div><!-- /logo-showcase -->
+<!-- TAGLINE -->
+<div class="tagline-block">
+  <div class="tagline-text">Intelligent by design.</div>
+  <div class="tagline-byline">Syntiq AI Agency · Brand Identity System v1.0</div>
+</div>
 
-<hr class="section-divider" style="margin:0 40px"/>
-
+<!-- FOOTER -->
 <footer class="footer">
-  <div class="footer-copy">© 2025 Syntiq AI Agency · Brand Identity v1.0</div>
-  <div style="display:flex;gap:10px">
-    <button class="btn btn-outline" onclick="downloadSVG()">↓ SVG</button>
-    <button class="btn btn-primary" onclick="downloadPNG()">↓ PNG 1024px</button>
+  <div class="footer-text">© 2025 Syntiq · All rights reserved</div>
+  <div style="display:flex;gap:8px">
+    <button class="tbtn tbtn-ghost" onclick="dlSVG()">↓ SVG Vector</button>
+    <button class="tbtn tbtn-fill" onclick="dlPNG()">↓ PNG 2× Export</button>
   </div>
 </footer>
 
+</div><!-- /page -->
 <script>
-// ---- Download SVG ----
-function downloadSVG() {
-  const svg = document.getElementById('mainLogoSVG');
-  const xml = new XMLSerializer().serializeToString(svg);
-  const blob = new Blob([xml], {type: 'image/svg+xml'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = 'syntiq-logo.svg'; a.click();
-  URL.revokeObjectURL(url);
+function dlSVG(){
+  const s=document.getElementById('mainLogo');
+  const x=new XMLSerializer().serializeToString(s);
+  const b=new Blob([x],{type:'image/svg+xml'});
+  const u=URL.createObjectURL(b);
+  const a=document.createElement('a');a.href=u;a.download='syntiq-logo.svg';a.click();URL.revokeObjectURL(u);
 }
-
-// ---- Download PNG ----
-function downloadPNG() {
-  const svg = document.getElementById('mainLogoSVG');
-  const xml = new XMLSerializer().serializeToString(svg);
-  const img = new Image();
-  const scale = 4; // 1440px wide
-  img.onload = () => {
-    const canvas = document.createElement('canvas');
-    canvas.width = svg.width.baseVal.value * scale;
-    canvas.height = svg.height.baseVal.value * scale;
-    const ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#050508';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.scale(scale, scale);
-    ctx.drawImage(img, 0, 0);
-    canvas.toBlob(blob => {
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = 'syntiq-logo.png'; a.click();
-      URL.revokeObjectURL(url);
-    });
+function dlPNG(){
+  const s=document.getElementById('mainLogo');
+  const x=new XMLSerializer().serializeToString(s);
+  const sc=3;
+  const img=new Image();
+  img.onload=()=>{
+    const c=document.createElement('canvas');
+    c.width=s.width.baseVal.value*sc;c.height=s.height.baseVal.value*sc;
+    const ctx=c.getContext('2d');
+    ctx.fillStyle='#030305';ctx.fillRect(0,0,c.width,c.height);
+    ctx.scale(sc,sc);ctx.drawImage(img,0,0);
+    c.toBlob(bl=>{const u=URL.createObjectURL(bl);const a=document.createElement('a');a.href=u;a.download='syntiq-logo-2x.png';a.click();URL.revokeObjectURL(u);});
   };
-  img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(xml)));
+  img.src='data:image/svg+xml;base64,'+btoa(unescape(encodeURIComponent(x)));
 }
 </script>
 </body>
