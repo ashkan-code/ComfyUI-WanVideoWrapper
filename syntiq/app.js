@@ -13,10 +13,21 @@ const state = {
     rex: JSON.parse(localStorage.getItem('syntiq_history_rex') || '[]'),
     pixel: JSON.parse(localStorage.getItem('syntiq_history_pixel') || '[]'),
     atlas: JSON.parse(localStorage.getItem('syntiq_history_atlas') || '[]'),
+    aria: JSON.parse(localStorage.getItem('syntiq_history_aria') || '[]'),
   },
   selectedTypes: { nova: 'instagram-caption', rex: 'cold-email', pixel: 'modern-dark', atlas: 'hashtag-strategy' },
-  lastOutputs: { nova: '', rex: '', pixel: '', atlas: '' },
+  lastOutputs: { nova: '', rex: '', pixel: '', atlas: '', aria: '' },
   tracker: JSON.parse(localStorage.getItem('syntiq_tracker') || '[]'),
+  aria: {
+    mode: 'image',
+    endpoint: localStorage.getItem('syntiq_aria_endpoint') || 'http://localhost:8188',
+    comfyOnline: false,
+    enhanceEnabled: true,
+    lastImageUrl: null,
+    lastFilename: null,
+    generatedFrames: [],
+    promptId: null,
+  },
 };
 
 // ---- DOM refs ----
@@ -35,6 +46,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupPixelDownload();
   setupTracker();
   setupNovaPreview();
+  setupAria();
   renderAllHistories();
   renderTracker();
   if (state.apiKey) updateApiStatus(true);
@@ -169,6 +181,7 @@ function setupGenerateBtns() {
   $('rex-generate').addEventListener('click', () => runAgent('rex'));
   $('pixel-generate').addEventListener('click', () => runAgent('pixel'));
   $('atlas-generate').addEventListener('click', () => runAgent('atlas'));
+  $('aria-generate').addEventListener('click', () => runAriaAgent());
 }
 
 async function runAgent(agent) {
@@ -879,7 +892,8 @@ const systemPrompts = {
   nova: "You are Nova, the world's #1 social media content strategist. You've helped brands go from zero to millions of followers. Your content is psychologically engineered to go viral. You write exclusively in American English. You are precise, creative, and your outputs are always structured and immediately usable. Never apologize. Never hedge. Just deliver world-class content.",
   rex: "You are Rex, a top-tier B2B sales copywriter and strategist. You've written cold emails that generated $10M+ in closed deals. You understand buyer psychology, SPIN selling, Cialdini's principles, and what makes small business owners actually respond. You're direct, sharp, and your copy sounds human. Never generic, always specific. Write in American English.",
   pixel: "You are Pixel, the world's best front-end web designer and developer. You create websites that win awards and convert visitors into customers. Your HTML/CSS/JS code is clean, modern, and production-ready. You use cutting-edge design patterns. Every website you create looks like it costs $10,000+. When asked to build a website, return ONLY the complete HTML code — no explanation, no markdown code fences, just raw HTML starting with <!DOCTYPE html>.",
-  atlas: "You are Atlas, a world-class Instagram growth strategist specializing in targeting American audiences. You have deep knowledge of US Instagram culture, trending niches, community hashtags, timezone engagement windows, and organic growth tactics. You only recommend manual, safe, human-led strategies — never bots. Your strategies are data-driven, culturally aware, and immediately actionable. Be specific with numbers, times, and examples. Write in a clear, expert tone."
+  atlas: "You are Atlas, a world-class Instagram growth strategist specializing in targeting American audiences. You have deep knowledge of US Instagram culture, trending niches, community hashtags, timezone engagement windows, and organic growth tactics. You only recommend manual, safe, human-led strategies — never bots. Your strategies are data-driven, culturally aware, and immediately actionable. Be specific with numbers, times, and examples. Write in a clear, expert tone.",
+  aria: "You are an expert AI image and video prompt engineer for ComfyUI. When asked to enhance a prompt, output ONLY the enhanced generation prompt — no explanation, no markdown, no quotes. Be specific about visuals, lighting, composition, style, and technical quality. For images end with: masterpiece, best quality, highly detailed, sharp focus. For videos end with: cinematic, smooth motion, high frame rate.",
 };
 
 // ---- Universal AI Call ----
@@ -959,6 +973,10 @@ async function callAnthropicDirect(agent, prompt) {
 
 // ---- Render Output ----
 function renderOutput(agent, text) {
+  if (agent === 'aria') {
+    $('aria-result-body').innerHTML = `<div style="padding:16px;font-size:12px;color:var(--text-secondary);font-family:'JetBrains Mono',monospace;white-space:pre-wrap;line-height:1.6;">${escapeHtml(text)}</div>`;
+    return;
+  }
   const outputEl = $(`${agent}-output`);
   const isPixel = agent === 'pixel';
 
@@ -1014,7 +1032,7 @@ function saveToHistory(agent, content, label) {
 }
 
 function renderAllHistories() {
-  ['nova', 'rex', 'pixel', 'atlas'].forEach(renderHistory);
+  ['nova', 'rex', 'pixel', 'atlas', 'aria'].forEach(renderHistory);
 }
 
 function renderHistory(agent) {
@@ -1125,9 +1143,16 @@ const thinkingMessages = {
     'Optimizing for conversions...',
     'Building something breathtaking...',
   ],
+  aria: [
+    'Enhancing your creative brief...',
+    'Building ComfyUI workflow...',
+    'Sending to GPU...',
+    'Rendering in progress...',
+    'Almost there...',
+  ],
 };
 
-const agentEmojis = { nova: '⭐', rex: '⚡', pixel: '🎨', atlas: '🌎' };
+const agentEmojis = { nova: '⭐', rex: '⚡', pixel: '🎨', atlas: '🌎', aria: '🔮' };
 
 let thinkingInterval = null;
 
@@ -1138,7 +1163,7 @@ function showLoading(agent) {
 
   // Apply agent color to rings
   const rings = document.querySelectorAll('.spinner-ring');
-  const colors = { nova: '#f472b6', rex: '#f59e0b', pixel: '#06b6d4' };
+  const colors = { nova: '#f472b6', rex: '#f59e0b', pixel: '#06b6d4', atlas: '#10b981', aria: '#818cf8' };
   rings[1].style.borderTopColor = colors[agent];
   rings[2].style.borderTopColor = `${colors[agent]}80`;
 
@@ -1156,6 +1181,431 @@ function hideLoading() {
   $('loadingOverlay').classList.remove('active');
   if (thinkingInterval) { clearInterval(thinkingInterval); thinkingInterval = null; }
 }
+
+// ================================================================
+//  ARIA — Adaptive Rendering & Imaging Agent (ComfyUI integration)
+// ================================================================
+
+function setupAria() {
+  // Restore endpoint
+  $('ariaEndpoint').value = state.aria.endpoint;
+
+  // Mode tabs
+  document.querySelectorAll('.aria-mode-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.aria-mode-tab').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.aria.mode = btn.dataset.ariaMode;
+      $('aria-image-settings').style.display = state.aria.mode !== 'video' ? 'flex' : 'none';
+      $('aria-video-settings').style.display = state.aria.mode === 'video' ? 'flex' : 'none';
+      $('aria-image-settings').style.flexDirection = 'column';
+      $('aria-output-type').textContent = state.aria.mode === 'image' ? 'Image' : state.aria.mode === 'video' ? 'WAN Video' : 'Poster';
+      $('ariaStatMode').textContent = state.aria.mode.charAt(0).toUpperCase() + state.aria.mode.slice(1);
+    });
+  });
+
+  // Endpoint change
+  $('ariaEndpoint').addEventListener('change', () => {
+    state.aria.endpoint = $('ariaEndpoint').value.trim().replace(/\/$/, '');
+    localStorage.setItem('syntiq_aria_endpoint', state.aria.endpoint);
+    checkComfyUI();
+  });
+
+  // Refresh button
+  $('ariaRefreshBtn').addEventListener('click', checkComfyUI);
+
+  // Enhance toggle
+  $('ariaEnhanceToggle').addEventListener('click', () => {
+    state.aria.enhanceEnabled = !state.aria.enhanceEnabled;
+    $('ariaEnhanceToggle').classList.toggle('on', state.aria.enhanceEnabled);
+  });
+
+  // Clear button
+  $('aria-clear').addEventListener('click', () => {
+    $('aria-result-body').innerHTML = `
+      <div class="aria-placeholder" id="ariaPlaceholder">
+        <div class="aria-placeholder-icon">🎨</div>
+        <p class="aria-placeholder-text">ARIA connects to your local ComfyUI<br>and generates images & WAN videos on your GPU.</p>
+        <span class="aria-placeholder-tip">Make sure ComfyUI is running at localhost:8188</span>
+      </div>`;
+    $('aria-download').style.display = 'none';
+    $('aria-send-nova').style.display = 'none';
+    $('ariaLog').classList.remove('visible');
+    $('ariaLog').innerHTML = '';
+    $('ariaProgressWrap').style.display = 'none';
+    state.aria.lastImageUrl = null;
+    state.aria.generatedFrames = [];
+  });
+
+  // Download button
+  $('aria-download').addEventListener('click', () => {
+    if (!state.aria.lastImageUrl) return;
+    const a = document.createElement('a');
+    a.href = state.aria.lastImageUrl;
+    a.download = state.aria.lastFilename || 'syntiq_aria.png';
+    a.click();
+  });
+
+  // Send to Nova button
+  $('aria-send-nova').addEventListener('click', () => {
+    if (!state.aria.lastImageUrl) return;
+    switchAgent('nova');
+    showToast('Image queued for Nova — attach it manually when posting!');
+  });
+
+  // Initial connection check
+  checkComfyUI();
+}
+
+// ---- ComfyUI Connection ----
+async function checkComfyUI() {
+  const dot = $('ariaComfyDot');
+  const status = $('ariaComfyStatus');
+  const pill = $('ariaStatusPill');
+  dot.className = 'comfy-dot checking';
+  status.textContent = 'Checking connection...';
+
+  try {
+    const res = await fetch(`${state.aria.endpoint}/system_stats`, { signal: AbortSignal.timeout(4000) });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    state.aria.comfyOnline = true;
+    dot.className = 'comfy-dot online';
+    const gpu = data.devices?.[0]?.name || 'GPU';
+    status.textContent = `Connected — ${gpu}`;
+    pill.textContent = '● Online';
+    pill.style.color = '#22c55e';
+    pill.style.borderColor = 'rgba(34,197,94,0.3)';
+    pill.style.background = 'rgba(34,197,94,0.08)';
+    await fetchComfyModels();
+  } catch {
+    state.aria.comfyOnline = false;
+    dot.className = 'comfy-dot offline';
+    status.textContent = 'ComfyUI not reachable — start it first';
+    pill.textContent = '● Offline';
+    pill.style.color = '#ef4444';
+    pill.style.borderColor = 'rgba(239,68,68,0.3)';
+    pill.style.background = 'rgba(239,68,68,0.08)';
+  }
+}
+
+async function fetchComfyModels() {
+  try {
+    // Fetch checkpoints for image mode
+    const ckptRes = await fetch(`${state.aria.endpoint}/object_info/CheckpointLoaderSimple`);
+    if (ckptRes.ok) {
+      const data = await ckptRes.json();
+      const checkpoints = data?.CheckpointLoaderSimple?.input?.required?.ckpt_name?.[0] || [];
+      const sel = $('aria-checkpoint');
+      if (checkpoints.length) {
+        sel.innerHTML = checkpoints.map(c => `<option value="${c}">${c}</option>`).join('');
+      } else {
+        sel.innerHTML = '<option value="">No checkpoints found</option>';
+      }
+    }
+
+    // Fetch WAN models
+    const wanRes = await fetch(`${state.aria.endpoint}/object_info/WanVideoModelLoader`);
+    if (wanRes.ok) {
+      const data = await wanRes.json();
+      const wanModels = data?.WanVideoModelLoader?.input?.required?.model?.[0] || [];
+      const sel = $('aria-wan-model');
+      if (wanModels.length) {
+        sel.innerHTML = wanModels.map(m => `<option value="${m}">${m}</option>`).join('');
+      } else {
+        sel.innerHTML = '<option value="">No WAN models found — download one</option>';
+      }
+    }
+
+    // Fetch T5 encoders
+    const t5Res = await fetch(`${state.aria.endpoint}/object_info/LoadWanVideoT5TextEncoder`);
+    if (t5Res.ok) {
+      const data = await t5Res.json();
+      const t5Models = data?.LoadWanVideoT5TextEncoder?.input?.required?.model_name?.[0] || [];
+      const sel = $('aria-t5-model');
+      if (t5Models.length) {
+        sel.innerHTML = t5Models.map(m => `<option value="${m}">${m}</option>`).join('');
+      } else {
+        sel.innerHTML = '<option value="">No T5 models found</option>';
+      }
+    }
+
+    // Update stat
+    const ckptCount = $('aria-checkpoint').options.length;
+    const wanCount = $('aria-wan-model').options.length;
+    $('ariaStatModels').textContent = ckptCount + wanCount;
+  } catch (e) {
+    ariaLog('Failed to fetch model list: ' + e.message, 'error');
+  }
+}
+
+// ---- ARIA Log ----
+function ariaLog(msg, type = 'info') {
+  const log = $('ariaLog');
+  log.classList.add('visible');
+  const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const line = document.createElement('div');
+  line.className = `aria-log-line ${type}`;
+  line.innerHTML = `<span class="aria-log-time">${time}</span><span class="aria-log-msg">${escapeHtml(msg)}</span>`;
+  log.appendChild(line);
+  log.scrollTop = log.scrollHeight;
+}
+
+function ariaSetProgress(pct) {
+  $('ariaProgressWrap').style.display = 'block';
+  $('ariaProgressFill').style.width = pct + '%';
+}
+
+// ---- AI Prompt Enhancer ----
+async function enhanceAriaPrompt(brief, style, mode) {
+  const modeGuide = mode === 'video'
+    ? 'a ComfyUI WAN video generation prompt (cinematic movement description, camera motion, atmosphere, no dialogue)'
+    : mode === 'poster'
+    ? 'a ComfyUI image generation prompt for a social media poster (bold composition, typographic space, vibrant colors, high impact)'
+    : 'a ComfyUI Stable Diffusion image generation prompt (visual details, lighting, style, quality tags)';
+
+  const systemP = { label: 'aria-enhance', content: `You are an expert AI image/video prompt engineer. Convert the user's creative brief into ${modeGuide}. Output ONLY the enhanced prompt — no explanation, no quotes, no markdown. Max 200 words. End with quality boosters like "masterpiece, best quality, highly detailed, sharp focus, 8K" (for images) or "cinematic, smooth motion, high frame rate" (for video).` };
+
+  try {
+    const result = await callAnthropic('aria', { label: 'enhance', content: `Brief: "${brief}"\nStyle keywords: "${style || 'none'}"` });
+    return result.trim();
+  } catch {
+    return `${brief}${style ? ', ' + style : ''}, masterpiece, best quality, highly detailed, sharp focus`;
+  }
+}
+
+// ---- Workflow Builders ----
+function buildImageWorkflow(posPrompt, negPrompt, checkpoint, width, height, steps, cfg) {
+  const seed = Math.floor(Math.random() * 9999999999);
+  return {
+    "1": { "class_type": "CheckpointLoaderSimple", "inputs": { "ckpt_name": checkpoint } },
+    "2": { "class_type": "EmptyLatentImage", "inputs": { "width": width, "height": height, "batch_size": 1 } },
+    "3": { "class_type": "CLIPTextEncode", "inputs": { "text": posPrompt, "clip": ["1", 1] } },
+    "4": { "class_type": "CLIPTextEncode", "inputs": { "text": negPrompt || "blurry, low quality, deformed, watermark", "clip": ["1", 1] } },
+    "5": { "class_type": "KSampler", "inputs": { "model": ["1", 0], "positive": ["3", 0], "negative": ["4", 0], "latent_image": ["2", 0], "seed": seed, "steps": steps, "cfg": cfg, "sampler_name": "euler_ancestral", "scheduler": "karras", "denoise": 1.0 } },
+    "6": { "class_type": "VAEDecode", "inputs": { "samples": ["5", 0], "vae": ["1", 2] } },
+    "7": { "class_type": "SaveImage", "inputs": { "images": ["6", 0], "filename_prefix": "syntiq_aria" } }
+  };
+}
+
+function buildWanVideoWorkflow(posPrompt, negPrompt, wanModel, t5Model, width, height, frames, steps, cfg) {
+  const seed = Math.floor(Math.random() * 9999999999);
+  return {
+    "1": { "class_type": "WanVideoModelLoader", "inputs": { "model": wanModel, "base_precision": "bf16", "quantization": "disabled", "load_device": "main_device" } },
+    "2": { "class_type": "LoadWanVideoT5TextEncoder", "inputs": { "model_name": t5Model, "precision": "bf16", "load_device": "offload_device" } },
+    "3": { "class_type": "WanVideoTextEncode", "inputs": { "positive_prompt": posPrompt, "negative_prompt": negPrompt || "low quality, blurry, watermark", "t5": ["2", 0], "force_offload": true } },
+    "4": { "class_type": "WanVideoEmptyEmbeds", "inputs": { "width": width, "height": height, "num_frames": frames } },
+    "5": { "class_type": "WanVideoSampler", "inputs": { "model": ["1", 0], "image_embeds": ["4", 0], "text_embeds": ["3", 0], "steps": steps, "cfg": cfg, "shift": 5.0, "seed": seed, "scheduler": "unipc", "riflex_freq_index": 0, "force_offload": true } },
+    "6": { "class_type": "WanVideoVAELoader", "inputs": { "model_name": "wan_2.1_vae.safetensors" } },
+    "7": { "class_type": "WanVideoDecode", "inputs": { "vae": ["6", 0], "samples": ["5", 0], "enable_vae_tiling": true, "tile_x": 272, "tile_y": 272, "tile_stride_x": 144, "tile_stride_y": 128 } },
+    "8": { "class_type": "SaveImage", "inputs": { "images": ["7", 0], "filename_prefix": "syntiq_aria_wan" } }
+  };
+}
+
+// ---- ComfyUI API ----
+async function submitComfyWorkflow(workflow) {
+  const clientId = 'syntiq_' + Date.now();
+  const res = await fetch(`${state.aria.endpoint}/prompt`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt: workflow, client_id: clientId })
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || `ComfyUI error ${res.status}`);
+  }
+  const data = await res.json();
+  return data.prompt_id;
+}
+
+async function pollComfyResult(promptId) {
+  ariaLog(`Queued: ${promptId.slice(0, 8)}...`);
+  let attempts = 0;
+  const maxAttempts = 300;
+
+  while (attempts < maxAttempts) {
+    await new Promise(r => setTimeout(r, 2000));
+    attempts++;
+    ariaSetProgress(Math.min(10 + (attempts / maxAttempts) * 80, 88));
+
+    try {
+      const res = await fetch(`${state.aria.endpoint}/history/${promptId}`);
+      if (!res.ok) continue;
+      const history = await res.json();
+      const entry = history[promptId];
+      if (!entry) continue;
+
+      if (entry.status?.status_str === 'success' || entry.outputs) {
+        ariaLog('Rendering complete!', 'success');
+        ariaSetProgress(100);
+        return entry.outputs;
+      }
+      if (entry.status?.status_str === 'error') {
+        const msgs = entry.status?.messages?.map(m => m[1]).join(', ') || 'Unknown error';
+        throw new Error(msgs);
+      }
+    } catch (e) {
+      if (e.message.includes('ComfyUI')) throw e;
+    }
+  }
+  throw new Error('Generation timed out after 10 minutes');
+}
+
+function extractImagesFromOutputs(outputs) {
+  const images = [];
+  for (const nodeId in outputs) {
+    const node = outputs[nodeId];
+    if (node.images) {
+      images.push(...node.images);
+    }
+  }
+  return images;
+}
+
+function comfyImageUrl(img) {
+  return `${state.aria.endpoint}/view?filename=${encodeURIComponent(img.filename)}&subfolder=${encodeURIComponent(img.subfolder || '')}&type=${img.type || 'output'}`;
+}
+
+// ---- Main ARIA Runner ----
+async function runAriaAgent() {
+  if (!state.aria.comfyOnline) {
+    showToast('ComfyUI is offline — start it at localhost:8188 first', 'error');
+    return;
+  }
+
+  const brief = $('aria-brief').value.trim();
+  if (!brief) { showToast('Write a creative brief first', 'error'); return; }
+
+  const mode = state.aria.mode;
+  const negative = $('aria-negative').value.trim();
+
+  // Clear previous result
+  $('aria-result-body').innerHTML = `
+    <div style="text-align:center;color:var(--text-secondary);padding:40px 20px">
+      <div style="font-size:40px;margin-bottom:12px">⚙️</div>
+      <div style="font-weight:600;margin-bottom:6px">Generating...</div>
+      <div style="font-size:12px">This may take a few minutes depending on your GPU</div>
+    </div>`;
+  $('aria-download').style.display = 'none';
+  $('aria-send-nova').style.display = 'none';
+  $('ariaLog').classList.add('visible');
+  $('ariaLog').innerHTML = '';
+  ariaSetProgress(2);
+
+  const generateBtn = $('aria-generate');
+  generateBtn.disabled = true;
+  generateBtn.querySelector('.btn-text').textContent = 'Generating...';
+
+  try {
+    let posPrompt = brief;
+
+    // AI Prompt Enhancement
+    if (state.aria.enhanceEnabled && state.apiKey) {
+      ariaLog('Enhancing prompt with AI...');
+      ariaSetProgress(5);
+      posPrompt = await enhanceAriaPrompt(brief, $('aria-style').value.trim(), mode);
+      ariaLog('Prompt enhanced: ' + posPrompt.slice(0, 80) + '...');
+      $('ariaEnhancedPromptText').textContent = posPrompt;
+      $('ariaEnhancedPromptPreview').classList.add('visible');
+    } else {
+      const style = $('aria-style').value.trim();
+      if (style) posPrompt = `${brief}, ${style}`;
+    }
+
+    // Build workflow
+    let workflow;
+    ariaSetProgress(8);
+
+    if (mode === 'video') {
+      const wanModel = $('aria-wan-model').value;
+      const t5Model = $('aria-t5-model').value;
+      if (!wanModel) throw new Error('Select a WAN model first');
+      if (!t5Model) throw new Error('Select a T5 encoder first');
+      const [width, height] = $('aria-vid-res').value.split('x').map(Number);
+      const frames = parseInt($('aria-frames').value);
+      const steps = parseInt($('aria-wan-steps').value);
+      const cfg = parseFloat($('aria-wan-cfg').value);
+      workflow = buildWanVideoWorkflow(posPrompt, negative, wanModel, t5Model, width, height, frames, steps, cfg);
+      ariaLog(`WAN Video: ${width}×${height}, ${frames} frames, ${steps} steps`);
+    } else {
+      const checkpoint = $('aria-checkpoint').value;
+      if (!checkpoint) throw new Error('Select a checkpoint model first');
+      const [width, height] = $('aria-resolution').value.split('x').map(Number);
+      const steps = parseInt($('aria-steps').value);
+      const cfg = parseFloat($('aria-cfg').value);
+      workflow = buildImageWorkflow(posPrompt, negative, checkpoint, width, height, steps, cfg);
+      ariaLog(`Image: ${width}×${height}, ${steps} steps, CFG ${cfg}, ${checkpoint}`);
+    }
+
+    // Submit
+    ariaLog('Submitting to ComfyUI...');
+    const promptId = await submitComfyWorkflow(workflow);
+    state.aria.promptId = promptId;
+
+    // Poll
+    ariaLog('Waiting for GPU...');
+    const outputs = await pollComfyResult(promptId);
+
+    // Display result
+    const images = extractImagesFromOutputs(outputs);
+    if (!images.length) throw new Error('No images in output — check ComfyUI console');
+
+    state.aria.generatedFrames = images;
+    const firstUrl = comfyImageUrl(images[0]);
+    state.aria.lastImageUrl = firstUrl;
+    state.aria.lastFilename = images[0].filename;
+
+    // Build result HTML
+    let resultHtml = `<img src="${firstUrl}" class="aria-generated-img" alt="Generated" onerror="this.src='';this.alt='Image failed to load — check ComfyUI'"/>`;
+    if (images.length > 1) {
+      const thumbs = images.map((img, i) =>
+        `<img src="${comfyImageUrl(img)}" class="aria-frame-thumb${i === 0 ? ' active' : ''}" data-url="${comfyImageUrl(img)}" alt="Frame ${i+1}"/>`
+      ).join('');
+      resultHtml += `<div class="aria-frames-strip">${thumbs}</div>`;
+    }
+    $('aria-result-body').innerHTML = resultHtml;
+
+    // Frame thumb clicks
+    $('aria-result-body').querySelectorAll('.aria-frame-thumb').forEach(thumb => {
+      thumb.addEventListener('click', () => {
+        $('aria-result-body').querySelectorAll('.aria-frame-thumb').forEach(t => t.classList.remove('active'));
+        thumb.classList.add('active');
+        $('aria-result-body').querySelector('.aria-generated-img').src = thumb.dataset.url;
+        state.aria.lastImageUrl = thumb.dataset.url;
+      });
+    });
+
+    $('aria-download').style.display = 'flex';
+    $('aria-send-nova').style.display = 'flex';
+
+    // Save to history
+    const label = `${mode === 'video' ? '🎬' : '🖼'} ${brief.slice(0, 40)}...`;
+    saveToHistory('aria', `[${mode}] ${posPrompt}`, label);
+
+    ariaLog(`Done! ${images.length} frame(s) generated.`, 'success');
+    showToast('ARIA generated successfully!');
+
+  } catch (err) {
+    ariaLog('Error: ' + err.message, 'error');
+    $('aria-result-body').innerHTML = `
+      <div class="aria-placeholder">
+        <div class="aria-placeholder-icon">❌</div>
+        <p class="aria-placeholder-text">${escapeHtml(err.message)}</p>
+        <span class="aria-placeholder-tip">Check the log below and ensure ComfyUI is running</span>
+      </div>`;
+    showToast(err.message, 'error');
+  } finally {
+    generateBtn.disabled = false;
+    generateBtn.querySelector('.btn-text').textContent = 'Generate with ARIA';
+    ariaSetProgress(0);
+    setTimeout(() => { $('ariaProgressWrap').style.display = 'none'; }, 1000);
+  }
+}
+
+// Add aria systemPrompt for prompt enhancement
+const ariaSystemPrompt = 'You are an expert AI image and video prompt engineer. When asked to enhance a prompt, output ONLY the enhanced generation prompt — no explanation, no markdown, no quotes. Be specific about visuals, lighting, composition, style, and quality. End with quality tags appropriate for the medium.';
+
+// ================================================================
 
 // ---- Toast ----
 function showToast(msg, type = 'success') {

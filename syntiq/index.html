@@ -45,6 +45,9 @@
       <button class="nav-tab" data-agent="atlas">
         <span class="tab-dot atlas-dot"></span>Atlas
       </button>
+      <button class="nav-tab" data-agent="aria">
+        <span class="tab-dot aria-dot"></span>ARIA
+      </button>
     </div>
     <div class="nav-actions">
       <button class="btn-api" id="apiToggleBtn">
@@ -855,6 +858,254 @@
                 <p class="placeholder-text">Atlas آماده‌ست نقشه رشد اینستاگرامت رو بکشه.<br/>نیچت رو بده و بزن <strong>Generate</strong>.</p>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ARIA SECTION -->
+    <section class="agent-section" id="section-aria">
+      <div class="agent-hero aria-hero">
+        <div class="agent-hero-content">
+          <div class="agent-avatar aria-avatar">
+            <div class="avatar-ring"></div>
+            <div class="avatar-inner">
+              <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+                <circle cx="20" cy="20" r="18" fill="url(#ariaGrad)"/>
+                <rect x="11" y="13" width="8" height="8" rx="2" fill="white" opacity="0.9"/>
+                <rect x="21" y="13" width="8" height="6" rx="2" fill="white" opacity="0.5"/>
+                <rect x="11" y="23" width="18" height="4" rx="2" fill="white" opacity="0.6"/>
+                <circle cx="29" cy="13" r="3.5" fill="#818cf8"/>
+                <circle cx="29" cy="13" r="2" fill="white"/>
+                <defs>
+                  <linearGradient id="ariaGrad" x1="0" y1="0" x2="40" y2="40">
+                    <stop offset="0%" stop-color="#6366f1"/>
+                    <stop offset="100%" stop-color="#818cf8"/>
+                  </linearGradient>
+                </defs>
+              </svg>
+            </div>
+          </div>
+          <div class="agent-info">
+            <div class="agent-name-row">
+              <h1 class="agent-name aria-name">ARIA</h1>
+              <span class="agent-badge aria-badge">Visual AI — ComfyUI</span>
+              <span class="agent-status-pill" id="ariaStatusPill">● Offline</span>
+            </div>
+            <p class="agent-bio">I generate images, WAN videos, and social media visuals using ComfyUI running on your local machine. Tell me what to create — I'll enhance your brief with AI, build the workflow, and render it directly on your GPU.</p>
+            <div class="agent-stats">
+              <div class="stat"><span class="stat-val" id="ariaStatMode">Image</span><span class="stat-label">Active Mode</span></div>
+              <div class="stat"><span class="stat-val" id="ariaStatModels">—</span><span class="stat-label">Models Found</span></div>
+              <div class="stat"><span class="stat-val">GPU</span><span class="stat-label">Rendering</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="agent-workspace">
+        <div class="workspace-left">
+
+          <!-- ComfyUI Connection Card -->
+          <div class="comfy-connect-card">
+            <div class="comfy-connect-header">
+              <span class="comfy-connect-title">ComfyUI Connection</span>
+            </div>
+            <div class="comfy-status-row" style="margin-bottom:10px">
+              <span class="comfy-dot checking" id="ariaComfyDot"></span>
+              <span class="comfy-status-text" id="ariaComfyStatus">Checking connection...</span>
+              <button class="comfy-refresh-btn" id="ariaRefreshBtn" title="Reconnect">↻</button>
+            </div>
+            <div class="comfy-endpoint-row">
+              <input type="text" class="comfy-endpoint-input" id="ariaEndpoint" value="http://localhost:8188" placeholder="http://localhost:8188" />
+            </div>
+          </div>
+
+          <!-- Main Form Card -->
+          <div class="form-card">
+            <h3 class="form-title">Create with ARIA</h3>
+
+            <!-- Mode Tabs -->
+            <div class="aria-mode-tabs">
+              <button class="aria-mode-tab active" data-aria-mode="image">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                Image
+              </button>
+              <button class="aria-mode-tab" data-aria-mode="video">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                WAN Video
+              </button>
+              <button class="aria-mode-tab" data-aria-mode="poster">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+                Poster
+              </button>
+            </div>
+
+            <!-- Creative Brief -->
+            <div class="form-group">
+              <label>Creative Brief</label>
+              <textarea class="form-input" id="aria-brief" rows="3" style="resize:vertical;min-height:80px" placeholder="Describe what you want to generate...&#10;e.g. A futuristic city at night with neon lights and flying cars"></textarea>
+            </div>
+
+            <div class="form-group">
+              <label>Visual Style / Keywords</label>
+              <input type="text" class="form-input" id="aria-style" placeholder="e.g. cinematic, 8K, dramatic lighting, photorealistic" />
+            </div>
+
+            <!-- IMAGE SETTINGS -->
+            <div class="aria-settings-block" id="aria-image-settings">
+              <div class="aria-settings-row">
+                <div class="form-group">
+                  <label>Checkpoint</label>
+                  <select class="form-select" id="aria-checkpoint">
+                    <option value="">Loading models...</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Resolution</label>
+                  <select class="form-select" id="aria-resolution">
+                    <option value="512x512">512×512 (Square)</option>
+                    <option value="768x512">768×512 (3:2)</option>
+                    <option value="512x768">512×768 (Portrait)</option>
+                    <option value="576x1024">576×1024 (9:16 Story)</option>
+                    <option value="1024x576">1024×576 (16:9)</option>
+                    <option value="768x768">768×768</option>
+                    <option value="1024x1024">1024×1024 (HD)</option>
+                  </select>
+                </div>
+              </div>
+              <div class="aria-settings-row">
+                <div class="form-group">
+                  <label>Steps</label>
+                  <input type="number" class="form-input" id="aria-steps" value="25" min="1" max="150" />
+                </div>
+                <div class="form-group">
+                  <label>CFG Scale</label>
+                  <input type="number" class="form-input" id="aria-cfg" value="7" min="1" max="20" step="0.5" />
+                </div>
+              </div>
+            </div>
+
+            <!-- WAN VIDEO SETTINGS -->
+            <div class="aria-settings-block" id="aria-video-settings" style="display:none">
+              <div class="form-group">
+                <label>WAN Model</label>
+                <select class="form-select" id="aria-wan-model">
+                  <option value="">Loading WAN models...</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>T5 Text Encoder</label>
+                <select class="form-select" id="aria-t5-model">
+                  <option value="">Loading T5 models...</option>
+                </select>
+              </div>
+              <div class="aria-settings-row">
+                <div class="form-group">
+                  <label>Resolution</label>
+                  <select class="form-select" id="aria-vid-res">
+                    <option value="480x832">480×832 (9:16 Portrait)</option>
+                    <option value="832x480">832×480 (16:9)</option>
+                    <option value="480x480">480×480 (Square)</option>
+                    <option value="720x1280">720×1280 (HD Portrait)</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Frames</label>
+                  <input type="number" class="form-input" id="aria-frames" value="81" min="9" max="201" step="4" />
+                </div>
+              </div>
+              <div class="aria-settings-row">
+                <div class="form-group">
+                  <label>Steps</label>
+                  <input type="number" class="form-input" id="aria-wan-steps" value="30" min="1" max="100" />
+                </div>
+                <div class="form-group">
+                  <label>CFG</label>
+                  <input type="number" class="form-input" id="aria-wan-cfg" value="6" min="1" max="20" step="0.5" />
+                </div>
+              </div>
+            </div>
+
+            <!-- Negative Prompt -->
+            <div class="form-group">
+              <label>Negative Prompt (optional)</label>
+              <input type="text" class="form-input" id="aria-negative" placeholder="blurry, low quality, text, watermark, deformed..." />
+            </div>
+
+            <!-- AI Enhance Toggle -->
+            <div class="aria-enhance-row">
+              <span class="aria-enhance-label">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                AI Prompt Enhancement
+              </span>
+              <div class="toggle-switch on" id="ariaEnhanceToggle"></div>
+            </div>
+            <div class="aria-enhanced-prompt" id="ariaEnhancedPromptPreview">
+              <div class="aria-enhanced-prompt-label">Enhanced Prompt</div>
+              <span id="ariaEnhancedPromptText"></span>
+            </div>
+
+            <button class="btn-generate aria-btn" id="aria-generate" style="margin-top:16px">
+              <span class="btn-text">Generate with ARIA</span>
+              <svg class="btn-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            </button>
+          </div>
+
+          <!-- History -->
+          <div class="history-card" id="aria-history-card">
+            <h4 class="history-title">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              Recent Generations
+            </h4>
+            <div class="history-list" id="aria-history-list"></div>
+          </div>
+        </div>
+
+        <!-- RIGHT: Result -->
+        <div class="workspace-right">
+          <div class="aria-result-card" id="aria-result-card">
+            <div class="aria-result-header">
+              <div class="aria-result-title-row">
+                <span class="output-agent-dot aria-dot"></span>
+                <span>ARIA's Output</span>
+                <span class="output-type-label" id="aria-output-type">Image</span>
+              </div>
+              <div class="aria-result-actions">
+                <button class="btn-send-nova" id="aria-send-nova" style="display:none">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+                  Send to Nova
+                </button>
+                <button class="btn-download-aria" id="aria-download" style="display:none">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  Download
+                </button>
+                <button class="btn-clear" id="aria-clear">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                </button>
+              </div>
+            </div>
+
+            <!-- Result body -->
+            <div class="aria-result-body" id="aria-result-body">
+              <div class="aria-placeholder" id="ariaPlaceholder">
+                <div class="aria-placeholder-icon">🎨</div>
+                <p class="aria-placeholder-text">
+                  ARIA connects to your local ComfyUI<br>
+                  and generates images & WAN videos on your GPU.
+                </p>
+                <span class="aria-placeholder-tip">Make sure ComfyUI is running at localhost:8188</span>
+              </div>
+            </div>
+
+            <!-- Progress bar (hidden until generating) -->
+            <div class="aria-progress-wrap" id="ariaProgressWrap" style="display:none">
+              <div class="aria-progress-bar-bg">
+                <div class="aria-progress-bar-fill" id="ariaProgressFill"></div>
+              </div>
+            </div>
+
+            <!-- Log -->
+            <div class="aria-log" id="ariaLog"></div>
           </div>
         </div>
       </div>
