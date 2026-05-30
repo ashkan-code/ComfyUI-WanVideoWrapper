@@ -1233,8 +1233,11 @@ function setupAria() {
     $('ariaLog').classList.remove('visible');
     $('ariaLog').innerHTML = '';
     $('ariaProgressWrap').style.display = 'none';
+    $('igPackageCard').style.display = 'none';
     state.aria.lastImageUrl = null;
     state.aria.generatedFrames = [];
+    state.aria.igCaption = '';
+    state.aria.igHashtags = '';
   });
 
   // Download button
@@ -1246,11 +1249,10 @@ function setupAria() {
     a.click();
   });
 
-  // Send to Nova button
+  // Build Instagram Post button
   $('aria-send-nova').addEventListener('click', () => {
     if (!state.aria.lastImageUrl) return;
-    switchAgent('nova');
-    showToast('Image queued for Nova — attach it manually when posting!');
+    buildAriaInstagramPost();
   });
 
   // Initial connection check
@@ -1601,6 +1603,104 @@ async function runAriaAgent() {
     setTimeout(() => { $('ariaProgressWrap').style.display = 'none'; }, 1000);
   }
 }
+
+// ---- ARIA × Nova: Build Instagram Post Package ----
+async function buildAriaInstagramPost() {
+  const brief = $('aria-brief').value.trim() || 'AI agency visual content';
+  const imageUrl = state.aria.lastImageUrl;
+
+  // Show the package card
+  const card = $('igPackageCard');
+  card.style.display = 'block';
+  card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  // Put the ARIA image in the phone mock
+  $('igPkgImage').innerHTML = `<img src="${imageUrl}" alt="Generated" style="width:100%;height:100%;object-fit:cover;" />`;
+
+  // Reset text areas to loading state
+  $('igCaptionBody').innerHTML = '<div class="ig-generating"><div class="ig-gen-spinner"></div>Nova is writing your caption...</div>';
+  $('igHashtagsBody').innerHTML = '';
+  $('igTimeBody').textContent = '—';
+  $('igPkgCaptionPreview').textContent = 'Generating...';
+
+  if (!state.apiKey) {
+    $('igCaptionBody').textContent = 'Add an API key to generate captions.';
+    return;
+  }
+
+  try {
+    const novaPrompt = {
+      label: 'aria-ig-post',
+      content: `Write a world-class Instagram caption package for this visual content.
+
+The image/visual is about: "${brief}"
+Brand: Syntiq AI Agency (premium AI services for businesses)
+Audience: American business owners and entrepreneurs
+Tone: Bold, confident, modern
+
+Return EXACTLY this format:
+
+## CAPTION
+[3-4 sentences. Hook + value + CTA. Use 2-3 emojis max. Sound human, not corporate.]
+
+## HASHTAGS
+[20 hashtags — mix of niche and broad. One per line, start with #]
+
+## BEST TIME
+[Best day + time to post for US audience in one sentence]`
+    };
+
+    const result = await callAnthropic('nova', novaPrompt);
+
+    // Parse sections
+    const captionMatch = result.match(/##\s*CAPTION\s*([\s\S]*?)(?=##|$)/i);
+    const hashMatch = result.match(/##\s*HASHTAGS\s*([\s\S]*?)(?=##|$)/i);
+    const timeMatch = result.match(/##\s*BEST TIME\s*([\s\S]*?)(?=##|$)/i);
+
+    const caption = captionMatch ? captionMatch[1].trim() : result.slice(0, 300);
+    const hashtags = hashMatch ? hashMatch[1].trim() : '';
+    const time = timeMatch ? timeMatch[1].trim() : 'Tuesday–Thursday, 10am–12pm EST';
+
+    // Display caption
+    $('igCaptionBody').textContent = caption;
+    $('igPkgCaptionPreview').textContent = caption.slice(0, 80) + '...';
+
+    // Display hashtags as clickable tags
+    const tags = hashtags.match(/#\w+/g) || [];
+    $('igHashtagsBody').innerHTML = tags.map(t =>
+      `<span class="tag" style="cursor:default">${t}</span>`
+    ).join(' ');
+
+    // Display time
+    $('igTimeBody').textContent = time;
+
+    // Store for copy buttons
+    state.aria.igCaption = caption;
+    state.aria.igHashtags = tags.join(' ');
+
+    showToast('Instagram post package ready!');
+
+  } catch (err) {
+    $('igCaptionBody').textContent = 'Error: ' + err.message;
+  }
+}
+
+// Copy buttons for ig package
+document.addEventListener('DOMContentLoaded', () => {
+  // These run after setupAria — safe to attach here
+  setTimeout(() => {
+    const btnCap = $('igCopyCaption');
+    const btnHash = $('igCopyHashtags');
+    if (btnCap) btnCap.addEventListener('click', () => {
+      const text = state.aria?.igCaption || '';
+      navigator.clipboard.writeText(text).then(() => showToast('Caption copied!'));
+    });
+    if (btnHash) btnHash.addEventListener('click', () => {
+      const text = state.aria?.igHashtags || '';
+      navigator.clipboard.writeText(text).then(() => showToast('Hashtags copied!'));
+    });
+  }, 500);
+});
 
 // Add aria systemPrompt for prompt enhancement
 const ariaSystemPrompt = 'You are an expert AI image and video prompt engineer. When asked to enhance a prompt, output ONLY the enhanced generation prompt — no explanation, no markdown, no quotes. Be specific about visuals, lighting, composition, style, and quality. End with quality tags appropriate for the medium.';

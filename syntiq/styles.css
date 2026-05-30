@@ -1821,6 +1821,187 @@ body {
 }
 .toggle-switch.on::after { left: 19px; }
 
+/* ---- ARIA workspace stacks vertically ---- */
+.aria-workspace-right {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ---- Instagram Package Card (ARIA × Nova) ---- */
+.ig-package-card {
+  background: var(--bg-card);
+  border: 1px solid rgba(244,114,182,0.18);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+}
+.ig-package-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.ig-package-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.ig-package-badge {
+  background: linear-gradient(135deg,rgba(129,140,248,0.15),rgba(244,114,182,0.15));
+  border: 1px solid rgba(244,114,182,0.2);
+  color: var(--nova-primary);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 3px 10px;
+  border-radius: 20px;
+}
+.ig-package-actions { display: flex; gap: 8px; }
+.ig-copy-caption,.ig-copy-hash {
+  background: rgba(244,114,182,0.08);
+  border: 1px solid rgba(244,114,182,0.2);
+  color: var(--nova-primary);
+  border-radius: 7px;
+  padding: 5px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all .2s;
+}
+.ig-copy-caption:hover,.ig-copy-hash:hover { background: rgba(244,114,182,0.15); }
+
+.ig-package-body {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 24px;
+  padding: 24px;
+  align-items: start;
+}
+
+/* Mini phone mock */
+.ig-package-phone-wrap { display: flex; justify-content: center; }
+.ig-package-phone {
+  width: 180px;
+  background: #111;
+  border-radius: 20px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+.ig-pkg-header-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.ig-pkg-avatar {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: linear-gradient(135deg,#f472b6,#818cf8);
+  flex-shrink: 0;
+}
+.ig-pkg-username { font-size: 10px; font-weight: 600; color: #fff; flex: 1; }
+.ig-pkg-more { font-size: 12px; color: rgba(255,255,255,.4); }
+.ig-pkg-image {
+  width: 180px;
+  height: 180px;
+  background: rgba(129,140,248,0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  overflow: hidden;
+}
+.ig-pkg-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.ig-pkg-actions-bar {
+  display: flex;
+  gap: 12px;
+  padding: 8px 10px 4px;
+  font-size: 14px;
+  color: rgba(255,255,255,.7);
+}
+.ig-pkg-caption-preview {
+  padding: 4px 10px 10px;
+  font-size: 9px;
+  color: rgba(255,255,255,.5);
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Text columns */
+.ig-package-text { display: flex; flex-direction: column; gap: 16px; }
+.ig-text-block {
+  background: rgba(255,255,255,0.025);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.ig-text-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: rgba(244,114,182,.7);
+  border-bottom: 1px solid var(--border);
+  background: rgba(244,114,182,0.04);
+}
+.ig-caption-body {
+  padding: 12px 14px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  min-height: 60px;
+}
+.ig-hashtags-body {
+  padding: 10px 14px;
+  font-size: 12px;
+  line-height: 2;
+  color: var(--nova-primary);
+}
+.ig-time-body {
+  padding: 10px 14px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* Generating spinner */
+.ig-generating {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.ig-gen-spinner {
+  width: 14px; height: 14px;
+  border: 2px solid rgba(244,114,182,0.2);
+  border-top-color: var(--nova-primary);
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
 /* ---- Responsive ---- */
 @media (max-width: 900px) {
   .agent-workspace {
