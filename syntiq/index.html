@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Syntiq — AI Agency Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- Ambient background particles -->
+  <div class="bg-particles" id="bgParticles"></div>
+
+  <!-- Top Nav -->
+  <nav class="navbar">
+    <div class="nav-brand">
+      <div class="brand-icon">
+        <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+          <polygon points="14,2 26,8 26,20 14,26 2,20 2,8" fill="url(#hexGrad)" stroke="rgba(139,92,246,0.6)" stroke-width="0.5"/>
+          <polygon points="14,7 21,11 21,17 14,21 7,17 7,11" fill="rgba(139,92,246,0.3)"/>
+          <circle cx="14" cy="14" r="3" fill="#a78bfa"/>
+          <defs>
+            <linearGradient id="hexGrad" x1="2" y1="2" x2="26" y2="26">
+              <stop offset="0%" stop-color="rgba(139,92,246,0.4)"/>
+              <stop offset="100%" stop-color="rgba(59,130,246,0.4)"/>
+            </linearGradient>
+          </defs>
+        </svg>
+      </div>
+      <span class="brand-name">Syntiq</span>
+      <span class="brand-tagline">AI Agency</span>
+    </div>
+    <div class="nav-center">
+      <button class="nav-tab active" data-agent="nova">
+        <span class="tab-dot nova-dot"></span>Nova
+      </button>
+      <button class="nav-tab" data-agent="rex">
+        <span class="tab-dot rex-dot"></span>Rex
+      </button>
+      <button class="nav-tab" data-agent="pixel">
+        <span class="tab-dot pixel-dot"></span>Pixel
+      </button>
+    </div>
+    <div class="nav-actions">
+      <button class="btn-api" id="apiToggleBtn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        API Key
+      </button>
+      <div class="status-indicator" id="apiStatus">
+        <span class="status-dot"></span>
+        <span class="status-text">No API Key</span>
+      </div>
+    </div>
+  </nav>
+
+  <!-- API Key Panel -->
+  <div class="api-panel" id="apiPanel">
+    <div class="api-panel-inner">
+      <div class="api-panel-header">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+        <span>Anthropic API Key</span>
+      </div>
+      <div class="api-input-row">
+        <input type="password" id="apiKeyInput" placeholder="sk-ant-api03-..." class="api-input" />
+        <button class="btn-save-api" id="saveApiBtn">Save Key</button>
+      </div>
+      <p class="api-note">Your key is stored locally in your browser and never sent anywhere except directly to Anthropic.</p>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <main class="main-content">
+
+    <!-- NOVA SECTION -->
+    <section class="agent-section active" id="section-nova">
+      <div class="agent-hero nova-hero">
+        <div class="agent-hero-content">
+          <div class="agent-avatar nova-avatar">
+            <div class="avatar-ring"></div>
+            <div class="avatar-inner">
+              <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+                <circle cx="20" cy="20" r="18" fill="url(#novaGrad)"/>
+                <path d="M20 8 L24 16 L32 16 L26 22 L28 30 L20 25 L12 30 L14 22 L8 16 L16 16 Z" fill="white" opacity="0.9"/>
+                <defs>
+                  <linearGradient id="novaGrad" x1="0" y1="0" x2="40" y2="40">
+                    <stop offset="0%" stop-color="#f472b6"/>
+                    <stop offset="100%" stop-color="#a855f7"/>
+                  </linearGradient>
+                </defs>
+              </svg>
+            </div>
+          </div>
+          <div class="agent-info">
+            <div class="agent-name-row">
+              <h1 class="agent-name nova-name">NOVA</h1>
+              <span class="agent-badge nova-badge">Social Media Expert</span>
+              <span class="agent-status-pill online">● Online</span>
+            </div>
+            <p class="agent-bio">I turn boring brands into viral sensations. Instagram, YouTube, Reels — I write content that stops thumbs and captures hearts. 700M+ people are scrolling right now. Let's make them stop for <em>you</em>.</p>
+            <div class="agent-stats">
+              <div class="stat"><span class="stat-val">4</span><span class="stat-label">Content Types</span></div>
+              <div class="stat"><span class="stat-val">∞</span><span class="stat-label">Virality Potential</span></div>
+              <div class="stat"><span class="stat-val">24/7</span><span class="stat-label">Available</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="agent-workspace">
+        <div class="workspace-left">
+          <div class="form-card">
+            <h3 class="form-title">Tell Nova About Your Brand</h3>
+            <div class="form-group">
+              <label>Business / Brand Name</label>
+              <input type="text" class="form-input" id="nova-business" placeholder="e.g. Glow Beauty Co." />
+            </div>
+            <div class="form-group">
+              <label>Industry / Niche</label>
+              <input type="text" class="form-input" id="nova-industry" placeholder="e.g. Skincare, Fitness, Food" />
+            </div>
+            <div class="form-group">
+              <label>Target Audience</label>
+              <input type="text" class="form-input" id="nova-audience" placeholder="e.g. Women 25-35, working moms" />
+            </div>
+            <div class="form-group">
+              <label>Content Topic / Product</label>
+              <input type="text" class="form-input" id="nova-topic" placeholder="e.g. New vitamin C serum launch" />
+            </div>
+            <div class="form-group">
+              <label>Tone / Style</label>
+              <select class="form-select" id="nova-tone">
+                <option value="casual-fun">Casual & Fun</option>
+                <option value="inspirational">Inspirational</option>
+                <option value="educational">Educational</option>
+                <option value="luxury">Luxury & Aspirational</option>
+                <option value="bold-edgy">Bold & Edgy</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Content Type</label>
+              <div class="content-type-grid">
+                <button class="type-btn active" data-type="instagram-caption">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="2" width="20" height="20" rx="5" ry="5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="17.5" cy="6.5" r="1.5"/></svg>
+                  Instagram Caption
+                </button>
+                <button class="type-btn" data-type="youtube-script">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22.54 6.42a2.78 2.78 0 0 0-1.95-1.96C18.88 4 12 4 12 4s-6.88 0-8.59.46a2.78 2.78 0 0 0-1.95 1.96A29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58 2.78 2.78 0 0 0 1.95 1.95C5.12 20 12 20 12 20s6.88 0 8.59-.47a2.78 2.78 0 0 0 1.95-1.95A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58z"/><polygon points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02" fill="currentColor"/></svg>
+                  YouTube Script
+                </button>
+                <button class="type-btn" data-type="reel-script">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8" fill="currentColor"/></svg>
+                  Reel Script
+                </button>
+                <button class="type-btn" data-type="content-strategy">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+                  Content Strategy
+                </button>
+              </div>
+            </div>
+            <button class="btn-generate nova-btn" id="nova-generate">
+              <span class="btn-text">Generate with Nova</span>
+              <svg class="btn-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            </button>
+          </div>
+
+          <!-- History -->
+          <div class="history-card" id="nova-history-card">
+            <h4 class="history-title">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              Recent Outputs
+            </h4>
+            <div class="history-list" id="nova-history-list"></div>
+          </div>
+        </div>
+
+        <div class="workspace-right">
+          <div class="output-card">
+            <div class="output-header">
+              <div class="output-header-left">
+                <div class="output-title-row">
+                  <span class="output-agent-dot nova-dot"></span>
+                  <span class="output-title">Nova's Output</span>
+                </div>
+                <span class="output-type-label" id="nova-output-type">Instagram Caption</span>
+              </div>
+              <div class="output-actions">
+                <button class="btn-copy" id="nova-copy" title="Copy output">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                  Copy
+                </button>
+                <button class="btn-clear" id="nova-clear" title="Clear output">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                </button>
+              </div>
+            </div>
+            <div class="output-body" id="nova-output">
+              <div class="output-placeholder">
+                <div class="placeholder-icon nova-placeholder-icon">
+                  <svg width="48" height="48" viewBox="0 0 40 40" fill="none">
+                    <circle cx="20" cy="20" r="18" fill="rgba(244,114,182,0.1)"/>
+                    <path d="M20 8 L24 16 L32 16 L26 22 L28 30 L20 25 L12 30 L14 22 L8 16 L16 16 Z" fill="#f472b6" opacity="0.6"/>
+                  </svg>
+                </div>
+                <p class="placeholder-text">Nova is ready to create viral content for you.<br/>Fill in your brand details and hit <strong>Generate</strong>.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- REX SECTION -->
+    <section class="agent-section" id="section-rex">
+      <div class="agent-hero rex-hero">
+        <div class="agent-hero-content">
+          <div class="agent-avatar rex-avatar">
+            <div class="avatar-ring"></div>
+            <div class="avatar-inner">
+              <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+                <circle cx="20" cy="20" r="18" fill="url(#rexGrad)"/>
+                <path d="M12 14 h16 M12 20 h10 M20 20 L26 26" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+                <circle cx="28" cy="13" r="4" fill="rgba(255,255,255,0.3)"/>
+                <path d="M26 13 L28 15 L31 11" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <defs>
+                  <linearGradient id="rexGrad" x1="0" y1="0" x2="40" y2="40">
+                    <stop offset="0%" stop-color="#f59e0b"/>
+                    <stop offset="100%" stop-color="#ef4444"/>
+                  </linearGradient>
+                </defs>
+              </svg>
+            </div>
+          </div>
+          <div class="agent-info">
+            <div class="agent-name-row">
+              <h1 class="agent-name rex-name">REX</h1>
+              <span class="agent-badge rex-badge">Sales & Marketing Expert</span>
+              <span class="agent-status-pill online">● Online</span>
+            </div>
+            <p class="agent-bio">I've studied 10,000 cold emails that got replies. I know what makes a prospect open, read, and respond. Give me your target, and I'll craft outreach so personal they'll think you knew them for years.</p>
+            <div class="agent-stats">
+              <div class="stat"><span class="stat-val">3</span><span class="stat-label">Email Types</span></div>
+              <div class="stat"><span class="stat-val">5x</span><span class="stat-label">Follow-up Sequence</span></div>
+              <div class="stat"><span class="stat-val">94%</span><span class="stat-label">Open Rate Theory</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="agent-workspace">
+        <div class="workspace-left">
+          <div class="form-card">
+            <h3 class="form-title">Brief Rex on Your Prospect</h3>
+            <div class="form-group">
+              <label>Your Business Name</label>
+              <input type="text" class="form-input" id="rex-business" placeholder="e.g. Pixel Perfect Studios" />
+            </div>
+            <div class="form-group">
+              <label>Service You're Selling</label>
+              <input type="text" class="form-input" id="rex-service" placeholder="e.g. Website design & development" />
+            </div>
+            <div class="form-group">
+              <label>Prospect's Business Type</label>
+              <input type="text" class="form-input" id="rex-prospect" placeholder="e.g. Local restaurant in Austin, TX" />
+            </div>
+            <div class="form-group">
+              <label>Pain Point to Target</label>
+              <input type="text" class="form-input" id="rex-pain" placeholder="e.g. Outdated website losing customers" />
+            </div>
+            <div class="form-group">
+              <label>Unique Value Offer</label>
+              <input type="text" class="form-input" id="rex-usp" placeholder="e.g. Built in 7 days, $997 flat fee" />
+            </div>
+            <div class="form-group">
+              <label>Outreach Type</label>
+              <div class="content-type-grid">
+                <button class="type-btn active" data-type="cold-email">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                  Cold Email
+                </button>
+                <button class="type-btn" data-type="followup-sequence">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+                  5-Email Sequence
+                </button>
+                <button class="type-btn" data-type="linkedin-outreach">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>
+                  LinkedIn DM
+                </button>
+              </div>
+            </div>
+            <button class="btn-generate rex-btn" id="rex-generate">
+              <span class="btn-text">Generate with Rex</span>
+              <svg class="btn-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            </button>
+          </div>
+
+          <div class="history-card" id="rex-history-card">
+            <h4 class="history-title">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              Recent Outputs
+            </h4>
+            <div class="history-list" id="rex-history-list"></div>
+          </div>
+        </div>
+
+        <div class="workspace-right">
+          <div class="output-card">
+            <div class="output-header">
+              <div class="output-header-left">
+                <div class="output-title-row">
+                  <span class="output-agent-dot rex-dot"></span>
+                  <span class="output-title">Rex's Output</span>
+                </div>
+                <span class="output-type-label" id="rex-output-type">Cold Email</span>
+              </div>
+              <div class="output-actions">
+                <button class="btn-copy" id="rex-copy" title="Copy output">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                  Copy
+                </button>
+                <button class="btn-clear" id="rex-clear" title="Clear output">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                </button>
+              </div>
+            </div>
+            <div class="output-body" id="rex-output">
+              <div class="output-placeholder">
+                <div class="placeholder-icon rex-placeholder-icon">
+                  <svg width="48" height="48" viewBox="0 0 40 40" fill="none">
+                    <circle cx="20" cy="20" r="18" fill="rgba(245,158,11,0.1)"/>
+                    <path d="M12 14 h16 M12 20 h10 M20 20 L26 26" stroke="#f59e0b" stroke-width="2.5" stroke-linecap="round" opacity="0.7"/>
+                  </svg>
+                </div>
+                <p class="placeholder-text">Rex is standing by to craft your perfect outreach.<br/>Fill in your details and hit <strong>Generate</strong>.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PIXEL SECTION -->
+    <section class="agent-section" id="section-pixel">
+      <div class="agent-hero pixel-hero">
+        <div class="agent-hero-content">
+          <div class="agent-avatar pixel-avatar">
+            <div class="avatar-ring"></div>
+            <div class="avatar-inner">
+              <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+                <circle cx="20" cy="20" r="18" fill="url(#pixelGrad)"/>
+                <rect x="11" y="11" width="8" height="8" rx="1" fill="white" opacity="0.9"/>
+                <rect x="21" y="11" width="8" height="8" rx="1" fill="white" opacity="0.5"/>
+                <rect x="11" y="21" width="8" height="8" rx="1" fill="white" opacity="0.5"/>
+                <rect x="21" y="21" width="8" height="8" rx="1" fill="white" opacity="0.9"/>
+                <defs>
+                  <linearGradient id="pixelGrad" x1="0" y1="0" x2="40" y2="40">
+                    <stop offset="0%" stop-color="#06b6d4"/>
+                    <stop offset="100%" stop-color="#3b82f6"/>
+                  </linearGradient>
+                </defs>
+              </svg>
+            </div>
+          </div>
+          <div class="agent-info">
+            <div class="agent-name-row">
+              <h1 class="agent-name pixel-name">PIXEL</h1>
+              <span class="agent-badge pixel-badge">World-Class Web Designer</span>
+              <span class="agent-status-pill online">● Online</span>
+            </div>
+            <p class="agent-bio">Every pixel is intentional. Every interaction is deliberate. I build websites that make visitors say "wow" in the first 3 seconds — and make them convert into customers. One file. No excuses. Pure craft.</p>
+            <div class="agent-stats">
+              <div class="stat"><span class="stat-val">$10K+</span><span class="stat-label">Design Value</span></div>
+              <div class="stat"><span class="stat-val">100%</span><span class="stat-label">Mobile-First</span></div>
+              <div class="stat"><span class="stat-val">1</span><span class="stat-label">File Delivery</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="agent-workspace">
+        <div class="workspace-left">
+          <div class="form-card">
+            <h3 class="form-title">Describe Your Dream Website</h3>
+            <div class="form-group">
+              <label>Business Name</label>
+              <input type="text" class="form-input" id="pixel-business" placeholder="e.g. Apex Roofing Co." />
+            </div>
+            <div class="form-group">
+              <label>Industry / Type</label>
+              <input type="text" class="form-input" id="pixel-industry" placeholder="e.g. Roofing contractor, Plumber, Dentist" />
+            </div>
+            <div class="form-group">
+              <label>Target City / Region</label>
+              <input type="text" class="form-input" id="pixel-location" placeholder="e.g. Dallas, TX" />
+            </div>
+            <div class="form-group">
+              <label>Primary Goal</label>
+              <select class="form-select" id="pixel-goal">
+                <option value="lead-gen">Generate Leads / Calls</option>
+                <option value="ecommerce">Sell Products Online</option>
+                <option value="portfolio">Showcase Portfolio</option>
+                <option value="booking">Take Bookings / Appointments</option>
+                <option value="brand">Build Brand Awareness</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Design Style</label>
+              <div class="content-type-grid">
+                <button class="type-btn active" data-type="modern-dark">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20"/></svg>
+                  Modern Dark
+                </button>
+                <button class="type-btn" data-type="clean-minimal">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/></svg>
+                  Clean Minimal
+                </button>
+                <button class="type-btn" data-type="bold-colorful">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/></svg>
+                  Bold & Colorful
+                </button>
+                <button class="type-btn" data-type="luxury-premium">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                  Luxury
+                </button>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Key Services (comma separated)</label>
+              <input type="text" class="form-input" id="pixel-services" placeholder="e.g. Roof repair, Installation, Inspection" />
+            </div>
+            <button class="btn-generate pixel-btn" id="pixel-generate">
+              <span class="btn-text">Build with Pixel</span>
+              <svg class="btn-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            </button>
+          </div>
+
+          <div class="history-card" id="pixel-history-card">
+            <h4 class="history-title">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              Recent Outputs
+            </h4>
+            <div class="history-list" id="pixel-history-list"></div>
+          </div>
+        </div>
+
+        <div class="workspace-right">
+          <div class="output-card">
+            <div class="output-header">
+              <div class="output-header-left">
+                <div class="output-title-row">
+                  <span class="output-agent-dot pixel-dot"></span>
+                  <span class="output-title">Pixel's Output</span>
+                </div>
+                <span class="output-type-label" id="pixel-output-type">Website Code</span>
+              </div>
+              <div class="output-actions">
+                <button class="btn-download" id="pixel-download" title="Download HTML file" style="display:none;">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  Download HTML
+                </button>
+                <button class="btn-copy" id="pixel-copy" title="Copy output">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                  Copy
+                </button>
+                <button class="btn-clear" id="pixel-clear" title="Clear output">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                </button>
+              </div>
+            </div>
+            <div class="output-body" id="pixel-output">
+              <div class="output-placeholder">
+                <div class="placeholder-icon pixel-placeholder-icon">
+                  <svg width="48" height="48" viewBox="0 0 40 40" fill="none">
+                    <circle cx="20" cy="20" r="18" fill="rgba(6,182,212,0.1)"/>
+                    <rect x="11" y="11" width="8" height="8" rx="1" fill="#06b6d4" opacity="0.7"/>
+                    <rect x="21" y="11" width="8" height="8" rx="1" fill="#06b6d4" opacity="0.4"/>
+                    <rect x="11" y="21" width="8" height="8" rx="1" fill="#06b6d4" opacity="0.4"/>
+                    <rect x="21" y="21" width="8" height="8" rx="1" fill="#06b6d4" opacity="0.7"/>
+                  </svg>
+                </div>
+                <p class="placeholder-text">Pixel is ready to build something stunning.<br/>Describe your business and hit <strong>Build</strong>.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Loading Overlay -->
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="loading-card">
+      <div class="loading-agent-name" id="loadingAgentName">Nova</div>
+      <div class="loading-spinner">
+        <div class="spinner-ring"></div>
+        <div class="spinner-ring ring2"></div>
+        <div class="spinner-ring ring3"></div>
+        <div class="spinner-dot" id="loadingAgentIcon"></div>
+      </div>
+      <div class="thinking-messages" id="thinkingMessages">
+        <p class="thinking-msg active" id="thinkingMsg"></p>
+      </div>
+      <div class="loading-progress">
+        <div class="progress-bar" id="progressBar"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div class="toast" id="toast">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+    <span id="toastMsg">Copied to clipboard!</span>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
