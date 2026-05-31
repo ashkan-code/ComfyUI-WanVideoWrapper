@@ -1,12 +1,12 @@
 """
-Sniper Alert Monitor — سیگنال اسنایپری دقیق بعد از Wyckoff HTF.
+Sniper Alert Monitor -- fires full ICT analysis when price hits Wyckoff HTF level.
 
-جریان:
-  ۱. سطح‌های فنر W/D/4H از wyckoff_alert ثبت میشن
-  ۲. هر 60s قیمت چک میشه — وقتی رسید به zone
-  ۳. تحلیل ICT کامل + محاسبه Entry/SL/TP دقیق
-  ۴. امتیاز اسنایپری 0-100 با رتبه‌بندی
-  ۵. نمایش سیگنال مثل گلوله — هیچ چیز اضافه‌ای نیست
+Flow:
+  1. W/D/4H spring levels registered from wyckoff_alert
+  2. Every 60s price checked -- when inside zone
+  3. Full ICT MTF analysis + precise Entry/SL/TP
+  4. Sniper score 0-100 with rank
+  5. Signal printed clean -- no extra noise
 """
 
 import asyncio
@@ -29,33 +29,30 @@ from .ict import (
 )
 from .signals import _fmt
 
-# alert zone: وقتی قیمت در این فاصله از سطح بود → trigger
 TF_ALERT_ZONE = {
     "1w": 0.025,
     "1d": 0.015,
     "4h": 0.010,
 }
-SL_BUFFER  = 0.005   # 0.5% فراتر از swept low/high
-MAX_SL_PCT = 0.035   # حداکثر 3.5% SL
+SL_BUFFER  = 0.005
+MAX_SL_PCT = 0.035
 POLL_SEC   = 60
 
 
 @dataclass
 class PriceAlert:
     symbol:      str
-    direction:   str    # LONG | SHORT
-    tf:          str    # 1w | 1d | 4h
-    level:       float  # Equal Lows/Highs سطح
-    swept:       float  # نقطه‌ای که wick تا اون رفت
+    direction:   str
+    tf:          str
+    level:       float
+    swept:       float
     pierce_pct:  float
-    wick_ratio:  float  # از detail کندل
-    score:       float  # امتیاز اولیه از اسکن
+    wick_ratio:  float
+    score:       float
     btc_bias:    str
     triggered:   bool  = False
     detected_at: float = field(default_factory=time.time)
 
-
-# ── scoring ───────────────────────────────────────────────────────────────────
 
 def _sniper_score(
     ict_dir:    str,
@@ -71,26 +68,21 @@ def _sniper_score(
 ) -> Tuple[float, dict]:
     pts = {}
 
-    # ساختار HTF (28 pts)
     pts["W"]  = 8 if ms_w  == ict_dir else (3 if ms_w  == "neutral" else 0)
     pts["D"]  = 8 if ms_d  == ict_dir else (3 if ms_d  == "neutral" else 0)
     pts["4H"] = 7 if ms_4h == ict_dir else (2 if ms_4h == "neutral" else 0)
     pts["1H"] = 5 if ms_1h == ict_dir else (2 if ms_1h == "neutral" else 0)
 
-    # BTC (10 pts)
     btc_ok = (ict_dir == "bullish" and btc_bias == "bullish") or \
              (ict_dir == "bearish" and btc_bias == "bearish")
     pts["BTC"] = 10 if btc_ok else (3 if btc_bias == "neutral" else 0)
 
-    # FVG (12 pts)
     pts["FVG4"] = 7 if fvg_4h else 0
     pts["FVG1"] = 5 if fvg_1h else 0
 
-    # Liquidity (8 pts)
     pts["LIQ4"] = 5 if liq_4h else 0
     pts["LIQ1"] = 3 if liq_1h else 0
 
-    # Spring quality (22 pts)
     pierce_pts = min(pierce_pct / 1.5, 1.0) * 8
     wick_pts   = min(wick_ratio / 5.0, 1.0) * 8
     conf_pts   = (4 if spring_4h else 0) + (2 if spring_1h else 0)
@@ -98,10 +90,8 @@ def _sniper_score(
     pts["WICK"]   = wick_pts
     pts["CONF"]   = conf_pts
 
-    # RRR (12 pts)
     pts["RR"] = 12 if rr >= 6 else (10 if rr >= 5 else (8 if rr >= 4 else (5 if rr >= 3 else 0)))
 
-    # OTE zone (8 pts)
     pts["OTE"] = 8 if ote_in else 0
 
     total = sum(pts.values())
@@ -109,18 +99,16 @@ def _sniper_score(
 
 
 def _rank_label(score: float) -> str:
-    if score >= 82: return "🔥🔥 ELITE"
-    if score >= 68: return "🔥 SNIPER"
-    if score >= 52: return "⭐ VALID"
-    return "⚠️  WEAK"
+    if score >= 82: return "ELITE"
+    if score >= 68: return "SNIPER"
+    if score >= 52: return "VALID"
+    return "WEAK"
 
 
 def _bar(s: float) -> str:
     f = round(s / 10)
-    return "█" * f + "░" * (10 - f)
+    return "#" * f + "." * (10 - f)
 
-
-# ── sniper signal card ────────────────────────────────────────────────────────
 
 def _print_sniper(
     rank:     int,
@@ -142,19 +130,19 @@ def _print_sniper(
     ote_in: bool,
     ict_dir: str,
 ):
-    icon  = "▲ LONG " if alert.direction == "LONG" else "▼ SHORT"
-    c_ico = "🟢" if alert.direction == "LONG" else "🔴"
-    rank_label = _rank_label(score)
-    sl_sign = "-" if alert.direction == "LONG" else "+"
-    tp_pct  = abs(tp - entry) / entry * 100
-    tp_sign = "+" if alert.direction == "LONG" else "-"
+    icon      = "LONG " if alert.direction == "LONG" else "SHORT"
+    rl        = _rank_label(score)
+    sl_sign   = "-" if alert.direction == "LONG" else "+"
+    tp_pct    = abs(tp - entry) / entry * 100
+    tp_sign   = "+" if alert.direction == "LONG" else "-"
+    bar       = _bar(score)
 
     def si(ms):
-        if ms == ict_dir:   return "✅"
-        if ms == "neutral": return "🟡"
-        return "❌"
+        if ms == ict_dir:   return "[OK]"
+        if ms == "neutral": return "[--]"
+        return "[NO]"
 
-    b_icon = "🟢" if btc_bias == "bullish" else ("🔴" if btc_bias == "bearish" else "🟡")
+    b_tag = "BULL" if btc_bias == "bullish" else ("BEAR" if btc_bias == "bearish" else "NEUT")
 
     struct_line = (f"W{si(ms_w)} D{si(ms_d)} 4H{si(ms_4h)} "
                    f"1H{si(ms_1h)} 15M{si(ms_15)}")
@@ -168,37 +156,35 @@ def _print_sniper(
         f"RR+{pts['RR']:.0f} OTE+{pts['OTE']:.0f}"
     )
 
-    print(f"""
-╔══════════════════════════════════════════════════════════╗
-║  🎯 SNIPER #{rank:<2}  {c_ico} {icon}  {alert.symbol:<12} [{alert.tf.upper()}]  ║
-║  امتیاز: {score:>5.1f}/100  {_bar(score)}  {rank_label:<16}║
-╚══════════════════════════════════════════════════════════╝
-  ──────────────────────────────────────────────────────
-  Entry     :  {_fmt(entry)}
-  Stop Loss :  {_fmt(sl)}  ({sl_sign}{loss_pct:.2f}%)  ← زیر swept low
-  TP        :  {_fmt(tp)}  ({tp_sign}{tp_pct:.2f}%)  ← {tp_reason}
-  RRR       :  1:{rr:.1f}
-  Leverage  :  {leverage}x
-  ──────────────────────────────────────────────────────
-  ساختار    :  {struct_line}
-  BTC       :  {b_icon} {btc_bias.upper()}
-  FVG       :  4H{"✅" if fvg_4h else "❌"}  1H{"✅" if fvg_1h else "❌"}
-  Liquidity :  4H{"✅" if liq_4h else "❌"}  1H{"✅" if liq_1h else "❌"}
-  فنر LTF   :  4H{"✅" if spring_4h else "❌"}  1H{"✅" if spring_1h else "❌"}
-  OTE Zone  :  {"✅ قیمت داخل OTE" if ote_in else "❌ خارج OTE"}
-  ──────────────────────────────────────────────────────
-  امتیاز    :  {score_detail}
-  فنر HTF   :  سطح={_fmt(alert.level)}  swept={_fmt(alert.swept)}  pierce={alert.pierce_pct:.2f}%
-╚══════════════════════════════════════════════════════════╝""")
+    print(
+        f"\n+========================================================+\n"
+        f"|  SNIPER #{rank:<2}  {icon}  {alert.symbol:<12} [{alert.tf.upper()}]           |\n"
+        f"|  score: {score:>5.1f}/100  {bar}  {rl:<16}          |\n"
+        f"+========================================================+\n"
+        f"  Entry     :  {_fmt(entry)}\n"
+        f"  Stop Loss :  {_fmt(sl)}  ({sl_sign}{loss_pct:.2f}%)  <- below swept low\n"
+        f"  TP        :  {_fmt(tp)}  ({tp_sign}{tp_pct:.2f}%)  <- {tp_reason}\n"
+        f"  RRR       :  1:{rr:.1f}\n"
+        f"  Leverage  :  {leverage}x\n"
+        f"  ────────────────────────────────────────────────────\n"
+        f"  Structure :  {struct_line}\n"
+        f"  BTC       :  {b_tag}\n"
+        f"  FVG       :  4H{'[OK]' if fvg_4h else '[NO]'}  1H{'[OK]' if fvg_1h else '[NO]'}\n"
+        f"  Liquidity :  4H{'[OK]' if liq_4h else '[NO]'}  1H{'[OK]' if liq_1h else '[NO]'}\n"
+        f"  Spring LTF:  4H{'[OK]' if spring_4h else '[NO]'}  1H{'[OK]' if spring_1h else '[NO]'}\n"
+        f"  OTE Zone  :  {'[OK] price inside OTE' if ote_in else '[NO] outside OTE'}\n"
+        f"  ────────────────────────────────────────────────────\n"
+        f"  Breakdown :  {score_detail}\n"
+        f"  HTF spring:  level={_fmt(alert.level)}  swept={_fmt(alert.swept)}  pierce={alert.pierce_pct:.2f}%\n"
+        f"+========================================================+"
+    )
 
-
-# ── AlertMonitor ──────────────────────────────────────────────────────────────
 
 class AlertMonitor:
     def __init__(self, client: AsyncBitunixClient):
         self.client  = client
         self.alerts: List[PriceAlert] = []
-        self._rank   = 0   # global sniper rank counter
+        self._rank   = 0
 
     def add(self, alert: PriceAlert):
         key = (alert.symbol, alert.tf, alert.direction)
@@ -206,8 +192,8 @@ class AlertMonitor:
             return
         self.alerts.append(alert)
         z = TF_ALERT_ZONE.get(alert.tf, 0.015) * 100
-        print(f"  🔔 [{alert.tf.upper()}] {alert.direction:<5} {alert.symbol:<16}"
-              f"  level={_fmt(alert.level)}  zone=±{z:.1f}%  score={alert.score:.0f}")
+        print(f"  + [{alert.tf.upper()}] {alert.direction:<5} {alert.symbol:<16}"
+              f"  level={_fmt(alert.level)}  zone=+-{z:.1f}%  score={alert.score:.0f}")
 
     async def _prices(self) -> Dict[str, float]:
         tickers = await self.client.get_all_tickers()
@@ -219,7 +205,6 @@ class AlertMonitor:
         sym     = a.symbol
         ict_dir = "bullish" if a.direction == "LONG" else "bearish"
 
-        # klines
         btc_kl = {tf: await self.client.get_klines("BTCUSDT", tf, 100)
                   for tf in ("4h", "1h", "1d")}
         btc_bias, _ = btc_ict_bias(btc_kl)
@@ -250,7 +235,6 @@ class AlertMonitor:
                      equal_tol=0.002, min_pierce=0.002, wick_ratio=2.0, max_age=8,  min_gap=3) \
                  if c1h else (False, {})
 
-        # SL
         sl = a.swept * (1 - SL_BUFFER) if a.direction == "LONG" \
              else a.swept * (1 + SL_BUFFER)
         loss_pct = abs(price - sl) / price * 100
@@ -259,7 +243,6 @@ class AlertMonitor:
             sl = price * (1 - MAX_SL_PCT) if a.direction == "LONG" \
                  else price * (1 + MAX_SL_PCT)
 
-        # TP
         try:
             _, tp, _, tp_reason = find_tiered_tp(c1h, c4h, price, ict_dir, sl, min_rr=3.0)
         except Exception:
@@ -274,12 +257,10 @@ class AlertMonitor:
 
         leverage = max(1, min(10, math.floor(15 / loss_pct)))
 
-        # OTE
         sw_lo, sw_hi = find_impulse_for_ote(c4h, ict_dir) if c4h else (price * 0.9, price * 1.1)
         ote_lo, ote_hi = find_ote_zone(sw_lo, sw_hi, ict_dir)
         ote_in = ote_lo <= price <= ote_hi
 
-        # Score
         score, pts = _sniper_score(
             ict_dir, ms_w, ms_d, ms_4h, ms_1h, ms_15,
             btc_bias,
@@ -299,26 +280,26 @@ class AlertMonitor:
 
     async def run(self):
         if not self.alerts:
-            print("  ⚠️  هیچ alert‌ای ثبت نشده.")
+            print("  No alerts registered.")
             return
 
-        print(f"\n{'═'*60}")
-        print(f"  🔔 AlertMonitor — {len(self.alerts)} سطح  [poll={POLL_SEC}s]")
-        print(f"{'═'*60}")
-        print(f"  {'#':<3} {'ارز':<16} {'جهت':<6} {'TF':<5} {'سطح':<14} {'zone'}")
-        print("  " + "─" * 52)
+        print(f"\n{'='*60}")
+        print(f"  AlertMonitor -- {len(self.alerts)} levels  [poll={POLL_SEC}s]")
+        print(f"{'='*60}")
+        print(f"  {'#':<3} {'symbol':<16} {'dir':<6} {'tf':<5} {'level':<14} {'zone'}")
+        print("  " + "-" * 52)
         for i, a in enumerate(self.alerts, 1):
             z = TF_ALERT_ZONE.get(a.tf, 0.015) * 100
             print(f"  {i:<3} {a.symbol:<16} {a.direction:<6} {a.tf:<5}"
-                  f" {_fmt(a.level):<14} ±{z:.1f}%")
-        print(f"{'═'*60}\n")
+                  f" {_fmt(a.level):<14} +-{z:.1f}%")
+        print(f"{'='*60}\n")
 
         while True:
             try:
                 prices = await self._prices()
                 active = [a for a in self.alerts if not a.triggered]
                 if not active:
-                    print("  ✅ همه alertها trigger شدن.\n")
+                    print("  All alerts triggered.\n")
                     break
 
                 hits = []
@@ -336,12 +317,12 @@ class AlertMonitor:
                     await self._analyze(a, p)
 
                 if not hits:
-                    print(f"  ⏳ {len(active)} alert فعال …", flush=True)
+                    print(f"  Watching {len(active)} level(s) ...", flush=True)
 
                 await asyncio.sleep(POLL_SEC)
 
             except asyncio.CancelledError:
                 raise
             except Exception as e:
-                print(f"  ⚠️  AlertMonitor error: {e}")
+                print(f"  AlertMonitor error: {e}")
                 await asyncio.sleep(POLL_SEC)

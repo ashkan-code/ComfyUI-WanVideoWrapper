@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
 Wyckoff HTF Alert System
-  ۱. اسکن فنر روی Weekly / Daily / 4H
-  ۲. نمایش رتبه‌بندی با امتیاز
-  ۳. شروع monitor — وقتی قیمت رسید ICT کامل تحلیل می‌کنه
+  1. Scan spring on Weekly / Daily / 4H
+  2. Show ranked results with score
+  3. Start monitor -- when price arrives, full ICT analysis fires
 
-اجرا:  python wyckoff_alert.py
+Run:  python wyckoff_alert.py
 """
 import asyncio, os, ssl, sys, time, math
 sys.path.insert(0, os.path.dirname(__file__))
@@ -24,45 +24,41 @@ from bitunix_scanner.alert_monitor import AlertMonitor, PriceAlert, _bar, _rank_
 API_KEY    = os.getenv("BITUNIX_API_KEY",    "7bee3f4756a0dbc89ae152f34c2175ac")
 SECRET_KEY = os.getenv("BITUNIX_SECRET_KEY", "4e0a845778d49068297106a64cbcda61")
 
-# ── پارامترهای اسکن هر TF ─────────────────────────────────────────────────────
-
 TF_CFG = {
     "1w": dict(
         kline_limit = 52,
-        equal_tol   = 0.008,   # 0.8% — weekly کندل‌ها نویز بیشتر دارن
-        min_pierce  = 0.005,   # 0.5% minimum stop hunt
-        wick_ratio  = 2.0,     # کمی آسان‌تر برای weekly
-        max_age     = 3,       # فقط 3 هفته اخیر
-        min_gap     = 4,       # حداقل 4 هفته بین دو سقف/کف
-        base_score  = 40,      # وزن TF (weekly = مهم‌ترین)
+        equal_tol   = 0.008,
+        min_pierce  = 0.005,
+        wick_ratio  = 2.0,
+        max_age     = 3,
+        min_gap     = 4,
+        base_score  = 40,
     ),
     "1d": dict(
         kline_limit = 120,
-        equal_tol   = 0.005,   # 0.5%
-        min_pierce  = 0.003,   # 0.3%
+        equal_tol   = 0.005,
+        min_pierce  = 0.003,
         wick_ratio  = 2.2,
-        max_age     = 5,       # 5 روز اخیر
-        min_gap     = 5,       # حداقل 5 روز بین دو سطح
+        max_age     = 5,
+        min_gap     = 5,
         base_score  = 30,
     ),
     "4h": dict(
         kline_limit = 200,
-        equal_tol   = 0.003,   # 0.3%
-        min_pierce  = 0.002,   # 0.2%
+        equal_tol   = 0.003,
+        min_pierce  = 0.002,
         wick_ratio  = 2.5,
-        max_age     = 8,       # 8 × 4h = 32 ساعت
+        max_age     = 8,
         min_gap     = 5,
         base_score  = 20,
     ),
 }
 
 SCAN_TFS   = ["1w", "1d", "4h"]
-BATCH_SIZE = 15     # همزمان — HTF کندل‌ها سنگین‌تره
-SHOW_TOP   = 8      # نمایش top N در جدول
-MIN_SCORE  = 35     # حداقل امتیاز برای ثبت alert
+BATCH_SIZE = 15
+SHOW_TOP   = 8
+MIN_SCORE  = 35
 
-
-# ── امتیازدهی ─────────────────────────────────────────────────────────────────
 
 def _score_htf(detail: dict, tf: str, raw4h: list, ict_dir: str,
                base_score: int) -> float:
@@ -76,21 +72,17 @@ def _score_htf(detail: dict, tf: str, raw4h: list, ict_dir: str,
         else:
             wick = float(c.get("high", 0)) - max(float(c.get("open", 0)), float(c.get("close", 0)))
         ratio = wick / body if body > 0 else 0
-        score += min(ratio / 5.0, 1.0) * 20   # max 20
+        score += min(ratio / 5.0, 1.0) * 20
 
-    # pierce depth — عمق stop hunt
     pierce = detail.get("pierce", 0)
-    score += min(pierce / 2.0, 1.0) * 15      # max 15
+    score += min(pierce / 2.0, 1.0) * 15
 
-    # gap — فاصله بین دو کف/سقف
     gap = detail.get("gap", 0)
-    score += min(gap / 20.0, 1.0) * 10        # max 10
+    score += min(gap / 20.0, 1.0) * 10
 
-    # recency
     age = detail.get("age", 99)
-    score += max(0, 1.0 - age / 5.0) * 10     # max 10
+    score += max(0, 1.0 - age / 5.0) * 10
 
-    # 4H alignment
     if raw4h:
         ms4 = market_structure(raw4h, lookback=60)
         if ms4 == ict_dir:
@@ -98,8 +90,6 @@ def _score_htf(detail: dict, tf: str, raw4h: list, ict_dir: str,
 
     return min(score, 100.0)
 
-
-# ── اسکن یک ارز روی همه TFها ─────────────────────────────────────────────────
 
 async def _scan_one(client: AsyncBitunixClient,
                     symbol: str, price: float,
@@ -128,7 +118,6 @@ async def _scan_one(client: AsyncBitunixClient,
 
         score = _score_htf(detail, tf, raw4h, ict_dir, cfg["base_score"])
 
-        # wick ratio از کندل فنر
         c = detail.get("candle", {})
         if c:
             body = abs(float(c.get("close", 0)) - float(c.get("open", 0)))
@@ -152,42 +141,37 @@ async def _scan_one(client: AsyncBitunixClient,
             btc_bias   = btc_bias,
         )
 
-        # بالاترین امتیاز در هر TF — نگه‌داشتن بهترین
         if best is None or score > best.score:
             best = alert
 
     return best
 
 
-# ── فرمت sniper preview ───────────────────────────────────────────────────────
-
 def _fmt_alert(rank: int, a: PriceAlert) -> str:
-    icon  = "🟢" if a.direction == "LONG" else "🔴"
-    kind  = "Spring 🔄" if a.direction == "LONG" else "Upthrust 🔄"
+    icon  = "L" if a.direction == "LONG" else "S"
+    kind  = "Spring" if a.direction == "LONG" else "Upthrust"
     rl    = _rank_label(a.score)
     z     = TF_ALERT_ZONE.get(a.tf, 0.015) * 100
-    b_ico = "🟢" if a.btc_bias == "bullish" else ("🔴" if a.btc_bias == "bearish" else "🟡")
+    b_ico = "bull" if a.btc_bias == "bullish" else ("bear" if a.btc_bias == "bearish" else "neut")
     return (
-        f"┌{'─'*58}┐\n"
-        f"│  🎯 #{rank:<2}  {icon} {kind}  {a.symbol:<14} [{a.tf.upper()}]{'':>4}│\n"
-        f"│  امتیاز: {a.score:>5.1f}/100  {_bar(a.score)}  {rl:<16}│\n"
-        f"├{'─'*58}┤\n"
-        f"│  سطح فنر : {_fmt(a.level):<16}  pierce: {a.pierce_pct:.2f}%{'':>10}│\n"
-        f"│  Swept   : {_fmt(a.swept):<16}  wick: {a.wick_ratio:.1f}x{'':>12}│\n"
-        f"│  BTC     : {b_ico} {a.btc_bias.upper():<10}  alert zone: ±{z:.1f}%{'':>9}│\n"
-        f"│  ⏳ منتظر قیمت → وقتی رسید سیگنال اسنایپری کامل می‌دیم{'':>3}│\n"
-        f"└{'─'*58}┘"
+        f"+{'─'*58}+\n"
+        f"|  #{rank:<2}  {icon} {kind}  {a.symbol:<14} [{a.tf.upper()}]      |\n"
+        f"|  score: {a.score:>5.1f}/100  {_bar(a.score)}  {rl:<16}|\n"
+        f"+{'─'*58}+\n"
+        f"|  level   : {_fmt(a.level):<16}  pierce: {a.pierce_pct:.2f}%           |\n"
+        f"|  swept   : {_fmt(a.swept):<16}  wick: {a.wick_ratio:.1f}x              |\n"
+        f"|  BTC     : {b_ico:<10}  alert zone: +-{z:.1f}%              |\n"
+        f"|  Waiting for price -- sniper signal on trigger          |\n"
+        f"+{'─'*58}+"
     )
 
 
-# ── main ──────────────────────────────────────────────────────────────────────
-
 async def main():
     print("""
-╔══════════════════════════════════════════════════════╗
-║   Wyckoff HTF Alert  —  Weekly / Daily / 4H        ║
-║   اسکن فنر HTF + هشدار قیمتی + تحلیل ICT          ║
-╚══════════════════════════════════════════════════════╝
++====================================================+
+|   Wyckoff HTF Alert  --  Weekly / Daily / 4H       |
+|   HTF spring scan + price alert + ICT analysis     |
++====================================================+
 """)
 
     ssl_ctx = ssl.create_default_context()
@@ -196,32 +180,30 @@ async def main():
     conn = aiohttp.TCPConnector(ssl=ssl_ctx)
 
     async with aiohttp.ClientSession(connector=conn) as session:
-        client = AsyncBitunixClient(API_KEY, SECRET_KEY, session)
+        client  = AsyncBitunixClient(API_KEY, SECRET_KEY, session)
         monitor = AlertMonitor(client)
 
-        # ── BTC bias ─────────────────────────────────────────────────────────
-        print("  📊 BTC تحلیل …", flush=True)
+        print("  BTC analysis ...", flush=True)
         btc_tf = {tf: await client.get_klines("BTCUSDT", tf, 100)
                   for tf in ("4h", "1h", "1d")}
         btc_bias, btc_detail = btc_ict_bias(btc_tf)
-        b_icon = "🟢" if btc_bias=="bullish" else ("🔴" if btc_bias=="bearish" else "🟡")
-        print(f"  {b_icon} BTC → {btc_bias.upper()}")
+        b_tag = "BULL" if btc_bias == "bullish" else ("BEAR" if btc_bias == "bearish" else "NEUT")
+        print(f"  BTC -> {b_tag}")
         print(f"     {btc_detail}\n")
 
         if btc_bias == "neutral":
             dirs = [("LONG", "bullish"), ("SHORT", "bearish")]
-            print("  🟡 BTC بی‌تصمیمه — هر دو جهت اسکن میشه\n")
+            print("  BTC neutral -- scanning both directions\n")
         else:
             direction = "LONG" if btc_bias == "bullish" else "SHORT"
             dirs      = [(direction, "bullish" if direction == "LONG" else "bearish")]
 
-        # ── همه ارزها ────────────────────────────────────────────────────────
-        tickers = await client.get_all_tickers()
+        tickers   = await client.get_all_tickers()
         price_map = {t["symbol"]: float(t["lastPrice"])
                      for t in tickers
                      if t.get("lastPrice") and float(t.get("lastPrice", 0)) > 0}
-        symbols = list(price_map.keys())
-        print(f"  🔍 اسکن {len(symbols)} ارز روی {SCAN_TFS} …\n", flush=True)
+        symbols   = list(price_map.keys())
+        print(f"  Scanning {len(symbols)} symbols on {SCAN_TFS} ...\n", flush=True)
 
         t0    = time.time()
         found = []
@@ -237,54 +219,51 @@ async def main():
                     if isinstance(r, PriceAlert):
                         found.append(r)
                 done = i + len(batch)
-                print(f"  {done}/{len(symbols)}  یافته: {len(found)}"
+                print(f"  {done}/{len(symbols)}  found: {len(found)}"
                       f"  [{time.time()-t0:.0f}s]", flush=True)
 
         elapsed = time.time() - t0
-        print(f"\n{'═'*56}")
-        print(f"  اسکن تموم شد — {len(found)} فنر HTF از {len(symbols)} ارز  [{elapsed:.0f}s]")
-        print(f"{'═'*56}\n")
+        print(f"\n{'='*56}")
+        print(f"  Scan done -- {len(found)} HTF springs from {len(symbols)} symbols  [{elapsed:.0f}s]")
+        print(f"{'='*56}\n")
 
         if not found:
-            print("  هیچ فنر HTF‌ای پیدا نشد.\n")
+            print("  No HTF spring found.\n")
             return
 
-        # رتبه‌بندی
         found.sort(key=lambda a: a.score, reverse=True)
 
-        # جدول سریع
-        print(f"\n{'═'*68}")
-        print(f"  🎯 SNIPER WATCHLIST — {len(found)} فنر HTF  (رتبه‌بندی بر اساس امتیاز)")
-        print(f"{'═'*68}")
-        print(f"  {'#':<4} {'ارز':<16} {'جهت':<6} {'TF':<5} {'امتیاز':<12} {'سطح':<14} {'رتبه'}")
-        print("  " + "─" * 62)
+        print(f"\n{'='*68}")
+        print(f"  SNIPER WATCHLIST -- {len(found)} HTF springs (ranked by score)")
+        print(f"{'='*68}")
+        print(f"  {'#':<4} {'symbol':<16} {'dir':<6} {'tf':<5} {'score':<12} {'level':<14} {'rank'}")
+        print("  " + "-" * 62)
         for i, a in enumerate(found, 1):
             rl = _rank_label(a.score)
             print(f"  #{i:<3} {a.symbol:<16} {a.direction:<6} {a.tf:<5}"
                   f" {a.score:>5.1f}/100  {_fmt(a.level):<14} {rl}")
 
-        print(f"\n{'═'*68}")
-        print(f"  پیش‌نمایش top {min(SHOW_TOP, len(found))}:")
-        print(f"{'═'*68}\n")
+        print(f"\n{'='*68}")
+        print(f"  Preview top {min(SHOW_TOP, len(found))}:")
+        print(f"{'='*68}\n")
 
         top = found[:SHOW_TOP]
         for rank, a in enumerate(top, 1):
             print(_fmt_alert(rank, a))
 
-        # ── ثبت alertها ──────────────────────────────────────────────────────
         alert_candidates = [a for a in found if a.score >= MIN_SCORE]
         if not alert_candidates:
-            alert_candidates = found[:5]   # حداقل 5 تا
+            alert_candidates = found[:5]
 
-        print(f"\n{'═'*68}")
-        print(f"  ثبت {len(alert_candidates)} سطح برای نظارت — وقتی قیمت رسید سیگنال اسنایپری:")
-        print(f"{'═'*68}")
+        print(f"\n{'='*68}")
+        print(f"  Registering {len(alert_candidates)} levels for monitoring -- sniper signal on trigger:")
+        print(f"{'='*68}")
         for a in alert_candidates:
             monitor.add(a)
 
         from bitunix_scanner.alert_monitor import POLL_SEC as _poll
-        print(f"\n  🔔 شروع نظارت — هر {_poll} ثانیه چک میشه")
-        print(f"  Ctrl+C برای خروج\n")
+        print(f"\n  Monitoring -- checking every {_poll}s")
+        print(f"  Ctrl+C to exit\n")
 
         await monitor.run()
 
