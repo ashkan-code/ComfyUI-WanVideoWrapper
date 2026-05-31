@@ -52,6 +52,10 @@
         <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M22.54 6.42a2.78 2.78 0 0 0-1.95-1.96C18.88 4 12 4 12 4s-6.88 0-8.59.46a2.78 2.78 0 0 0-1.95 1.96A29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58 2.78 2.78 0 0 0 1.95 1.95C5.12 20 12 20 12 20s6.88 0 8.59-.47a2.78 2.78 0 0 0 1.95-1.95A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58z"/></svg>
         TUBE
       </button>
+      <button class="nav-tab seo-tab" data-agent="seo">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        SEO
+      </button>
       <button class="nav-tab mission-tab" data-agent="mission">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
         Mission
@@ -1333,6 +1337,109 @@
     </section>
 
     <!-- MISSION SECTION -->
+    <!-- ======================== SEO AGENT ======================== -->
+    <section class="agent-section" id="section-seo">
+      <div class="agent-hero seo-hero">
+        <div class="agent-hero-content">
+          <div class="agent-avatar seo-avatar">
+            <div class="avatar-ring"></div>
+            <div class="avatar-inner">
+              <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+                <circle cx="20" cy="20" r="18" fill="url(#seoGrad)"/>
+                <circle cx="17" cy="17" r="7" stroke="white" stroke-width="2.5" fill="none" opacity="0.95"/>
+                <line x1="22" y1="22" x2="30" y2="30" stroke="white" stroke-width="2.5" stroke-linecap="round" opacity="0.95"/>
+                <defs>
+                  <linearGradient id="seoGrad" x1="0" y1="0" x2="40" y2="40">
+                    <stop offset="0%" stop-color="#8b5cf6"/>
+                    <stop offset="100%" stop-color="#06b6d4"/>
+                  </linearGradient>
+                </defs>
+              </svg>
+            </div>
+          </div>
+          <div class="agent-info">
+            <div class="agent-name-row">
+              <h1 class="agent-name seo-name">SAYO</h1>
+              <span class="agent-badge seo-badge">SEO & Promotion Agent</span>
+            </div>
+            <p class="agent-bio">I find keywords, optimize your YouTube and Instagram content for maximum reach, and build your promotion roadmap — so Ruth's content gets found by thousands of Americans every week.</p>
+            <div class="agent-stats">
+              <div class="stat"><span class="stat-val">YouTube</span><span class="stat-label">SEO</span></div>
+              <div class="stat"><span class="stat-val">Instagram</span><span class="stat-label">Reach</span></div>
+              <div class="stat"><span class="stat-val">Google</span><span class="stat-label">Discovery</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="agent-workspace">
+        <div class="input-panel">
+          <div class="form-group">
+            <label class="form-label">Topic / Video Title / Content Piece</label>
+            <input type="text" class="form-input" id="seo-topic" placeholder="e.g. How to build a website with AI — for beginners" />
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Platform</label>
+              <select class="form-select" id="seo-platform">
+                <option value="youtube">YouTube</option>
+                <option value="instagram">Instagram</option>
+                <option value="both">Both</option>
+                <option value="google">Google / Blog</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Niche</label>
+              <input type="text" class="form-input" id="seo-niche" placeholder="Web Dev & AI Tools" />
+            </div>
+          </div>
+
+          <div class="type-btns" id="seo-type-btns">
+            <button class="type-btn active" data-type="keyword-research">🔍 Keywords</button>
+            <button class="type-btn" data-type="video-seo">🎬 Video SEO</button>
+            <button class="type-btn" data-type="channel-promotion">📢 Promotion Plan</button>
+            <button class="type-btn" data-type="backlink-strategy">🔗 Backlinks</button>
+          </div>
+
+          <button class="btn-generate seo-btn" id="seo-generate">
+            <span class="btn-text">Optimize with SAYO</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          </button>
+        </div>
+
+        <div class="history-card" id="seo-history-card">
+          <div class="history-header">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            History
+          </div>
+          <div class="history-list" id="seo-history-list"></div>
+        </div>
+
+        <div class="output-panel">
+          <div class="output-header">
+            <div class="output-agent">
+              <span class="output-agent-dot seo-dot"></span>
+              <span class="output-agent-name">SAYO</span>
+            </div>
+            <span class="output-type-label" id="seo-output-type">Keyword Research</span>
+            <div class="output-actions">
+              <button class="btn-copy" id="seo-copy">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                Copy
+              </button>
+              <button class="btn-clear" id="seo-clear">Clear</button>
+            </div>
+          </div>
+          <div class="output-body" id="seo-output">
+            <div class="output-placeholder">
+              <div class="placeholder-icon seo-placeholder-icon"></div>
+              <p class="placeholder-text">Enter your topic and SAYO will find the keywords, optimize your content, and map your promotion strategy.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <section class="agent-section" id="section-mission">
 
       <!-- Hero -->
@@ -1501,8 +1608,20 @@
       <!-- Approved / Completed -->
       <div class="mission-done-zone" id="missionDoneZone" style="display:none">
         <div class="mission-done-header">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-          Approved & Ready
+          <div class="mission-done-title">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+            Approved & Ready
+          </div>
+          <div class="mission-done-actions">
+            <button class="btn-export-pack" id="btnExportPack">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Download Pack
+            </button>
+            <button class="btn-copy-all-pack" id="btnCopyAllPack">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              Copy All
+            </button>
+          </div>
         </div>
         <div class="mission-done-list" id="missionDoneList"></div>
       </div>

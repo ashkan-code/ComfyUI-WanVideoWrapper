@@ -15,9 +15,10 @@ const state = {
     atlas: JSON.parse(localStorage.getItem('syntiq_history_atlas') || '[]'),
     aria: JSON.parse(localStorage.getItem('syntiq_history_aria') || '[]'),
     tube: JSON.parse(localStorage.getItem('syntiq_history_tube') || '[]'),
+    seo: JSON.parse(localStorage.getItem('syntiq_history_seo') || '[]'),
   },
-  selectedTypes: { nova: 'instagram-caption', rex: 'cold-email', pixel: 'modern-dark', atlas: 'hashtag-strategy', tube: 'long-form' },
-  lastOutputs: { nova: '', rex: '', pixel: '', atlas: '', aria: '', tube: '' },
+  selectedTypes: { nova: 'instagram-caption', rex: 'cold-email', pixel: 'modern-dark', atlas: 'hashtag-strategy', tube: 'long-form', seo: 'keyword-research' },
+  lastOutputs: { nova: '', rex: '', pixel: '', atlas: '', aria: '', tube: '', seo: '' },
   tracker: JSON.parse(localStorage.getItem('syntiq_tracker') || '[]'),
   aria: {
     mode: 'image',
@@ -50,6 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupAria();
   setupMission();
   setupTube();
+  setupSeo();
   renderAllHistories();
   renderTracker();
   if (state.apiKey) updateApiStatus(true);
@@ -160,7 +162,7 @@ function updateApiStatus(active) {
 
 // ---- Type Buttons ----
 function setupTypeBtns() {
-  ['nova', 'rex', 'pixel', 'atlas', 'tube'].forEach(agent => {
+  ['nova', 'rex', 'pixel', 'atlas', 'tube', 'seo'].forEach(agent => {
     const section = $(`section-${agent}`);
     section.querySelectorAll('.type-btn').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -185,6 +187,7 @@ function setupGenerateBtns() {
   $('pixel-generate').addEventListener('click', () => runAgent('pixel'));
   $('atlas-generate').addEventListener('click', () => runAgent('atlas'));
   $('tube-generate').addEventListener('click', () => runAgent('tube'));
+  $('seo-generate').addEventListener('click', () => runAgent('seo'));
   $('aria-generate').addEventListener('click', () => runAriaAgent());
 }
 
@@ -223,6 +226,7 @@ function buildPrompt(agent) {
   if (agent === 'pixel') return buildPixelPrompt();
   if (agent === 'atlas') return buildAtlasPrompt();
   if (agent === 'tube') return buildTubePrompt();
+  if (agent === 'seo') return buildSeoPrompt();
 }
 
 function buildNovaPrompt() {
@@ -1092,7 +1096,114 @@ Keep the whole thing warm, conversational, and American in tone.]
 }
 
 function setupTube() {
-  // Type buttons are wired globally by setupTypeBtns() — nothing extra needed here
+  // Type buttons are wired globally by setupTypeBtns()
+}
+
+function buildSeoPrompt() {
+  const topic = $('seo-topic').value.trim();
+  const platform = $('seo-platform').value;
+  const niche = $('seo-niche').value.trim() || 'Web Dev & AI Tools';
+  const type = state.selectedTypes.seo;
+
+  if (!topic) return null;
+
+  const platLabel = { youtube: 'YouTube', instagram: 'Instagram', both: 'YouTube + Instagram', google: 'Google / Blog' }[platform];
+
+  const typeMap = {
+    'keyword-research': `You are SAYO. Do a COMPLETE keyword research for: "${topic}"
+Platform: ${platLabel}. Niche: ${niche}. Target: US audience.
+
+## 🔍 PRIMARY KEYWORDS (high volume, rankable)
+[10 keywords with: keyword, estimated US monthly searches, competition level Low/Med/High, and why it's a good target]
+
+## 🎯 LONG-TAIL KEYWORDS (easier to rank, high intent)
+[15 long-tail variations of "${topic}" with monthly searches. Include question-format keywords ("how to...", "best way to...", "can I...")]
+
+## 🏆 COMPETITOR KEYWORDS (what the top channels rank for)
+[10 keywords that top American YouTube/Instagram accounts in ${niche} are ranking for that Ruth isn't covering yet]
+
+## 💡 CONTENT IDEAS FROM KEYWORDS
+[Turn the top 5 keywords into specific video/post titles Ruth should make — optimized for click-through rate]
+
+## 📊 KEYWORD DIFFICULTY BREAKDOWN
+[Beginner-friendly: rank these keywords from easiest to hardest to rank for. Tell Ruth where to start.]
+
+## 🔤 LSI KEYWORDS (semantic variations)
+[15 related terms YouTube/Instagram algorithm looks for to understand context]`,
+
+    'video-seo': `You are SAYO. Fully optimize this piece of content for ${platLabel}:
+Content: "${topic}". Niche: ${niche}. Creator: Ruth from Syntiq AI Agency. Audience: US beginners.
+
+## 🎬 OPTIMIZED TITLES (10 options)
+[10 A/B testable titles. Include: main keyword in first 60 chars, power word, number or curiosity gap, parenthetical twist where appropriate. Rate each CTR potential 1-10.]
+
+## 📋 FULL OPTIMIZED DESCRIPTION
+[Write the complete ${platLabel} description:
+- First 150 chars: keyword-rich hook that appears in search results
+- Full description body: what the video/post covers, keywords naturally woven in
+- Chapters/timestamps (for YouTube)
+- About Ruth & Syntiq section
+- Instagram: @syntiq.ai
+- Subscribe CTA
+- 5 keyword tags at the bottom]
+
+## 🏷️ TAGS / HASHTAGS
+[For YouTube: 30 video tags ordered by priority
+For Instagram: 30 hashtags in 3 groups (broad, niche, hyper-niche)]
+
+## 🖼️ THUMBNAIL SEO TIPS
+[What text to put on the thumbnail, what visual elements perform best for US ${niche} audience, color psychology]
+
+## 📌 END SCREEN & CARDS STRATEGY (YouTube)
+[What to link in end screen, which cards to add and at what timestamps, what playlist to add the video to]`,
+
+    'channel-promotion': `You are SAYO. Build a COMPLETE promotion plan to get Ruth's "${topic}" content seen by thousands of Americans.
+Platform: ${platLabel}. Niche: ${niche}.
+
+## 📢 WEEK 1 LAUNCH PROMOTION (first 48 hours are critical)
+[Exact actions Ruth should take in the first 48 hours after posting to maximize the algorithm boost — specific and actionable]
+
+## 🤝 COLLABORATION STRATEGY
+[5 types of US creators/channels Ruth should reach out to for collabs, shoutouts, or cross-promotion. Include what to offer, how to pitch, what to say in the DM/email.]
+
+## 📱 CROSS-PLATFORM AMPLIFICATION
+[How to repurpose this ${platLabel} content across other platforms to drive traffic back. Specific: what to post where, what format, what caption.]
+
+## 💬 COMMUNITY ENGAGEMENT PLAN
+[Which specific subreddits, Discord servers, Facebook groups, and Twitter communities are active in the US ${niche} space where Ruth should share this content. Exact approach for each.]
+
+## 🔗 LINK BUILDING (for YouTube Google ranking)
+[5 strategies to get external websites, blogs, and forums to embed or link to Ruth's video — specifically targeting US audiences]
+
+## 📊 PROMOTION CALENDAR (30 days)
+[Day-by-day promotion actions for the first 30 days post-publish]`,
+
+    'backlink-strategy': `You are SAYO. Create a BACKLINK and discovery strategy for Syntiq AI Agency targeting US audience in the ${niche} niche. Content: "${topic}".
+
+## 🔗 TOP US WEBSITES TO GET LINKS FROM
+[10 specific types of US websites that accept guest posts, resources pages, or embeds in the ${niche} space. For each: site type, domain authority, how to approach them, what to offer]
+
+## 📝 GUEST POST STRATEGY
+[5 US tech/web dev blogs Ruth should pitch a guest post to. Include: what angle to pitch, how to tie it back to @syntiq.ai, what CTA to include]
+
+## 🗣️ PODCAST & INTERVIEW TARGETS
+[5 types of US podcasts in the ${niche} space that would have Ruth as a guest. What value prop to pitch. Estimated audience size.]
+
+## 📌 RESOURCE PAGE TARGETING
+[How to find "best resources for learning web development" pages in the US and get @syntiq.ai/Ruth listed on them]
+
+## 🔄 CONTENT SYNDICATION
+[Where to republish Ruth's content (Medium, Dev.to, Hashnode, LinkedIn articles) to create backlinks + new audience exposure — with specific optimization tips for each platform]
+
+## 📈 AUTHORITY BUILDING ROADMAP
+[3-month plan to build Ruth's domain authority and channel authority from zero to recognized in the US ${niche} space]`
+  };
+
+  return { label: `SAYO — ${topic.slice(0, 40)}`, content: typeMap[type] };
+}
+
+function setupSeo() {
+  // Type buttons wired globally by setupTypeBtns()
 }
 
 // ---- Tracker ----
@@ -1183,6 +1294,7 @@ const systemPrompts = {
   pixel: "You are Pixel, the world's best front-end web designer and developer. You create websites that win awards and convert visitors into customers. Your HTML/CSS/JS code is clean, modern, and production-ready. You use cutting-edge design patterns. Every website you create looks like it costs $10,000+. When asked to build a website, return ONLY the complete HTML code — no explanation, no markdown code fences, just raw HTML starting with <!DOCTYPE html>.",
   atlas: "You are Atlas, a world-class Instagram growth strategist specializing in targeting American audiences. You have deep knowledge of US Instagram culture, trending niches, community hashtags, timezone engagement windows, and organic growth tactics. You only recommend manual, safe, human-led strategies — never bots. Your strategies are data-driven, culturally aware, and immediately actionable. Be specific with numbers, times, and examples. Write in a clear, expert tone.",
   aria: "You are an expert AI image and video prompt engineer for ComfyUI. When asked to enhance a prompt, output ONLY the enhanced generation prompt — no explanation, no markdown, no quotes. Be specific about visuals, lighting, composition, style, and technical quality. For images end with: masterpiece, best quality, highly detailed, sharp focus. For videos end with: cinematic, smooth motion, high frame rate.",
+  seo: "You are SAYO, a world-class SEO and content promotion strategist specializing in YouTube and Instagram growth for American audiences. You focus on the web development and AI tools niche. You know exactly which keywords rank, what titles get clicked, how the YouTube algorithm distributes content, and how to build a sustainable organic reach engine. You give specific, actionable strategies — not generic advice. Every recommendation is tailored for the US market. Write in clear, expert American English.",
   tube: `You are TUBE, the YouTube content director for Syntiq AI Agency. You write scripts for Ruth — a warm, charismatic, highly relatable young woman who teaches web development and AI tools to American beginners. Ruth's voice is natural American English, energetic, encouraging, occasionally funny, never corporate. She makes complex tech feel accessible and exciting. Your scripts are designed to maximize watch time, retention, and conversion. Ruth always opens with a scroll-stopping hook, teaches with clear steps, and includes a natural BREAK moment (a short relatable story) to refresh the viewer before continuing. Every script ends with a strong CTA to follow on Instagram @syntiq.ai and subscribe.`,
 };
 
@@ -1335,7 +1447,7 @@ function saveToHistory(agent, content, label) {
 }
 
 function renderAllHistories() {
-  ['nova', 'rex', 'pixel', 'atlas', 'aria', 'tube'].forEach(renderHistory);
+  ['nova', 'rex', 'pixel', 'atlas', 'aria', 'tube', 'seo'].forEach(renderHistory);
 }
 
 function renderHistory(agent) {
@@ -1363,7 +1475,7 @@ function renderHistory(agent) {
 
 // ---- Copy Buttons ----
 function setupCopyBtns() {
-  ['nova', 'rex', 'pixel', 'atlas', 'tube'].forEach(agent => {
+  ['nova', 'rex', 'pixel', 'atlas', 'tube', 'seo'].forEach(agent => {
     $(`${agent}-copy`).addEventListener('click', () => {
       const text = state.lastOutputs[agent];
       if (!text) { showToast('Nothing to copy yet', 'error'); return; }
@@ -1382,7 +1494,7 @@ function setupCopyBtns() {
 
 // ---- Clear Buttons ----
 function setupClearBtns() {
-  ['nova', 'rex', 'pixel', 'atlas', 'tube'].forEach(agent => {
+  ['nova', 'rex', 'pixel', 'atlas', 'tube', 'seo'].forEach(agent => {
     $(`${agent}-clear`).addEventListener('click', () => {
       $(`${agent}-output`).innerHTML = `<div class="output-placeholder">
         <div class="placeholder-icon ${agent}-placeholder-icon"></div>
@@ -1461,9 +1573,17 @@ const thinkingMessages = {
     'Adding SEO and CTA layers...',
     'Almost ready — this one will go viral...',
   ],
+  seo: [
+    'Scanning US keyword landscape...',
+    'Analyzing top-ranking channels...',
+    'Finding your traffic goldmine...',
+    'Building your promotion roadmap...',
+    'Mapping authority-building strategy...',
+    'Almost ready — this will drive real reach...',
+  ],
 };
 
-const agentEmojis = { nova: '⭐', rex: '⚡', pixel: '🎨', atlas: '🌎', aria: '🔮', tube: '📺' };
+const agentEmojis = { nova: '⭐', rex: '⚡', pixel: '🎨', atlas: '🌎', aria: '🔮', tube: '📺', seo: '🔍' };
 
 let thinkingInterval = null;
 
@@ -1474,7 +1594,7 @@ function showLoading(agent) {
 
   // Apply agent color to rings
   const rings = document.querySelectorAll('.spinner-ring');
-  const colors = { nova: '#f472b6', rex: '#f59e0b', pixel: '#06b6d4', atlas: '#10b981', aria: '#818cf8', tube: '#f43f5e' };
+  const colors = { nova: '#f472b6', rex: '#f59e0b', pixel: '#06b6d4', atlas: '#10b981', aria: '#818cf8', tube: '#f43f5e', seo: '#8b5cf6' };
   rings[1].style.borderTopColor = colors[agent];
   rings[2].style.borderTopColor = `${colors[agent]}80`;
 
@@ -1510,6 +1630,8 @@ function setupMission() {
   });
   $('btnApproveAll').addEventListener('click', approveAll);
   $('btnClearMission').addEventListener('click', clearMission);
+  $('btnExportPack').addEventListener('click', exportContentPack);
+  $('btnCopyAllPack').addEventListener('click', copyAllApproved);
 
   // Example chips
   document.querySelectorAll('.mission-example-chip').forEach(chip => {
@@ -2070,6 +2192,75 @@ function clearMission() {
   $('missionQueueZone').style.display = 'none';
   $('missionDoneZone').style.display = 'none';
   $('missionProgressCard').style.display = 'none';
+}
+
+function exportContentPack() {
+  const approved = zeusState.queue.filter(i => i.status === 'approved');
+  if (!approved.length) { showToast('No approved content yet', 'error'); return; }
+
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+
+  const lines = [
+    '╔══════════════════════════════════════════════════════════════╗',
+    '║           SYNTIQ AI AGENCY — Content Pack                   ║',
+    `║  Generated: ${dateStr} at ${timeStr}`.padEnd(64) + '║',
+    `║  Items: ${approved.length} approved tasks`.padEnd(64) + '║',
+    '╚══════════════════════════════════════════════════════════════╝',
+    '',
+  ];
+
+  // Group by platform
+  const groups = {
+    '📱 INSTAGRAM': approved.filter(i => ['nova', 'atlas'].includes(i.agent)),
+    '🎬 YOUTUBE': approved.filter(i => i.agent === 'tube'),
+    '📧 OUTREACH': approved.filter(i => i.agent === 'rex'),
+    '🌐 WEBSITE': approved.filter(i => i.agent === 'pixel'),
+    '📊 OTHER': approved.filter(i => !['nova', 'atlas', 'tube', 'rex', 'pixel'].includes(i.agent)),
+  };
+
+  for (const [section, items] of Object.entries(groups)) {
+    if (!items.length) continue;
+    lines.push('━'.repeat(66));
+    lines.push(section);
+    lines.push('━'.repeat(66));
+    items.forEach((item, idx) => {
+      lines.push('');
+      lines.push(`[${idx + 1}] ${item.label} (${item.agent.toUpperCase()} · ${item.type})`);
+      lines.push('─'.repeat(50));
+      lines.push(item.content);
+      lines.push('');
+    });
+  }
+
+  lines.push('━'.repeat(66));
+  lines.push('Generated by Syntiq AI Agency Dashboard');
+  lines.push('Instagram: @syntiq.ai  |  YouTube: Syntiq AI');
+  lines.push('━'.repeat(66));
+
+  const text = lines.join('\n');
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `syntiq-content-pack-${now.toISOString().slice(0, 10)}.txt`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast(`📦 Content pack downloaded! (${approved.length} items)`);
+}
+
+function copyAllApproved() {
+  const approved = zeusState.queue.filter(i => i.status === 'approved');
+  if (!approved.length) { showToast('No approved content yet', 'error'); return; }
+
+  const text = approved.map(item =>
+    `=== ${item.label} (${item.agent.toUpperCase()}) ===\n\n${item.content}`
+  ).join('\n\n' + '═'.repeat(60) + '\n\n');
+
+  navigator.clipboard.writeText(text)
+    .then(() => showToast(`Copied ${approved.length} items to clipboard!`))
+    .catch(() => showToast('Copy failed — try Download Pack instead', 'error'));
 }
 
 function updateMissionStats() {
