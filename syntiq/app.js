@@ -14,9 +14,10 @@ const state = {
     pixel: JSON.parse(localStorage.getItem('syntiq_history_pixel') || '[]'),
     atlas: JSON.parse(localStorage.getItem('syntiq_history_atlas') || '[]'),
     aria: JSON.parse(localStorage.getItem('syntiq_history_aria') || '[]'),
+    tube: JSON.parse(localStorage.getItem('syntiq_history_tube') || '[]'),
   },
-  selectedTypes: { nova: 'instagram-caption', rex: 'cold-email', pixel: 'modern-dark', atlas: 'hashtag-strategy' },
-  lastOutputs: { nova: '', rex: '', pixel: '', atlas: '', aria: '' },
+  selectedTypes: { nova: 'instagram-caption', rex: 'cold-email', pixel: 'modern-dark', atlas: 'hashtag-strategy', tube: 'long-form' },
+  lastOutputs: { nova: '', rex: '', pixel: '', atlas: '', aria: '', tube: '' },
   tracker: JSON.parse(localStorage.getItem('syntiq_tracker') || '[]'),
   aria: {
     mode: 'image',
@@ -48,6 +49,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupNovaPreview();
   setupAria();
   setupMission();
+  setupTube();
   renderAllHistories();
   renderTracker();
   if (state.apiKey) updateApiStatus(true);
@@ -158,7 +160,7 @@ function updateApiStatus(active) {
 
 // ---- Type Buttons ----
 function setupTypeBtns() {
-  ['nova', 'rex', 'pixel'].forEach(agent => {
+  ['nova', 'rex', 'pixel', 'atlas', 'tube'].forEach(agent => {
     const section = $(`section-${agent}`);
     section.querySelectorAll('.type-btn').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -182,6 +184,7 @@ function setupGenerateBtns() {
   $('rex-generate').addEventListener('click', () => runAgent('rex'));
   $('pixel-generate').addEventListener('click', () => runAgent('pixel'));
   $('atlas-generate').addEventListener('click', () => runAgent('atlas'));
+  $('tube-generate').addEventListener('click', () => runAgent('tube'));
   $('aria-generate').addEventListener('click', () => runAriaAgent());
 }
 
@@ -219,6 +222,7 @@ function buildPrompt(agent) {
   if (agent === 'rex') return buildRexPrompt();
   if (agent === 'pixel') return buildPixelPrompt();
   if (agent === 'atlas') return buildAtlasPrompt();
+  if (agent === 'tube') return buildTubePrompt();
 }
 
 function buildNovaPrompt() {
@@ -342,7 +346,81 @@ Include: exact words to say, caption for text overlay, visual direction]
 
 ## 📊 KPIs TO TRACK
 
-[What to measure weekly and monthly]`
+[What to measure weekly and monthly]`,
+
+    'ruth-reel': `Write a VIRAL Instagram Reel script for Ruth — a warm, charismatic young American woman who teaches web development and AI tools. She works for Syntiq AI Agency (@syntiq.ai). Topic: "${topic}". Audience: ${audience || 'American beginners 20-35 who want to learn web dev and AI'}.
+
+Ruth's voice: natural American English, energetic, relatable, occasionally funny, never corporate. She makes tech feel exciting and accessible.
+
+## 🎬 REEL CONCEPT
+[One-sentence hook concept. Target emotion. Why it will stop the scroll.]
+
+## ⚡ RUTH'S SCRIPT (30-60 seconds)
+[Write second-by-second:
+0-3s: [RUTH ON CAMERA — attention-grabbing opening line, spoken naturally]
+3-10s: [Setup the value — what they're about to learn]
+10-30s: [The actual quick tip or insight — simple, visual, actionable]
+30-50s: [The payoff — the "aha" moment]
+50-60s: [CTA — "Follow @syntiq.ai for more" + subscribe plug]
+Include exact words Ruth says, text overlay, and visual direction for each segment.]
+
+## 🎵 AUDIO & VIBE
+[Trending audio style. Energy level. Background setting for Ruth.]
+
+## 📱 TEXT OVERLAYS
+[All on-screen text with timing and style suggestion]
+
+## 💬 CAPTION + HASHTAGS
+[Punchy caption in Ruth's voice + 20 hashtags targeting US tech/web dev audience]`,
+
+    'ruth-story': `Write a set of 5 connected Instagram Story slides for Ruth from Syntiq AI Agency (@syntiq.ai). Topic: "${topic}". Audience: ${audience || 'American beginners interested in web dev and AI'}.
+
+Ruth is warm, funny, relatable — like a smart friend teaching you something cool. Stories should feel casual and human, not like an ad.
+
+## 📱 STORY SLIDE 1 — Hook
+[What Ruth says/shows in the first 3 seconds to stop swipes. Text overlay + visual direction.]
+
+## 📱 STORY SLIDE 2 — Setup
+[Introduce the problem or situation. Relatable pain point. Ruth on camera or screen recording.]
+
+## 📱 STORY SLIDE 3 — Tip/Reveal
+[The actual value. Keep it simple and visual. One clear insight per slide.]
+
+## 📱 STORY SLIDE 4 — Deeper Insight
+[The "bonus" detail most people don't know. Creates authority and trust.]
+
+## 📱 STORY SLIDE 5 — CTA
+[Soft, friendly call to action: follow, DM for questions, swipe up to link, or poll/quiz for engagement.]
+
+## 🎨 VISUAL DIRECTION
+[Overall vibe: color palette, font style, Ruth's on-camera style, background setting]`,
+
+    'ruth-bio': `Write a COMPLETE, HIGH-CONVERTING Instagram bio for Ruth's account at Syntiq AI Agency. The account handle is @syntiq.ai.
+
+Ruth is a warm, charismatic American woman who teaches web development and AI tools to beginners. She represents the human face of Syntiq AI Agency.
+
+## 👤 PROFILE NAME
+[Display name — max 30 chars. Should include keywords.]
+
+## 📝 BIO (150 chars max)
+[5 lines maximum. Each line punchy and purposeful:
+Line 1: Who Ruth is — identity + niche
+Line 2: What she teaches — the transformation
+Line 3: Who it's for — target audience
+Line 4: Social proof or credibility hook
+Line 5: CTA with emoji → link]
+
+## 🔗 LINK IN BIO
+[What the link should lead to and suggested URL text]
+
+## 🌟 STORY HIGHLIGHT COVERS (5)
+[Names and icon/theme for 5 permanent highlight categories Ruth should have]
+
+## 🖼️ PROFILE PHOTO DIRECTION
+[What Ruth's profile photo should look like: background, expression, clothing, framing]
+
+## 📌 PINNED POST IDEAS (3)
+[3 posts Ruth should pin at the top of her grid and why]`
   };
 
   return { label: `${business} — ${type}`, content: typeMap[type] };
@@ -801,10 +879,220 @@ function buildAtlasPrompt() {
 
 ## 🇺🇸 US CULTURAL CONTENT CALENDAR
 
-[Key American dates, holidays, and events in the next 30 days to tie content to for maximum relevance]`
+[Key American dates, holidays, and events in the next 30 days to tie content to for maximum relevance]`,
+
+    'us-trends': `You are Atlas. Research and report the HOTTEST current web development and AI tools trends in the United States for Instagram and YouTube content. Niche: ${niche}. Target: ${aud}.
+
+## 🔥 TOP 10 US TRENDING TOPICS RIGHT NOW
+### Web Dev & Programming
+[5 specific topics blowing up on American Instagram/YouTube: React, AI coding tools, no-code, etc. For each: topic name, why it's trending with Americans, content angle that works, estimated monthly searches, example viral hook]
+
+### AI Tools
+[5 AI tools or concepts Americans are obsessed with right now. For each: tool/concept, what's driving US interest, best content angle, viral potential score 1-10]
+
+## 📱 TRENDING CONTENT FORMATS FOR US TECH AUDIENCE
+[What content FORMAT is getting the most views: tutorials, before/after, reactions, listicles, day-in-the-life coding vlogs, etc. Include specific metrics or observations.]
+
+## 🏆 VIRAL CONTENT EXAMPLES TO STUDY
+[5 types of viral tech/web dev posts that consistently crush it with American audiences — describe the pattern, not specific accounts]
+
+## 📅 TREND FORECAST (next 30 days)
+[What tech topics are about to explode for US audiences based on upcoming releases, events, or cultural moments]
+
+## 🎯 CONTENT GAPS (Opportunities)
+[3 underserved angles in the US web dev/AI niche where competition is low but interest is high — goldmine opportunities]`,
+
+    'hook-formulas': `You are Atlas. Reveal the EXACT hook formulas that generate maximum views for web development and AI content targeting American audiences on Instagram Reels and YouTube. Niche: ${niche}. Audience: ${aud}.
+
+## ⚡ TOP 15 HOOK FORMULAS FOR US TECH AUDIENCE
+
+[For each formula:
+- Formula name
+- Template with blanks
+- 3 fill-in examples for web dev / AI topics
+- Why it works psychologically for Americans
+- Best format: Reel / YouTube Short / Long-form]
+
+Include these categories:
+1. Curiosity gap hooks ("Nobody talks about...")
+2. Transformation hooks ("I went from X to Y in Z time")
+3. Counter-intuitive hooks ("Stop doing X — do this instead")
+4. Proof hooks ("I built [thing] using only [tool]")
+5. Fear/FOMO hooks ("If you're not using X yet, you're behind")
+6. Simplification hooks ("X explained in 60 seconds")
+7. List hooks ("5 things every developer wishes they knew sooner")
+
+## 🧠 PSYCHOLOGY BREAKDOWN
+[Why each hook category works specifically for American tech learners. What emotional trigger it activates.]
+
+## 📊 HOOK PERFORMANCE BY PLATFORM
+[Which hook types work best on Instagram Reels vs YouTube Shorts vs YouTube long-form — and why]
+
+## 🎤 RUTH'S VOICE ADAPTATIONS
+[How to deliver these hooks in Ruth's warm, relatable American woman voice — specific language patterns, energy level, opening body language]
+
+## 🧪 A/B TESTING GUIDE
+[How to test two hooks against each other. What metrics to watch. How long to run the test.]`
   };
 
   return { label: `${niche} — ${type}`, content: typeMap[type] };
+}
+
+function buildTubePrompt() {
+  const topic = $('tube-topic').value.trim();
+  const audience = $('tube-audience').value.trim();
+  const value = $('tube-value').value.trim();
+  const type = state.selectedTypes.tube;
+
+  if (!topic) return null;
+
+  const aud = audience || 'American beginners aged 20–35 who want to learn web development and AI tools';
+  const val = value || 'you can build a professional website or use AI tools without any prior experience';
+
+  const typeMap = {
+    'long-form': `Write a COMPLETE YouTube video script for Ruth at Syntiq AI Agency. Ruth is a warm, charismatic, highly relatable young American woman teaching web development and AI tools to beginners. Her voice is natural, energetic, encouraging, occasionally funny — never corporate.
+
+Topic: "${topic}"
+Target audience: ${aud}
+Core value proposition: ${val}
+
+SCRIPT STRUCTURE (write all sections completely — this is a full production script):
+
+## 🎬 VIDEO TITLES (5 options)
+[5 scroll-stopping titles. Use numbers, power words, curiosity gaps. 60 chars max each.]
+
+## ⚡ HOOK (0:00–0:30) — THE MOST IMPORTANT 30 SECONDS
+[Exact words Ruth says. Must: create a pattern interrupt, make a bold promise, tease the ending. Start with something surprising or counter-intuitive. Ruth speaks directly to camera, high energy, feels spontaneous.]
+
+## 👋 INTRO (0:30–2:00)
+[Ruth introduces herself naturally: "Hey guys, I'm Ruth with Syntiq..." Builds quick credibility. Previews exactly what they'll learn. Teases the biggest "aha" moment coming later. Include a "subscribe if you're new" that doesn't feel forced.]
+
+## 📚 MAIN CONTENT (2:00–12:00) — with timestamps
+[Write detailed talking points for 4–5 sections:
+[2:00] Section 1 — [title]
+[Key point 1] [Key point 2] [Key point 3]
+Transition line to next section
+
+[4:30] Section 2 — [title]
+...etc.
+Each section has a clear teaching moment, an example, and a visual direction note.]
+
+## 💥 BREAK STORY (mid-video, ~8:00 mark)
+[This is the BREAK segment — a short 60–90 second story to refresh viewer attention.
+Ruth transitions naturally: "Okay real quick before we keep going — I have to tell you this story..."
+The story must be: relatable to Americans, slightly funny or surprising, emotionally resonant, tied loosely to the video topic.
+End with a smooth return: "Anyway, back to what we were doing..." — and jump back in with energy.]
+
+## 🔑 THE BIG PAYOFF (12:00–14:00)
+[The main "aha" moment or final technique. The thing viewers came for. Deliver it clearly and confidently.]
+
+## 📣 CALL TO ACTION (14:00–15:00)
+[Ruth's exact words. Not corporate. Warm, grateful, genuine:
+- Subscribe with reason ("I post every week and it's literally free education")
+- Instagram follow: @syntiq.ai
+- Comment prompt to boost algorithm
+- Like the video]
+
+## 📋 YOUTUBE DESCRIPTION (SEO)
+[Full description: 150-word intro with keywords, timestamp chapter markers, about Ruth/Syntiq, links placeholder, 5 keyword tags]
+
+## 🏷️ VIDEO TAGS
+[30 tags for US YouTube SEO in web dev / AI tools niche]`,
+
+    'shorts-script': `Write a VIRAL YouTube Shorts script for Ruth from Syntiq AI Agency. Ruth is warm, energetic, relatable — teaching web dev and AI to American beginners in under 60 seconds.
+
+Topic: "${topic}"
+Audience: ${aud}
+Value: ${val}
+
+## 🎬 SHORT CONCEPT
+[One-line concept. Hook type. Why it'll get watch-through on Shorts.]
+
+## ⚡ FULL SCRIPT (60 seconds max)
+[Second-by-second — write EXACTLY what Ruth says and does:
+0-3s: [RUTH ON CAMERA — explosive opening line. No hello, no intro.]
+3-15s: [Setup — the problem or question]
+15-40s: [The tip, trick, or insight — fast, visual, clear]
+40-55s: [The "wow" payoff — the result or twist]
+55-60s: [Quick CTA: "Follow for more!" or "Comment if this helped!"]
+
+For each: exact words, visual direction, text overlay]
+
+## 📱 TEXT OVERLAYS
+[All on-screen text with timing — bold, minimal, impactful]
+
+## 🎵 AUDIO DIRECTION
+[Audio style: upbeat, trending, energetic. Suggested mood. No copyrighted songs.]
+
+## 🔁 HOOK VARIATIONS (3)
+[3 alternative opening lines to test for higher CTR]
+
+## 📌 SHORTS TITLE + DESCRIPTION
+[Clickable title (50 chars max) + 3-line description with hashtags]`,
+
+    'channel-seo': `Create a COMPLETE YouTube SEO strategy for Ruth's channel at Syntiq AI Agency. Niche: web development + AI tools for American beginners.
+
+Topic focus for this SEO audit: "${topic}"
+Target audience: ${aud}
+
+## 🔍 CHANNEL KEYWORD STRATEGY
+[Primary keywords, secondary keywords, and long-tail keywords Ruth's channel should dominate. Include US monthly search volume estimates and competition level.]
+
+## 🏆 TOP 20 VIDEO IDEAS (SEO-optimized)
+[20 video titles Ruth should make — each with:
+- Title (keyword-rich, under 60 chars)
+- Target keyword
+- Estimated US monthly searches
+- Competition level: low/medium/high
+- Why it will rank for beginners]
+
+## 📋 VIDEO DESCRIPTION TEMPLATE
+[A reusable SEO-optimized description template Ruth can fill in for every video. Include: first 150 chars hook, chapter markers placeholder, about section, links section, tags line]
+
+## 🏷️ CHANNEL TAGS
+[30 channel-level tags for maximum discoverability in the US web dev / AI niche]
+
+## 📌 PLAYLISTS TO CREATE
+[5 playlist names with descriptions — designed to increase session time and help YouTube understand the channel]
+
+## 📈 GROWTH TACTICS
+[5 specific actions Ruth can take RIGHT NOW to improve her YouTube SEO and get more US viewers — actionable, not generic]`,
+
+    'channel-bio': `Write a COMPLETE YouTube channel About section for Ruth at Syntiq AI Agency. Ruth teaches web development and AI tools to American beginners.
+
+Channel focus: "${topic}"
+Audience: ${aud}
+
+## 📺 CHANNEL NAME
+[Best channel name options — should include Ruth's name + niche keywords for discoverability]
+
+## 📝 CHANNEL DESCRIPTION (About section — 5000 chars max)
+[Write the full About page:
+Section 1: Who Ruth is (warm, human, relatable — not corporate)
+Section 2: What the channel is about — the transformation you get
+Section 3: Who it's for — describe the exact viewer
+Section 4: What Ruth posts and how often
+Section 5: Ruth's story / credibility — why trust her
+Section 6: Syntiq AI Agency mention — what it is, what they offer
+Section 7: Where to find Ruth on Instagram (@syntiq.ai)
+Section 8: Contact / business inquiries
+Keep the whole thing warm, conversational, and American in tone.]
+
+## 🔗 CHANNEL LINKS (for the handle section)
+[List of links Ruth should add: Instagram, website, email, etc. — with what label to use for each]
+
+## 🎨 CHANNEL ART DIRECTION
+[What the channel banner should show: colors, layout, text, Ruth's image direction, Syntiq logo placement]
+
+## 📌 CHANNEL TRAILER SCRIPT (60 seconds)
+[The channel trailer — first video a new visitor sees. Ruth introduces herself and the channel. Make it compelling enough that they hit subscribe before it ends.]`
+  };
+
+  return { label: `TUBE — ${topic.slice(0, 40)}`, content: typeMap[type] };
+}
+
+function setupTube() {
+  // Type buttons are wired globally by setupTypeBtns() — nothing extra needed here
 }
 
 // ---- Tracker ----
@@ -895,6 +1183,7 @@ const systemPrompts = {
   pixel: "You are Pixel, the world's best front-end web designer and developer. You create websites that win awards and convert visitors into customers. Your HTML/CSS/JS code is clean, modern, and production-ready. You use cutting-edge design patterns. Every website you create looks like it costs $10,000+. When asked to build a website, return ONLY the complete HTML code — no explanation, no markdown code fences, just raw HTML starting with <!DOCTYPE html>.",
   atlas: "You are Atlas, a world-class Instagram growth strategist specializing in targeting American audiences. You have deep knowledge of US Instagram culture, trending niches, community hashtags, timezone engagement windows, and organic growth tactics. You only recommend manual, safe, human-led strategies — never bots. Your strategies are data-driven, culturally aware, and immediately actionable. Be specific with numbers, times, and examples. Write in a clear, expert tone.",
   aria: "You are an expert AI image and video prompt engineer for ComfyUI. When asked to enhance a prompt, output ONLY the enhanced generation prompt — no explanation, no markdown, no quotes. Be specific about visuals, lighting, composition, style, and technical quality. For images end with: masterpiece, best quality, highly detailed, sharp focus. For videos end with: cinematic, smooth motion, high frame rate.",
+  tube: `You are TUBE, the YouTube content director for Syntiq AI Agency. You write scripts for Ruth — a warm, charismatic, highly relatable young woman who teaches web development and AI tools to American beginners. Ruth's voice is natural American English, energetic, encouraging, occasionally funny, never corporate. She makes complex tech feel accessible and exciting. Your scripts are designed to maximize watch time, retention, and conversion. Ruth always opens with a scroll-stopping hook, teaches with clear steps, and includes a natural BREAK moment (a short relatable story) to refresh the viewer before continuing. Every script ends with a strong CTA to follow on Instagram @syntiq.ai and subscribe.`,
 };
 
 // ---- Universal AI Call ----
@@ -1046,7 +1335,7 @@ function saveToHistory(agent, content, label) {
 }
 
 function renderAllHistories() {
-  ['nova', 'rex', 'pixel', 'atlas', 'aria'].forEach(renderHistory);
+  ['nova', 'rex', 'pixel', 'atlas', 'aria', 'tube'].forEach(renderHistory);
 }
 
 function renderHistory(agent) {
@@ -1074,7 +1363,7 @@ function renderHistory(agent) {
 
 // ---- Copy Buttons ----
 function setupCopyBtns() {
-  ['nova', 'rex', 'pixel', 'atlas'].forEach(agent => {
+  ['nova', 'rex', 'pixel', 'atlas', 'tube'].forEach(agent => {
     $(`${agent}-copy`).addEventListener('click', () => {
       const text = state.lastOutputs[agent];
       if (!text) { showToast('Nothing to copy yet', 'error'); return; }
@@ -1093,7 +1382,7 @@ function setupCopyBtns() {
 
 // ---- Clear Buttons ----
 function setupClearBtns() {
-  ['nova', 'rex', 'pixel', 'atlas'].forEach(agent => {
+  ['nova', 'rex', 'pixel', 'atlas', 'tube'].forEach(agent => {
     $(`${agent}-clear`).addEventListener('click', () => {
       $(`${agent}-output`).innerHTML = `<div class="output-placeholder">
         <div class="placeholder-icon ${agent}-placeholder-icon"></div>
@@ -1164,9 +1453,17 @@ const thinkingMessages = {
     'Rendering in progress...',
     'Almost there...',
   ],
+  tube: [
+    'Studying the YouTube algorithm...',
+    "Crafting Ruth's opening hook...",
+    'Writing the BREAK story moment...',
+    'Building watch-time retention structure...',
+    'Adding SEO and CTA layers...',
+    'Almost ready — this one will go viral...',
+  ],
 };
 
-const agentEmojis = { nova: '⭐', rex: '⚡', pixel: '🎨', atlas: '🌎', aria: '🔮' };
+const agentEmojis = { nova: '⭐', rex: '⚡', pixel: '🎨', atlas: '🌎', aria: '🔮', tube: '📺' };
 
 let thinkingInterval = null;
 
@@ -1177,7 +1474,7 @@ function showLoading(agent) {
 
   // Apply agent color to rings
   const rings = document.querySelectorAll('.spinner-ring');
-  const colors = { nova: '#f472b6', rex: '#f59e0b', pixel: '#06b6d4', atlas: '#10b981', aria: '#818cf8' };
+  const colors = { nova: '#f472b6', rex: '#f59e0b', pixel: '#06b6d4', atlas: '#10b981', aria: '#818cf8', tube: '#f43f5e' };
   rings[1].style.borderTopColor = colors[agent];
   rings[2].style.borderTopColor = `${colors[agent]}80`;
 
@@ -1296,20 +1593,22 @@ async function launchMission() {
 // ---- ZEUS: Parse mission into tasks via AI ----
 async function parseMissionToTasks(mission) {
   const systemPrompt = `You are ZEUS, mission orchestrator for Syntiq AI Agency.
-Parse the user's mission into 3-6 specific tasks for these agents: nova, rex, pixel, atlas.
+Parse the user's mission into 3-6 specific tasks for these agents: nova, rex, pixel, atlas, tube.
 Return ONLY a valid JSON array. No markdown, no explanation.
 
 Agent capabilities:
-- nova: instagram-caption, youtube-script, reel-script, content-strategy
+- nova: instagram-caption, youtube-script, reel-script, content-strategy, ruth-reel, ruth-story, ruth-bio
 - rex: cold-email, email-sequence, linkedin-dm
 - pixel: website (landing page HTML)
-- atlas: hashtag-strategy, follow-targets, engagement-templates, growth-schedule
+- atlas: hashtag-strategy, follow-targets, engagement-templates, growth-schedule, us-trends, hook-formulas
+- tube: long-form, shorts-script, channel-seo, channel-bio
 
 JSON format per task:
 {"agent":"nova","label":"Instagram Caption — Product Launch","type":"instagram-caption","params":{"business":"BrandName","industry":"niche","audience":"target audience","topic":"specific topic","tone":"casual-fun|inspirational|educational|luxury|bold-edgy"}}
 {"agent":"rex","label":"Cold Email — SaaS Outreach","type":"cold-email","params":{"business":"BrandName","service":"what you sell","prospect":"prospect type","painpoint":"their pain","offer":"your offer"}}
 {"agent":"atlas","label":"Hashtag Strategy","type":"hashtag-strategy","params":{"niche":"industry","audience":"target","location":"city or country","style":"professional"}}
 {"agent":"pixel","label":"Landing Page","type":"website","params":{"business":"BrandName","industry":"niche","style":"modern-dark","services":"service1, service2"}}
+{"agent":"tube","label":"YouTube Long-form Script","type":"long-form","params":{"topic":"video topic","audience":"target audience","value":"core value prop"}}
 
 Return 3-6 tasks as a JSON array.`;
 
@@ -1343,6 +1642,12 @@ function buildFallbackTasks(mission) {
   if (lower.includes('email') || lower.includes('outreach') || lower.includes('sales')) {
     tasks.push({ agent: 'rex', label: 'Cold Email Outreach', type: 'cold-email', params: { business: brand, service: 'AI services', prospect: 'Small business owners', painpoint: 'Wasting time on repetitive tasks', offer: 'Free AI strategy call' } });
   }
+  if (lower.includes('youtube') || lower.includes('video') || lower.includes('script') || lower.includes('tube')) {
+    tasks.push({ agent: 'tube', label: 'YouTube Script — ' + mission.slice(0, 40), type: 'long-form', params: { topic: mission.slice(0, 80), audience: 'American beginners learning web dev and AI', value: 'actionable skills you can use today' } });
+  }
+  if (lower.includes('trend') || lower.includes('viral') || lower.includes('hook')) {
+    tasks.push({ agent: 'atlas', label: 'US Trends Research', type: 'us-trends', params: { niche: 'Web Dev & AI Tools', audience: 'US tech enthusiasts', location: 'United States', style: 'educational' } });
+  }
   if (!tasks.length) {
     tasks.push(
       { agent: 'nova', label: 'Instagram Caption', type: 'instagram-caption', params: { business: brand, industry: 'AI Agency', audience: 'US startup founders', topic: mission.slice(0, 80), tone: 'bold-edgy' } },
@@ -1374,6 +1679,8 @@ async function executeTask(item) {
     promptObj = buildAtlasPromptFromParams(params, type);
   } else if (agent === 'pixel') {
     promptObj = buildPixelPromptFromParams(params, type);
+  } else if (agent === 'tube') {
+    promptObj = buildTubePromptFromParams(params, type);
   } else {
     throw new Error('Unknown agent: ' + agent);
   }
@@ -1442,6 +1749,24 @@ function buildAtlasPromptFromParams(p, type) {
   return { label: `${niche} — ${type}`, content };
 }
 
+function buildTubePromptFromParams(p, type) {
+  const topic = p.topic || 'How to build your first website with AI';
+  const audience = p.audience || 'American beginners aged 20–35';
+  const value = p.value || 'you can build a professional website without any coding experience';
+
+  const contentMap = {
+    'long-form': `Write a complete YouTube long-form script for Ruth at Syntiq AI Agency. Ruth is a warm, charismatic American woman teaching web dev and AI to beginners.
+Topic: "${topic}". Audience: ${audience}. Value: ${value}.
+Include: hook (first 30s), intro, 4-5 main sections with timestamps, BREAK story segment (mid-video relatable story), big payoff, CTA to follow @syntiq.ai and subscribe.`,
+    'shorts-script': `Write a 60-second YouTube Shorts script for Ruth from Syntiq AI Agency on the topic: "${topic}". Audience: ${audience}. Ruth is warm, energetic, relatable. Include second-by-second breakdown, text overlays, and a hook + CTA.`,
+    'channel-seo': `Create a YouTube SEO strategy for Ruth's Syntiq AI Agency channel focused on "${topic}" for ${audience}. Include: top 20 video ideas with keywords, description template, channel tags, playlist structure.`,
+    'channel-bio': `Write a complete YouTube channel About section for Ruth at Syntiq AI Agency. Focus: "${topic}" for ${audience}. Include: channel description, link list, channel art direction, and channel trailer script.`,
+  };
+
+  const content = contentMap[type] || contentMap['long-form'];
+  return { label: `TUBE — ${topic.slice(0, 40)}`, content };
+}
+
 function buildPixelPromptFromParams(p, type) {
   const business = p.business || 'Syntiq';
   const industry = p.industry || 'AI Agency';
@@ -1484,7 +1809,7 @@ function renderMissionQueue() {
   });
 }
 
-const agentColors = { nova: '#f472b6', rex: '#f59e0b', pixel: '#06b6d4', atlas: '#10b981', aria: '#818cf8' };
+const agentColors = { nova: '#f472b6', rex: '#f59e0b', pixel: '#06b6d4', atlas: '#10b981', aria: '#818cf8', tube: '#f43f5e' };
 
 function renderQueueCard(item) {
   const color = agentColors[item.agent] || '#888';
