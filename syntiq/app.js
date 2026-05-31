@@ -1518,6 +1518,133 @@ function setupMission() {
       $('missionInput').focus();
     });
   });
+
+  // Quick Pack buttons
+  $('btnLaunchRuthPack').addEventListener('click', () => {
+    const topic = $('ruthPackTopic').value.trim();
+    if (!topic) { $('ruthPackTopic').focus(); showToast('Enter a topic first', 'error'); return; }
+    launchQuickPack('ruth', { topic });
+  });
+  $('ruthPackTopic').addEventListener('keydown', e => { if (e.key === 'Enter') $('btnLaunchRuthPack').click(); });
+
+  $('btnLaunchSalesPack').addEventListener('click', () => {
+    const brand = $('salesPackBrand').value.trim() || 'Syntiq';
+    const service = $('salesPackService').value.trim();
+    if (!service) { $('salesPackService').focus(); showToast('Enter what you are selling', 'error'); return; }
+    launchQuickPack('sales', { brand, service });
+  });
+
+  $('btnLaunchGrowthPack').addEventListener('click', () => {
+    const niche = $('growthPackNiche').value.trim() || 'Web Dev & AI Tools';
+    launchQuickPack('growth', { niche });
+  });
+  $('growthPackNiche').addEventListener('keydown', e => { if (e.key === 'Enter') $('btnLaunchGrowthPack').click(); });
+}
+
+// ================================================================
+//  QUICK PACKS — deterministic task builders (no AI parsing needed)
+// ================================================================
+
+async function launchQuickPack(packType, params) {
+  if (!state.apiKey) { $('apiPanel').classList.add('open'); showToast('Add API key first', 'error'); return; }
+  if (zeusState.running) { showToast('A mission is already running', 'error'); return; }
+
+  const tasks = packType === 'ruth'
+    ? buildRuthPackTasks(params.topic)
+    : packType === 'sales'
+    ? buildSalesPackTasks(params.brand, params.service)
+    : buildGrowthPackTasks(params.niche);
+
+  // Switch to mission tab for visibility
+  switchAgent('mission');
+
+  zeusState.running = true;
+  zeusState.queue = [];
+  zeusState.nextId = 1;
+
+  const packNames = { ruth: '🎬 Ruth Content Pack', sales: '🚀 Full Sales Launch', growth: '📈 Growth Sprint' };
+  missionSetProgress(5, `${packNames[packType]} — launching ${tasks.length} agents...`);
+  $('missionProgressCard').style.display = 'block';
+  $('missionQueueZone').style.display = 'block';
+  $('missionDoneZone').style.display = 'none';
+
+  // Disable all pack launch buttons during run
+  ['btnLaunchRuthPack', 'btnLaunchSalesPack', 'btnLaunchGrowthPack', 'btnLaunchMission'].forEach(id => {
+    const el = $(id); if (el) { el.disabled = true; }
+  });
+
+  try {
+    // Add all as loading cards
+    tasks.forEach(task => {
+      const id = zeusState.nextId++;
+      zeusState.queue.push({ id, ...task, content: '', status: 'loading' });
+    });
+    renderMissionQueue();
+    updateMissionStats();
+
+    // Execute each task
+    for (let i = 0; i < zeusState.queue.length; i++) {
+      const item = zeusState.queue[i];
+      const pct = 10 + Math.round(((i + 1) / zeusState.queue.length) * 85);
+      missionSetProgress(pct, `${agentEmojis[item.agent] || '⚡'} ${item.agent.toUpperCase()} — ${item.label}...`);
+
+      try {
+        item.content = await executeTask(item);
+        item.status = 'pending';
+      } catch (e) {
+        item.content = `Error: ${e.message}`;
+        item.status = 'pending';
+      }
+      renderMissionQueue();
+      updateMissionStats();
+      await new Promise(r => setTimeout(r, 250));
+    }
+
+    missionSetProgress(100, `${packNames[packType]} complete ✅ — review and approve below`);
+    showToast(`${packNames[packType]} done! Review the queue.`);
+    setTimeout(() => { $('missionProgressCard').style.display = 'none'; }, 3000);
+
+  } catch (err) {
+    missionSetProgress(0, 'Pack failed: ' + err.message);
+    showToast(err.message, 'error');
+  } finally {
+    zeusState.running = false;
+    ['btnLaunchRuthPack', 'btnLaunchSalesPack', 'btnLaunchGrowthPack', 'btnLaunchMission'].forEach(id => {
+      const el = $(id); if (el) el.disabled = false;
+    });
+    updateMissionStats();
+  }
+}
+
+function buildRuthPackTasks(topic) {
+  return [
+    { agent: 'atlas', label: '🇺🇸 US Trends — ' + topic.slice(0, 35), type: 'us-trends',       params: { niche: 'Web Dev & AI Tools', audience: 'US beginners 20–35', location: 'United States', style: 'educational' } },
+    { agent: 'atlas', label: '🎣 Hook Formulas for Ruth',               type: 'hook-formulas',   params: { niche: 'Web Dev & AI Tools', audience: 'American beginners', location: 'United States', style: 'relatable, warm' } },
+    { agent: 'nova',  label: '📱 Ruth Reel — ' + topic.slice(0, 35),   type: 'ruth-reel',       params: { business: 'Syntiq AI Agency', industry: 'AI & Web Dev Education', audience: 'American beginners 20–35', topic, tone: 'educational' } },
+    { agent: 'nova',  label: '📲 Ruth Story — ' + topic.slice(0, 35),  type: 'ruth-story',      params: { business: 'Syntiq AI Agency', industry: 'AI & Web Dev Education', audience: 'American beginners 20–35', topic, tone: 'casual-fun' } },
+    { agent: 'tube',  label: '🎬 YouTube Script — ' + topic.slice(0, 35), type: 'long-form',    params: { topic, audience: 'American beginners who want to learn web dev and AI', value: 'you can build a professional site or automate tasks without coding experience' } },
+    { agent: 'tube',  label: '⚡ YouTube Shorts — ' + topic.slice(0, 35), type: 'shorts-script', params: { topic, audience: 'American beginners 20–35', value: 'quick actionable tip' } },
+    { agent: 'atlas', label: '🏷️ Hashtag Strategy — ' + topic.slice(0, 35), type: 'hashtag-strategy', params: { niche: 'Web Dev & AI Tools', audience: 'US beginners', location: 'United States', style: 'educational, tech' } },
+  ];
+}
+
+function buildSalesPackTasks(brand, service) {
+  return [
+    { agent: 'nova',  label: `📸 Instagram Caption — ${brand}`,    type: 'instagram-caption', params: { business: brand, industry: 'Business', audience: 'US professionals', topic: service, tone: 'bold-edgy' } },
+    { agent: 'nova',  label: `🎬 Reel Script — ${brand}`,          type: 'reel-script',       params: { business: brand, industry: 'Business', audience: 'US professionals', topic: service, tone: 'bold-edgy' } },
+    { agent: 'rex',   label: `📧 Cold Email — ${brand}`,           type: 'cold-email',        params: { business: brand, service, prospect: 'Small business owners', painpoint: 'Wasting time on tasks that could be automated', offer: 'Free 30-min strategy call' } },
+    { agent: 'atlas', label: `🏷️ Hashtag Strategy — ${brand}`,    type: 'hashtag-strategy',  params: { niche: service, audience: 'US business owners', location: 'United States', style: 'professional' } },
+    { agent: 'pixel', label: `🌐 Landing Page — ${brand}`,         type: 'website',           params: { business: brand, industry: service, style: 'modern-dark', services: service } },
+  ];
+}
+
+function buildGrowthPackTasks(niche) {
+  return [
+    { agent: 'atlas', label: `🇺🇸 US Trends — ${niche}`,           type: 'us-trends',         params: { niche, audience: 'US audience', location: 'United States', style: 'professional' } },
+    { agent: 'atlas', label: `🎣 Hook Formulas — ${niche}`,         type: 'hook-formulas',     params: { niche, audience: 'US audience', location: 'United States', style: 'professional' } },
+    { agent: 'atlas', label: `🏷️ Hashtag Strategy — ${niche}`,    type: 'hashtag-strategy',  params: { niche, audience: 'US audience', location: 'United States', style: 'professional' } },
+    { agent: 'atlas', label: `📅 30-Day Growth Schedule — ${niche}`, type: 'growth-schedule', params: { niche, audience: 'US audience', location: 'United States', style: 'professional' } },
+  ];
 }
 
 async function launchMission() {
@@ -1696,6 +1823,33 @@ function buildNovaPromptFromParams(p, type) {
   const topic = p.topic || 'Our services';
   const tone = p.tone || 'bold-edgy';
 
+  if (type === 'ruth-reel') {
+    return {
+      label: `Ruth Reel — ${topic.slice(0, 40)}`,
+      content: `Write a VIRAL Instagram Reel script for Ruth from Syntiq AI Agency (@syntiq.ai). Ruth is a warm, charismatic young American woman teaching web dev and AI to beginners.
+Topic: "${topic}". Audience: ${audience}.
+Include: second-by-second script (0-60s), exact words Ruth says, text overlays, audio direction, caption + 20 hashtags.
+Ruth's voice: natural American English, energetic, encouraging, occasionally funny — never corporate.`
+    };
+  }
+
+  if (type === 'ruth-story') {
+    return {
+      label: `Ruth Story — ${topic.slice(0, 40)}`,
+      content: `Write 5 connected Instagram Story slides for Ruth from Syntiq AI Agency (@syntiq.ai) on the topic: "${topic}". Audience: ${audience}.
+Ruth is warm, casual, relatable — like a smart friend teaching something cool. Each slide: what Ruth says/shows, text overlay, visual direction.
+Slides: Hook → Setup → Tip → Deeper insight → CTA (follow @syntiq.ai)`
+    };
+  }
+
+  if (type === 'ruth-bio') {
+    return {
+      label: 'Ruth Instagram Bio @syntiq.ai',
+      content: `Write a complete, high-converting Instagram bio for Ruth at Syntiq AI Agency. Handle: @syntiq.ai.
+Ruth teaches web development and AI tools to American beginners. Include: display name (keyword-rich), bio (5 lines max, 150 chars), link strategy, 5 story highlight categories, profile photo direction, 3 pinned post ideas.`
+    };
+  }
+
   const content = `Write a world-class Instagram caption for "${business}" in the ${industry} industry.
 Topic: "${topic}". Target audience: ${audience}. Tone: ${tone}.
 
@@ -1739,7 +1893,31 @@ function buildAtlasPromptFromParams(p, type) {
   const location = p.location || 'United States';
   const style = p.style || 'professional';
 
-  const content = `You are Atlas. Create a ${type.replace('-', ' ')} for a ${niche} Instagram account targeting ${audience} in ${location}. Style: ${style}.
+  if (type === 'us-trends') {
+    return {
+      label: `US Trends — ${niche}`,
+      content: `You are Atlas. Research the HOTTEST current web development and AI tools trends in the United States for content creators. Niche: ${niche}. Audience: ${audience}.
+Report: Top 10 trending topics (5 web dev + 5 AI tools) with viral content angles, trending content formats, content gaps/opportunities, and trend forecast for the next 30 days. Be specific and data-aware.`
+    };
+  }
+
+  if (type === 'hook-formulas') {
+    return {
+      label: `Hook Formulas — ${niche}`,
+      content: `You are Atlas. Reveal the BEST hook formulas for web development and AI content targeting American audiences. Niche: ${niche}. Audience: ${audience}.
+Give 15 hook formulas with: name, template, 3 fill-in examples, psychology behind it, best platform (Reel/Shorts/Long-form). Include sections for curiosity gap, transformation, counter-intuitive, proof, FOMO, simplification, and list hooks. Also: Ruth voice adaptation tips.`
+    };
+  }
+
+  if (type === 'growth-schedule') {
+    return {
+      label: `30-Day Growth Schedule — ${niche}`,
+      content: `You are Atlas. Build a complete 30-day Instagram growth schedule for a ${niche} account targeting ${audience} in ${location}. Style: ${style}.
+Include: Week 1-4 daily actions (posts, follows, comments — with specific numbers), safe daily limits, 30-day targets, US cultural content calendar.`
+    };
+  }
+
+  const content = `You are Atlas. Create a ${type.replace(/-/g, ' ')} for a ${niche} Instagram account targeting ${audience} in ${location}. Style: ${style}.
 
 ## 🎯 STRATEGY OVERVIEW
 ## 📊 HASHTAG SETS (3 rotating sets of 25 hashtags each)
