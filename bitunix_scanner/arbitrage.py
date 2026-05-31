@@ -1,175 +1,119 @@
 """
-Triangular / Synthetic Arbitrage Engine — Bitunix Futures
+Arbitrage Opportunity Engine — Bitunix Futures
 
-از آنجا که Bitunix فقط USDT pairs داره، دو نوع فرصت رو پیدا می‌کنه:
+روش:
+  ① همه ارزها → top 80 بر اساس حجم
+  ② kline 1h (100 کندل) برای همه با هم fetch
+  ③ همه جفت‌های ممکن (≈3000) → محاسبه correlation + z-score
+  ④ فیلتر: corr>0.60 AND |z|>1.5 AND net>0.15%
+  ⑤ رتبه‌بندی بر اساس امتیاز
 
-  ① True Triangular  : اگه روزی cross-pair (مثلاً ETHBTC) اضافه شد → گراف رو
-                       پیمایش می‌کنه و حلقه‌های ۳ ضلعی واقعی پیدا می‌کنه.
-
-  ② Synthetic Arb    : نسبت قیمت دو ارز همبسته (مثلاً ETHUSDT/BTCUSDT)
-                       از میانگین N کندل خارج شد → پوزیشن جهت‌دار می‌گیریم
-                       و منتظر برگشت می‌مونیم.
-
-هزینه‌ها (محافظه‌کارانه):
-  taker fee  : 0.06% در هر لگ  → round-trip دو لگ: 0.24%
-  spread     : از bid-ask order book گرفته میشه؛ fallback: 0.04%/pair
-  funding    : هر 8 ساعت چک میشه
-  min profit : ≥ 0.35% بعد از همه هزینه‌ها
+هزینه واقعی:
+  taker fee   : 0.06% × 4 = 0.24%  (ورود+خروج هر دو لگ)
+  spread      : از order book (fallback 0.04%/pair)
+  min profit  : 0.15% خالص (محافظه‌کارانه)
 """
 
 import asyncio
 import math
-import time
-from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from statistics import mean, stdev
 from typing import Dict, List, Optional, Tuple
 
 from .client import AsyncBitunixClient
 
-# ── هزینه‌ها ──────────────────────────────────────────────────────────────────
-TAKER_FEE     = 0.0006   # 0.06% هر لگ
-MIN_NET_PROFIT = 0.0035  # حداقل 0.35% خالص برای نشون دادن
-SPREAD_FALLBACK = 0.0004 # 0.04% اگه order book در دسترس نبود
-MAX_SPREAD     = 0.0015  # بیشتر از 0.15% → رد کن
-CORR_LOOKBACK  = 100     # تعداد کندل برای محاسبه میانگین نسبت
-Z_THRESHOLD    = 2.0     # انحراف معیار برای سیگنال
-MIN_CORR       = 0.80    # حداقل همبستگی تاریخی
-
-# جفت‌های از پیش‌تعریف‌شده بر اساس همبستگی بالا
-KNOWN_PAIRS: List[Tuple[str, str]] = [
-    ("ETHUSDT",  "BTCUSDT"),
-    ("SOLUSDT",  "ETHUSDT"),
-    ("AVAXUSDT", "SOLUSDT"),
-    ("BNBUSDT",  "ETHUSDT"),
-    ("LINKUSDT", "ETHUSDT"),
-    ("DOTUSDT",  "SOLUSDT"),
-    ("MATICUSDT","ETHUSDT"),
-    ("APTUSDT",  "SOLUSDT"),
-    ("ARBUSDT",  "ETHUSDT"),
-    ("OPUSDT",   "ETHUSDT"),
-    ("SUIUSDT",  "SOLUSDT"),
-    ("NEARUSDT", "SOLUSDT"),
-    ("ATOMUSDT", "DOTUSDT"),
-    ("ADAUSDT",  "SOLUSDT"),
-    ("XRPUSDT",  "BNBUSDT"),
-    ("LTCUSDT",  "BTCUSDT"),
-    ("BCHUSDT",  "BTCUSDT"),
-    ("TRXUSDT",  "BNBUSDT"),
-    ("FILUSDT",  "ETHUSDT"),
-    ("AAVEUSDT", "ETHUSDT"),
-]
+# ── تنظیمات ───────────────────────────────────────────────────────────────────
+TAKER_FEE       = 0.0006   # 0.06% per leg
+ROUND_TRIP_FEES = 4 * TAKER_FEE   # 0.24% — ورود+خروج دو لگ
+SPREAD_FALLBACK = 0.0004   # fallback اگه depth نداشت
+MAX_SPREAD      = 0.0020   # بیشتر از 0.2% → رد
+MIN_NET_PROFIT  = 0.0015   # 0.15% خالص
+MIN_CORR        = 0.60     # حداقل همبستگی
+Z_THRESHOLD     = 1.5      # انحراف معیار برای سیگنال
+LOOKBACK        = 100      # کندل برای آمار نسبت
+TOP_SYMBOLS     = 80       # تعداد ارز بر اساس حجم
 
 
 # ── dataclasses ───────────────────────────────────────────────────────────────
 
 @dataclass
-class SpreadInfo:
-    symbol:      str
-    bid:         float
-    ask:         float
-    spread_pct:  float
-    mid:         float
-
-
-@dataclass
 class ArbOpp:
-    kind:          str      # "triangle" | "synthetic"
-    sym_a:         str
-    sym_b:         str
-    sym_c:         str      # برای triangle سومی، برای synthetic ""
-    direction_a:   str      # "LONG" | "SHORT"
-    direction_b:   str
-    price_a:       float
-    price_b:       float
-    ratio_now:     float    # نسبت فعلی A/B
-    ratio_mean:    float    # میانگین تاریخی
-    z_score:       float    # انحراف معیار
-    gross_profit:  float    # درصد قبل از هزینه
-    fee_cost:      float
-    spread_cost:   float
-    net_profit:    float    # درصد خالص
-    sim_profit:    float    # USDT سود با ۱۰۰۰ USDT
-    score:         float    # امتیاز 0-100
-    detail:        str      # توضیح مختصر
+    sym_a:        str
+    sym_b:        str
+    direction_a:  str       # LONG | SHORT
+    direction_b:  str
+    price_a:      float
+    price_b:      float
+    z_score:      float
+    corr:         float
+    ratio_now:    float
+    ratio_mean:   float
+    ratio_sd:     float
+    gross:        float     # % قبل از هزینه
+    fee_cost:     float     # % کارمزد
+    spread_cost:  float     # % اسپرد
+    net:          float     # % خالص
+    sim_usdt:     float     # USDT سود با 1000
+    score:        float     # 0-100
+    diverge_pct:  float     # % انحراف نسبت از میانگین
 
 
-# ── spread fetcher ────────────────────────────────────────────────────────────
-
-async def get_spread(client: AsyncBitunixClient, sym: str) -> SpreadInfo:
-    try:
-        depth = await client.get_depth(sym, limit=5)
-        bids  = depth.get("bids") or depth.get("b") or []
-        asks  = depth.get("asks") or depth.get("a") or []
-        if bids and asks:
-            bid = float(bids[0][0]) if isinstance(bids[0], (list, tuple)) else float(bids[0].get("price", 0))
-            ask = float(asks[0][0]) if isinstance(asks[0], (list, tuple)) else float(asks[0].get("price", 0))
-            if bid > 0 and ask > 0:
-                mid = (bid + ask) / 2
-                return SpreadInfo(sym, bid, ask, (ask - bid) / mid, mid)
-    except Exception:
-        pass
-    # fallback: از قیمت تیکر
-    return SpreadInfo(sym, 0, 0, SPREAD_FALLBACK, 0)
-
-
-async def get_spreads_batch(client: AsyncBitunixClient,
-                            symbols: List[str]) -> Dict[str, SpreadInfo]:
-    tasks = {sym: get_spread(client, sym) for sym in symbols}
-    results = await asyncio.gather(*tasks.values(), return_exceptions=True)
-    out = {}
-    for sym, r in zip(tasks.keys(), results):
-        if isinstance(r, SpreadInfo):
-            out[sym] = r
-        else:
-            out[sym] = SpreadInfo(sym, 0, 0, SPREAD_FALLBACK, 0)
-    return out
-
-
-# ── ratio calculator ──────────────────────────────────────────────────────────
-
-def _ratio_stats(closes_a: List[float], closes_b: List[float]) -> Tuple[float, float, float]:
-    """
-    نسبت A/B، میانگین، و انحراف معیار.
-    returns: (current_ratio, mean_ratio, std_ratio)
-    """
-    if len(closes_a) < 10 or len(closes_b) < 10:
-        return 0, 0, 0
-    n   = min(len(closes_a), len(closes_b))
-    ca  = closes_a[-n:]
-    cb  = closes_b[-n:]
-    ratios = [a / b for a, b in zip(ca, cb) if b > 0]
-    if len(ratios) < 5:
-        return 0, 0, 0
-    mu  = mean(ratios)
-    sd  = stdev(ratios) if len(ratios) >= 2 else 0
-    cur = ratios[-1]
-    return cur, mu, sd
-
-
-def _correlation(a: List[float], b: List[float]) -> float:
-    n  = min(len(a), len(b))
-    if n < 10:
-        return 0
-    xa = a[-n:]; xb = b[-n:]
-    ma = mean(xa); mb = mean(xb)
-    num = sum((x - ma) * (y - mb) for x, y in zip(xa, xb))
-    da  = math.sqrt(sum((x - ma)**2 for x in xa))
-    db  = math.sqrt(sum((y - mb)**2 for y in xb))
-    return num / (da * db) if da * db > 0 else 0
-
+# ── helpers ───────────────────────────────────────────────────────────────────
 
 def _closes(klines: list) -> List[float]:
     return [float(k["close"]) for k in klines if k.get("close")]
 
 
+def _corr(a: List[float], b: List[float]) -> float:
+    n = min(len(a), len(b))
+    if n < 20:
+        return 0.0
+    xa, xb = a[-n:], b[-n:]
+    ma, mb = mean(xa), mean(xb)
+    num = sum((x - ma) * (y - mb) for x, y in zip(xa, xb))
+    da  = math.sqrt(sum((x - ma) ** 2 for x in xa))
+    db  = math.sqrt(sum((y - mb) ** 2 for y in xb))
+    return num / (da * db) if da * db > 0 else 0.0
+
+
+def _ratio_stats(a: List[float], b: List[float]) -> Tuple[float, float, float]:
+    n  = min(len(a), len(b))
+    if n < 10:
+        return 0, 0, 0
+    rs = [x / y for x, y in zip(a[-n:], b[-n:]) if y > 0]
+    if len(rs) < 5:
+        return 0, 0, 0
+    mu = mean(rs)
+    sd = stdev(rs) if len(rs) >= 2 else 0
+    return rs[-1], mu, sd
+
+
+async def _get_spread_pct(client: AsyncBitunixClient, sym: str) -> float:
+    try:
+        depth = await client.get_depth(sym, limit=5)
+        # Bitunix depth formats: bids/asks as list of [price, qty]
+        bids = depth.get("bids") or depth.get("b") or []
+        asks = depth.get("asks") or depth.get("a") or []
+        if bids and asks:
+            def _p(x):
+                if isinstance(x, (list, tuple)): return float(x[0])
+                if isinstance(x, dict): return float(x.get("price") or x.get("p") or 0)
+                return float(x)
+            bid, ask = _p(bids[0]), _p(asks[0])
+            if bid > 0 and ask > 0:
+                return (ask - bid) / ((bid + ask) / 2)
+    except Exception:
+        pass
+    return SPREAD_FALLBACK
+
+
 # ── scoring ───────────────────────────────────────────────────────────────────
 
-def _score(z: float, net_pct: float, spread_pct: float, corr: float) -> float:
-    s  = min(abs(z) / 4.0, 1.0) * 30          # z-score (max 30)
-    s += min(net_pct / 0.02, 1.0) * 35        # net profit (max 35)
-    s += max(0, (0.001 - spread_pct) / 0.001) * 15   # tight spread (max 15)
-    s += min(max(corr - 0.8, 0) / 0.2, 1.0) * 20   # correlation (max 20)
+def _score(z: float, net: float, spread: float, corr: float) -> float:
+    s  = min(abs(z) / 5.0,    1.0) * 30   # z-score  (max 30)
+    s += min(net   / 0.015,   1.0) * 35   # profit   (max 35)
+    s += min(max(corr - 0.60, 0) / 0.40, 1.0) * 20  # corr (max 20)
+    s += max(0, 1 - spread / MAX_SPREAD)  * 15       # spread (max 15)
     return min(s, 100.0)
 
 
@@ -177,7 +121,7 @@ def _rank(score: float) -> str:
     if score >= 80: return "🔥🔥 ELITE"
     if score >= 65: return "🔥 STRONG"
     if score >= 50: return "✅ VALID"
-    return "⚠️  WEAK"
+    return "⚠️  MARGINAL"
 
 
 def _bar(s: float) -> str:
@@ -185,175 +129,113 @@ def _bar(s: float) -> str:
     return "█" * f + "░" * (10 - f)
 
 
-# ── true triangular arb (اگه cross-pair وجود داشت) ───────────────────────────
+# ── main scanner ──────────────────────────────────────────────────────────────
 
-def find_true_triangles(tickers: List[dict]) -> List[ArbOpp]:
+async def scan(client: AsyncBitunixClient) -> List[ArbOpp]:
     """
-    ساخت گراف قیمتی و پیدا کردن حلقه‌های ۳-ضلعی سودده.
-    فعلاً Bitunix فقط USDT pairs داره → معمولاً خالی برمی‌گرده.
+    اسکن کامل:
+    1. top 80 ارز بر اساس حجم
+    2. fetch 1h klines همه با هم
+    3. همه جفت‌ها → corr + z-score
+    4. فیلتر + امتیاز + مرتب‌سازی
     """
-    graph: Dict[str, Dict[str, dict]] = defaultdict(dict)
 
+    # ── step 1: top symbols ───────────────────────────────────────────────────
+    tickers = await client.get_all_tickers()
     for t in tickers:
-        sym  = t.get("symbol", "")
-        last = float(t.get("lastPrice") or 0)
-        if last <= 0:
-            continue
-        # تلاش برای parse کردن جفت‌ارزی
-        for quote in ("USDT", "BTC", "ETH", "BNB"):
-            if sym.endswith(quote) and len(sym) > len(quote):
-                base = sym[: -len(quote)]
-                if base:
-                    graph[base][quote] = {"sym": sym, "price": last}
-                    graph[quote][base] = {"sym": sym, "price": 1.0 / last}
-                    break
+        try:    t["_vol"] = float(t.get("baseVol") or 0)
+        except: t["_vol"] = 0.0
 
-    found = []
-    currencies = [c for c in graph if c != "USDT"]
-    for b in currencies:
-        if "USDT" not in graph or b not in graph["USDT"]:
-            continue
-        for c in currencies:
-            if c == b:
+    top = sorted(tickers, key=lambda t: t["_vol"], reverse=True)[:TOP_SYMBOLS]
+    price_map = {t["symbol"]: float(t["lastPrice"])
+                 for t in top if t.get("lastPrice") and float(t.get("lastPrice", 0)) > 0}
+    symbols = list(price_map.keys())
+
+    # ── step 2: fetch klines ──────────────────────────────────────────────────
+    tasks   = {sym: client.get_klines(sym, "1h", LOOKBACK) for sym in symbols}
+    results = await asyncio.gather(*tasks.values(), return_exceptions=True)
+    klines  = {sym: r for sym, r in zip(tasks.keys(), results)
+               if isinstance(r, list) and len(r) >= 25}
+    closes  = {sym: _closes(klines[sym]) for sym in klines}
+    valid   = list(closes.keys())
+
+    # ── step 3: همه جفت‌ها ────────────────────────────────────────────────────
+    candidates = []
+    for i in range(len(valid)):
+        for j in range(i + 1, len(valid)):
+            a, b = valid[i], valid[j]
+            ca, cb = closes[a], closes[b]
+
+            corr_val = _corr(ca, cb)
+            if corr_val < MIN_CORR:
                 continue
-            if b not in graph or c not in graph[b]:
+
+            cur, mu, sd = _ratio_stats(ca, cb)
+            if mu == 0 or sd == 0:
                 continue
-            if c not in graph or "USDT" not in graph[c]:
+
+            z = (cur - mu) / sd
+            if abs(z) < Z_THRESHOLD:
                 continue
 
-            r1 = graph["USDT"][b]["price"]
-            r2 = graph[b][c]["price"]
-            r3 = graph[c]["USDT"]["price"]
+            candidates.append((a, b, corr_val, z, cur, mu, sd))
 
-            gross = r1 * r2 * r3 - 1
-            fees  = 3 * TAKER_FEE
-            spread = 3 * SPREAD_FALLBACK
-            net   = gross - fees - spread
-
-            if net >= MIN_NET_PROFIT:
-                found.append(ArbOpp(
-                    kind="triangle",
-                    sym_a=f"{b}USDT", sym_b=graph[b][c]["sym"],
-                    sym_c=f"{c}USDT",
-                    direction_a="BUY", direction_b="BUY",
-                    price_a=1/r1, price_b=1/r2,
-                    ratio_now=gross+1, ratio_mean=1.0, z_score=0,
-                    gross_profit=gross, fee_cost=fees,
-                    spread_cost=spread, net_profit=net,
-                    sim_profit=1000 * net,
-                    score=_score(3.0, net, SPREAD_FALLBACK, 0.95),
-                    detail=f"USDT→{b}→{c}→USDT  gross={gross*100:.3f}%",
-                ))
-
-    found.sort(key=lambda x: x.net_profit, reverse=True)
-    return found
-
-
-# ── synthetic arb ─────────────────────────────────────────────────────────────
-
-async def find_synthetic_opps(
-    client: AsyncBitunixClient,
-    price_map: Dict[str, float],
-    pairs: List[Tuple[str, str]] = None,
-) -> List[ArbOpp]:
-    """
-    برای هر جفت همبسته:
-      ① ضریب نسبت فعلی vs میانگین تاریخی
-      ② اگه z-score > Z_THRESHOLD → سیگنال
-      ③ محاسبه سود خالص بعد از هزینه‌ها
-    """
-    if pairs is None:
-        pairs = KNOWN_PAIRS
-
-    # فیلتر جفت‌هایی که قیمت دارن
-    valid_pairs = [(a, b) for a, b in pairs
-                   if a in price_map and b in price_map]
-    if not valid_pairs:
+    if not candidates:
         return []
 
-    # fetch klines همه با هم
-    all_syms = list({s for pair in valid_pairs for s in pair})
-    kline_tasks = {sym: client.get_klines(sym, "1h", CORR_LOOKBACK)
-                   for sym in all_syms}
-    kline_results = await asyncio.gather(*kline_tasks.values(), return_exceptions=True)
-    klines_map = {}
-    for sym, r in zip(kline_tasks.keys(), kline_results):
-        if isinstance(r, list):
-            klines_map[sym] = r
+    # ── step 4: spread fetch برای کاندیداهای برتر ─────────────────────────────
+    top_cands = sorted(candidates, key=lambda x: abs(x[3]), reverse=True)[:50]
+    unique_syms = list({s for c in top_cands for s in (c[0], c[1])})
+    spread_tasks   = {sym: _get_spread_pct(client, sym) for sym in unique_syms}
+    spread_results = await asyncio.gather(*spread_tasks.values(), return_exceptions=True)
+    spread_map = {sym: (r if isinstance(r, float) else SPREAD_FALLBACK)
+                  for sym, r in zip(spread_tasks.keys(), spread_results)}
 
-    # fetch spreads برای جفت‌های valid
-    spread_syms = [s for pair in valid_pairs for s in pair]
-    spreads = await get_spreads_batch(client, spread_syms)
+    # ── step 5: محاسبه دقیق سود ──────────────────────────────────────────────
+    opps: List[ArbOpp] = []
 
-    found = []
-    for sym_a, sym_b in valid_pairs:
-        ka = klines_map.get(sym_a, [])
-        kb = klines_map.get(sym_b, [])
-        if len(ka) < 20 or len(kb) < 20:
-            continue
-
-        ca = _closes(ka)
-        cb = _closes(kb)
-
-        cur_ratio, mu, sd = _ratio_stats(ca, cb)
-        if mu == 0 or sd == 0:
-            continue
-
-        z = (cur_ratio - mu) / sd
-        if abs(z) < Z_THRESHOLD:
-            continue
-
-        corr = _correlation(ca, cb)
-        if corr < MIN_CORR:
-            continue
-
-        pa = price_map[sym_a]
-        pb = price_map[sym_b]
-
-        # spread از order book (یا fallback)
-        sp_a = spreads.get(sym_a, SpreadInfo(sym_a, 0, 0, SPREAD_FALLBACK, 0)).spread_pct
-        sp_b = spreads.get(sym_b, SpreadInfo(sym_b, 0, 0, SPREAD_FALLBACK, 0)).spread_pct
+    for a, b, corr_val, z, cur, mu, sd in top_cands:
+        sp_a  = spread_map.get(a, SPREAD_FALLBACK)
+        sp_b  = spread_map.get(b, SPREAD_FALLBACK)
 
         if sp_a > MAX_SPREAD or sp_b > MAX_SPREAD:
             continue
 
-        # هزینه round-trip (ورود + خروج هر دو لگ)
-        total_spread = (sp_a + sp_b) / 2
-        total_fees   = 4 * TAKER_FEE           # 2 لگ × (ورود + خروج)
-        total_cost   = total_fees + total_spread
+        spread_cost = (sp_a + sp_b) / 2
 
-        # تخمین سود از بازگشت به میانگین
-        # اگه z=+2.5 → نسبت 2.5σ بالاتر → انتظار داریم به mu برگرده
-        revert_pct = abs(z - math.copysign(Z_THRESHOLD * 0.5, z)) * (sd / mu)
-        gross      = revert_pct
-        net        = gross - total_cost
+        # انحراف نسبت از میانگین
+        diverge_pct = abs(cur - mu) / mu
+
+        # تخمین سود واقعی:
+        # پوزیشن ۵۰/۵۰ — وقتی نسبت برگشت به میانگین:
+        # یک لگ سود کرده، دیگری ضرر یا صفر
+        # expected move ≈ diverge_pct × 0.5 (محافظه‌کارانه)
+        gross = diverge_pct * 0.5
+        net   = gross - ROUND_TRIP_FEES - spread_cost
 
         if net < MIN_NET_PROFIT:
             continue
 
-        score = _score(z, net, total_spread, corr)
-        if score < 30:
+        pa, pb = price_map.get(a, 0), price_map.get(b, 0)
+        if pa == 0 or pb == 0:
             continue
 
-        # جهت: اگه z مثبت → A گران‌تر از حد معمول → SHORT A + LONG B
-        if z > 0:
-            dir_a, dir_b = "SHORT", "LONG"
-            detail = f"{sym_a} گران‌تر از حد (z={z:.2f}σ) → SHORT {sym_a} + LONG {sym_b}"
-        else:
-            dir_a, dir_b = "LONG", "SHORT"
-            detail = f"{sym_a} ارزون‌تر از حد (z={z:.2f}σ) → LONG {sym_a} + SHORT {sym_b}"
+        s = _score(z, net, spread_cost, corr_val)
 
-        found.append(ArbOpp(
-            kind="synthetic",
-            sym_a=sym_a, sym_b=sym_b, sym_c="",
+        dir_a = "SHORT" if z > 0 else "LONG"
+        dir_b = "LONG"  if z > 0 else "SHORT"
+
+        opps.append(ArbOpp(
+            sym_a=a, sym_b=b,
             direction_a=dir_a, direction_b=dir_b,
             price_a=pa, price_b=pb,
-            ratio_now=cur_ratio, ratio_mean=mu,
-            z_score=z, gross_profit=gross,
-            fee_cost=total_fees, spread_cost=total_spread,
-            net_profit=net, sim_profit=1000 * net,
-            score=score, detail=detail,
+            z_score=z, corr=corr_val,
+            ratio_now=cur, ratio_mean=mu, ratio_sd=sd,
+            gross=gross, fee_cost=ROUND_TRIP_FEES,
+            spread_cost=spread_cost, net=net,
+            sim_usdt=1000 * net,
+            score=s, diverge_pct=diverge_pct * 100,
         ))
 
-    found.sort(key=lambda x: x.score, reverse=True)
-    return found
+    opps.sort(key=lambda x: x.score, reverse=True)
+    return opps
