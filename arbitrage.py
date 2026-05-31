@@ -214,8 +214,8 @@ async def main():
 
     print(f"""
 {_line('=')}
- Pairs Arb Signal Tracker -- Bitunix
- ENTRY : corr>=0.60 | z>=1.5 | net>=0.15%
+ Sniper Pairs Arb -- Bitunix
+ ENTRY : corr>=0.72 | z>=2.0 | hl<=96h
  EXIT  : z<{Z_EXIT} OR after {TIMEOUT_HOURS}h
  NO orders placed -- display only
 {_line('=')}
@@ -292,15 +292,23 @@ async def main():
 
                 # show open signals status with live z
                 if _open_signals:
-                    print(f"\n Open signals: {len(_open_signals)}")
+                    print(f"\n{_line('=')}")
+                    print(f" Open signals: {len(_open_signals)}"
+                          f"  [{time.strftime('%H:%M:%S')}]")
+                    print(_line("-"))
                     z_map = await _z_now_all(client)
                     for s in _open_signals:
-                        z_now = z_map.get(id(s), s.entry_z)
-                        conv  = abs(z_now) < abs(s.entry_z)
-                        tag   = "[<]" if conv else "[>]"
-                        print(f"  {s.sym_a}+{s.sym_b}")
-                        print(f"  in={s.entry_z:+.2f} now={z_now:+.2f} {tag}"
-                              f" {s.age_hours:.1f}h")
+                        z_now  = z_map.get(id(s), s.entry_z)
+                        delta  = z_now - s.entry_z
+                        conv   = abs(z_now) < abs(s.entry_z)
+                        arrow  = "v" if conv else "^"
+                        status = "CONV" if conv else "DIV "
+                        print(f"  {s.sym_a}")
+                        print(f"  +{s.sym_b}")
+                        print(f"  z: {s.entry_z:+.2f} -> {z_now:+.2f}"
+                              f"  ({delta:+.2f}) {arrow} {status}"
+                              f"  {s.age_hours:.1f}h")
+                        print(_line("-"))
 
             except Exception as e:
                 print(f" ERROR: {e}")
