@@ -23,8 +23,8 @@ from bitunix_scanner.arbitrage import (
 )
 from bitunix_scanner.signals import _fmt
 
-API_KEY    = os.getenv("BITUNIX_API_KEY",    "7bee3f4756a0dbc89ae152f34c2175ac")
-SECRET_KEY = os.getenv("BITUNIX_SECRET_KEY", "4e0a845778d49068297106a64cbcda61")
+API_KEY    = os.getenv("BITUNIX_API_KEY",    "68f0a1765f124bacb847afa8db78e480")
+SECRET_KEY = os.getenv("BITUNIX_SECRET_KEY", "159808597389a1cd1fc429f9f469209b")
 
 SCAN_INTERVAL  = 30      # ثانیه بین هر اسکن اولیه
 MONITOR_MINS   = 30      # دقیقه بین هر چک روی open signals

@@ -21,8 +21,8 @@ from bitunix_scanner.ict import (
 from bitunix_scanner.signals import _fmt
 from bitunix_scanner.alert_monitor import AlertMonitor, PriceAlert, _bar, _rank_label, TF_ALERT_ZONE
 
-API_KEY    = os.getenv("BITUNIX_API_KEY",    "7bee3f4756a0dbc89ae152f34c2175ac")
-SECRET_KEY = os.getenv("BITUNIX_SECRET_KEY", "4e0a845778d49068297106a64cbcda61")
+API_KEY    = os.getenv("BITUNIX_API_KEY",    "68f0a1765f124bacb847afa8db78e480")
+SECRET_KEY = os.getenv("BITUNIX_SECRET_KEY", "159808597389a1cd1fc429f9f469209b")
 
 TF_CFG = {
     "1w": dict(

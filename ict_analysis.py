@@ -22,8 +22,8 @@ from bitunix_scanner.ict import (
     _klines_to_df,
 )
 
-API_KEY    = "7bee3f4756a0dbc89ae152f34c2175ac"
-SECRET_KEY = "4e0a845778d49068297106a64cbcda61"
+API_KEY    = "68f0a1765f124bacb847afa8db78e480"
+SECRET_KEY = "159808597389a1cd1fc429f9f469209b"
 
 INTERVALS = ["1D", "4H", "1H", "15m", "5m", "3m"]
 MAP = {"1D": "1d", "4H": "4h", "1H": "1h", "15m": "15m", "5m": "5m", "3m": "3m"}

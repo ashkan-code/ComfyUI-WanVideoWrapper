@@ -120,8 +120,8 @@ class BitunixClient:
 
 
 if __name__ == "__main__":
-    API_KEY = "7bee3f4756a0dbc89ae152f34c2175ac"
-    SECRET_KEY = "4e0a845778d49068297106a64cbcda61"
+    API_KEY = "68f0a1765f124bacb847afa8db78e480"
+    SECRET_KEY = "159808597389a1cd1fc429f9f469209b"
 
     client = BitunixClient(API_KEY, SECRET_KEY)
 

@@ -39,8 +39,8 @@ from .scanner import run_scan
 from .signals import Signal, _fmt, format_summary
 from .spring_scanner import run_spring_scan
 
-API_KEY    = os.getenv("BITUNIX_API_KEY",    "7bee3f4756a0dbc89ae152f34c2175ac")
-SECRET_KEY = os.getenv("BITUNIX_SECRET_KEY", "4e0a845778d49068297106a64cbcda61")
+API_KEY    = os.getenv("BITUNIX_API_KEY",    "68f0a1765f124bacb847afa8db78e480")
+SECRET_KEY = os.getenv("BITUNIX_SECRET_KEY", "159808597389a1cd1fc429f9f469209b")
 
 RESCAN_WAIT       = 300    # seconds between scans
 ERROR_WAIT        = 60     # seconds after an unexpected error
