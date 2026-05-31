@@ -96,6 +96,32 @@
       <p class="api-note" id="apiNote">
         🆓 <strong>Groq رایگانه!</strong> برو <strong>console.groq.com</strong> — ایمیل بزن، API Key بگیر، اینجا بذار. تموم.
       </p>
+
+      <!-- Instagram Webhook -->
+      <div class="webhook-section">
+        <div class="webhook-header">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#e1306c" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
+          <span>Instagram Auto-Post (Make.com Webhook)</span>
+          <span class="webhook-status-dot" id="webhookStatusDot"></span>
+        </div>
+        <div class="webhook-input-row">
+          <input type="text" id="webhookUrlInput" class="api-input" placeholder="https://hook.make.com/your-webhook-url" />
+          <button class="btn-save-api" id="saveWebhookBtn">Save</button>
+          <button class="btn-test-webhook" id="testWebhookBtn">Test</button>
+        </div>
+        <details class="webhook-guide">
+          <summary>📖 How to set up Make.com (5 minutes, free)</summary>
+          <ol class="webhook-steps">
+            <li>Go to <strong>make.com</strong> → sign up free (no credit card)</li>
+            <li>Click <strong>+ Create a new scenario</strong></li>
+            <li>Add module: <strong>Webhooks → Custom webhook</strong> → Copy the URL → paste it above</li>
+            <li>Add next module: <strong>Instagram for Business → Create a Photo/Video post</strong></li>
+            <li>Map the fields: Caption = <code>{{1.caption}}</code>, Hashtags = <code>{{1.hashtags}}</code></li>
+            <li>Turn the scenario <strong>ON</strong> → Save → Done ✅</li>
+          </ol>
+          <p class="webhook-note">After this, every time you click "Post to Instagram" in the queue, it fires automatically.</p>
+        </details>
+      </div>
     </div>
   </div>
 

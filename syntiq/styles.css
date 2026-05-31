@@ -295,6 +295,75 @@ body {
   line-height: 1.5;
 }
 
+/* Webhook section */
+.webhook-section {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255,255,255,0.07);
+}
+.webhook-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+}
+.webhook-status-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.15);
+  margin-left: auto;
+  transition: background 0.3s;
+}
+.webhook-input-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.btn-test-webhook {
+  background: rgba(225,48,108,0.12);
+  border: 1px solid rgba(225,48,108,0.25);
+  color: #f9a8d4;
+  border-radius: 8px;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s;
+}
+.btn-test-webhook:hover { background: rgba(225,48,108,0.2); }
+.webhook-guide {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 6px;
+}
+.webhook-guide summary {
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-weight: 600;
+  user-select: none;
+  padding: 4px 0;
+}
+.webhook-steps {
+  margin: 8px 0 4px 16px;
+  line-height: 2;
+  color: var(--text-secondary);
+}
+.webhook-steps code {
+  background: rgba(255,255,255,0.07);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 11px;
+}
+.webhook-note {
+  color: rgba(34,197,94,0.8);
+  font-size: 11px;
+  margin-top: 6px;
+}
+
 /* ---- Main Content ---- */
 .main-content {
   position: relative;
@@ -2398,6 +2467,23 @@ body {
   text-overflow: ellipsis;
   max-width: 300px;
 }
+.done-card-btns { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+
+.btn-done-ig {
+  background: linear-gradient(135deg, #f9a8d4, #e1306c);
+  border: none;
+  color: #fff;
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  white-space: nowrap;
+}
+.btn-done-ig:hover { opacity: 0.85; }
+.btn-done-ig:disabled { opacity: 0.5; cursor: not-allowed; }
+
 .btn-done-copy {
   background: none;
   border: 1px solid rgba(34,197,94,0.2);

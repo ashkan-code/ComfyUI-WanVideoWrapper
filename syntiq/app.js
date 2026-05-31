@@ -6,6 +6,7 @@
 // ---- State ----
 const state = {
   apiKey: localStorage.getItem('syntiq_api_key') || '',
+  webhookUrl: localStorage.getItem('syntiq_webhook_url') || '',
   provider: localStorage.getItem('syntiq_provider') || 'groq',
   currentAgent: 'nova',
   history: {
@@ -131,6 +132,47 @@ function setupApiPanel() {
   });
 
   input.addEventListener('keydown', e => { if (e.key === 'Enter') saveBtn.click(); });
+
+  // Webhook setup
+  const webhookInput = $('webhookUrlInput');
+  if (state.webhookUrl) { webhookInput.value = state.webhookUrl; updateWebhookDot(true); }
+
+  $('saveWebhookBtn').addEventListener('click', () => {
+    const url = webhookInput.value.trim();
+    state.webhookUrl = url;
+    localStorage.setItem('syntiq_webhook_url', url);
+    updateWebhookDot(!!url);
+    showToast(url ? 'Webhook URL saved!' : 'Webhook cleared');
+  });
+
+  $('testWebhookBtn').addEventListener('click', async () => {
+    const url = $('webhookUrlInput').value.trim();
+    if (!url) { showToast('Paste a webhook URL first', 'error'); return; }
+    const btn = $('testWebhookBtn');
+    btn.textContent = '...';
+    btn.disabled = true;
+    try {
+      await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ test: true, source: 'Syntiq AI Dashboard', caption: 'Test post from Syntiq ✅', hashtags: '#syntiq #aiagency #test', type: 'test' })
+      });
+      showToast('Test sent to Make.com! Check your scenario.');
+      updateWebhookDot(true);
+    } catch (e) {
+      showToast('Could not reach webhook — check the URL', 'error');
+    } finally {
+      btn.textContent = 'Test';
+      btn.disabled = false;
+    }
+  });
+}
+
+function updateWebhookDot(active) {
+  const dot = $('webhookStatusDot');
+  if (!dot) return;
+  dot.style.background = active ? '#22c55e' : 'rgba(255,255,255,0.2)';
+  dot.title = active ? 'Webhook configured' : 'No webhook set';
 }
 
 // ---- Provider Tabs ----
@@ -2103,9 +2145,12 @@ function renderMissionQueue() {
     }
   });
   done.forEach(item => {
-    document.querySelector(`[data-done-id="${item.id}"]`)?.addEventListener('click', () => {
+    const card = document.querySelector(`[data-done-id="${item.id}"].btn-done-copy`);
+    card?.addEventListener('click', () => {
       navigator.clipboard.writeText(item.content).then(() => showToast('Copied!'));
     });
+    const igBtn = document.querySelector(`[data-done-id="${item.id}"].btn-done-ig`);
+    igBtn?.addEventListener('click', () => postToInstagram(item));
   });
 }
 
@@ -2150,6 +2195,10 @@ function renderQueueCard(item) {
 function renderDoneCard(item) {
   const color = agentColors[item.agent] || '#888';
   const preview = item.content.slice(0, 60).replace(/\n/g, ' ');
+  const canPost = ['nova', 'tube'].includes(item.agent) && state.webhookUrl;
+  const igBtn = canPost
+    ? `<button class="btn-done-ig" data-done-id="${item.id}" title="Post to Instagram via Make.com">📱 Post</button>`
+    : '';
   return `
     <div class="done-card">
       <div class="done-card-left">
@@ -2159,7 +2208,10 @@ function renderDoneCard(item) {
           <div class="done-card-preview">${escapeHtml(preview)}...</div>
         </div>
       </div>
-      <button class="btn-done-copy" data-done-id="${item.id}">Copy</button>
+      <div class="done-card-btns">
+        ${igBtn}
+        <button class="btn-done-copy" data-done-id="${item.id}">Copy</button>
+      </div>
     </div>`;
 }
 
@@ -2261,6 +2313,52 @@ function copyAllApproved() {
   navigator.clipboard.writeText(text)
     .then(() => showToast(`Copied ${approved.length} items to clipboard!`))
     .catch(() => showToast('Copy failed — try Download Pack instead', 'error'));
+}
+
+async function postToInstagram(item) {
+  if (!state.webhookUrl) {
+    showToast('Set your Make.com webhook URL in API Settings first', 'error');
+    $('apiPanel').classList.add('open');
+    return;
+  }
+
+  // Extract caption and hashtags from content
+  const captionMatch = item.content.match(/##\s*(?:CAPTION|INSTAGRAM CAPTION|CAPTION FOR INSTAGRAM)\s*([\s\S]*?)(?=##|$)/i);
+  const hashMatch = item.content.match(/##\s*HASHTAGS?\s*([\s\S]*?)(?=##|$)/i);
+  const timeMatch = item.content.match(/##\s*BEST TIME[S\s]*(?:TO POST)?\s*([\s\S]*?)(?=##|$)/i);
+
+  const caption = captionMatch ? captionMatch[1].trim() : item.content.slice(0, 400);
+  const hashtags = hashMatch ? (hashMatch[1].match(/#\w+/g) || []).join(' ') : '';
+  const bestTime = timeMatch ? timeMatch[1].trim().slice(0, 120) : '';
+
+  const payload = {
+    source: 'Syntiq AI Dashboard',
+    agent: item.agent,
+    label: item.label,
+    type: item.type,
+    caption,
+    hashtags,
+    full_caption: caption + (hashtags ? '\n\n' + hashtags : ''),
+    best_time: bestTime,
+    timestamp: new Date().toISOString(),
+  };
+
+  const btn = document.querySelector(`[data-done-id="${item.id}"].btn-done-ig`);
+  if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
+
+  try {
+    const res = await fetch(state.webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok && res.status !== 200) throw new Error('Webhook returned ' + res.status);
+    showToast('📱 Sent to Make.com → Instagram!');
+    if (btn) { btn.textContent = '✅ Sent'; btn.style.background = 'rgba(34,197,94,0.2)'; btn.style.color = '#22c55e'; }
+  } catch (e) {
+    showToast('Webhook failed: ' + e.message, 'error');
+    if (btn) { btn.textContent = '📱 Post'; btn.disabled = false; }
+  }
 }
 
 function updateMissionStats() {
