@@ -1,0 +1,1446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Syntiq AI — Learn Web Dev & AI Tools | syntiq.ai</title>
+  <meta name="description" content="Syntiq AI teaches beginners how to build websites and use AI tools — through Ruth, your personal instructor. Free lessons on YouTube. Pro courses available." />
+  <meta name="keywords" content="learn web development, AI tools for beginners, build a website, no-code, coding bootcamp, Ruth Syntiq" />
+  <meta name="author" content="Syntiq AI" />
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="Syntiq AI — Learn Web Dev & AI Tools" />
+  <meta property="og:description" content="Learn to build websites and use AI tools with Ruth — warm, friendly, and designed for beginners." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://syntiq.ai" />
+  <meta property="og:image" content="https://syntiq.ai/og-image.png" />
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:site" content="@syntiqai" />
+  <meta name="twitter:title" content="Syntiq AI — Learn Web Dev & AI Tools" />
+
+  <!-- Security Headers (browser-level) -->
+  <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+  <meta http-equiv="X-Frame-Options" content="DENY" />
+  <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin" />
+  <meta http-equiv="Permissions-Policy" content="camera=(), microphone=(), geolocation=()" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://formspree.io https://hook.make.com; frame-ancestors 'none';" />
+
+  <!-- Canonical -->
+  <link rel="canonical" href="https://syntiq.ai" />
+
+  <!-- Favicon (SVG inline) -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0%25' stop-color='%238b5cf6'/><stop offset='100%25' stop-color='%23f472b6'/></linearGradient></defs><circle cx='20' cy='20' r='19' fill='url(%23g)'/><text x='20' y='26' font-family='Arial,sans-serif' font-size='18' font-weight='900' fill='white' text-anchor='middle'>S</text></svg>" />
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- Structured Data (SEO) -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "EducationalOrganization",
+    "name": "Syntiq AI",
+    "url": "https://syntiq.ai",
+    "description": "Syntiq AI teaches web development and AI tools to American beginners through engaging online courses.",
+    "sameAs": ["https://instagram.com/syntiq.ai", "https://youtube.com/@syntiqai"],
+    "founder": { "@type": "Person", "name": "Ruth", "jobTitle": "Lead Instructor" },
+    "offers": [
+      { "@type": "Course", "name": "Web Dev Starter Pack", "price": "97", "priceCurrency": "USD" },
+      { "@type": "Course", "name": "Full-Stack Pro Pack", "price": "297", "priceCurrency": "USD" },
+      { "@type": "Course", "name": "AI Agency Elite", "price": "997", "priceCurrency": "USD" }
+    ]
+  }
+  </script>
+
+  <style>
+    /* =================== RESET & BASE =================== */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; font-size: 16px; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #080810;
+      color: #e2e8f0;
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+    a { color: inherit; text-decoration: none; }
+    img { max-width: 100%; display: block; }
+    button { cursor: pointer; font-family: inherit; }
+
+    /* =================== VARIABLES =================== */
+    :root {
+      --brand-purple: #8b5cf6;
+      --brand-cyan: #06b6d4;
+      --brand-pink: #f472b6;
+      --brand-orange: #f97316;
+      --bg: #080810;
+      --bg2: #0d0d1a;
+      --bg3: #111125;
+      --border: rgba(255,255,255,0.08);
+      --text-primary: #f1f5f9;
+      --text-secondary: #94a3b8;
+      --text-muted: #475569;
+      --radius: 16px;
+      --radius-sm: 10px;
+      --max-w: 1200px;
+      --shadow: 0 20px 60px rgba(0,0,0,0.4);
+    }
+
+    /* =================== UTILITIES =================== */
+    .container { max-width: var(--max-w); margin: 0 auto; padding: 0 24px; }
+    .gradient-text {
+      background: linear-gradient(135deg, var(--brand-purple), var(--brand-pink));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .section-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--brand-purple);
+      background: rgba(139,92,246,0.1);
+      border: 1px solid rgba(139,92,246,0.2);
+      padding: 6px 14px;
+      border-radius: 20px;
+      margin-bottom: 20px;
+    }
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: linear-gradient(135deg, var(--brand-purple), var(--brand-pink));
+      color: #fff;
+      font-weight: 700;
+      font-size: 15px;
+      padding: 14px 28px;
+      border-radius: 12px;
+      border: none;
+      transition: transform 0.2s, box-shadow 0.2s;
+      box-shadow: 0 4px 20px rgba(139,92,246,0.35);
+    }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(139,92,246,0.5); }
+    .btn-secondary {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255,255,255,0.05);
+      color: var(--text-primary);
+      font-weight: 600;
+      font-size: 15px;
+      padding: 14px 28px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      transition: background 0.2s, border-color 0.2s;
+    }
+    .btn-secondary:hover { background: rgba(255,255,255,0.09); border-color: rgba(255,255,255,0.15); }
+    .card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px;
+      transition: border-color 0.3s, transform 0.3s;
+    }
+    .card:hover { border-color: rgba(139,92,246,0.3); transform: translateY(-4px); }
+
+    /* =================== HEADER / NAV =================== */
+    .site-header {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 1000;
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      background: rgba(8,8,16,0.85);
+      border-bottom: 1px solid var(--border);
+      height: 68px;
+    }
+    .nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 68px;
+    }
+    .nav-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-family: 'Syne', sans-serif;
+      font-weight: 800;
+      font-size: 20px;
+    }
+    .nav-logo-mark {
+      width: 36px; height: 36px;
+      background: linear-gradient(135deg, var(--brand-purple), var(--brand-pink));
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      font-weight: 900;
+      color: #fff;
+      flex-shrink: 0;
+    }
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 32px;
+      list-style: none;
+    }
+    .nav-links a {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--text-primary); }
+    .nav-cta { display: flex; gap: 10px; }
+    .hamburger { display: none; flex-direction: column; gap: 5px; cursor: pointer; }
+    .hamburger span { width: 22px; height: 2px; background: var(--text-secondary); border-radius: 2px; transition: 0.3s; }
+
+    /* =================== HERO =================== */
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      padding: 120px 0 80px;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero-bg {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+    .hero-glow-1 {
+      position: absolute;
+      width: 600px; height: 600px;
+      background: radial-gradient(circle, rgba(139,92,246,0.15), transparent 70%);
+      top: -100px; left: -100px;
+    }
+    .hero-glow-2 {
+      position: absolute;
+      width: 500px; height: 500px;
+      background: radial-gradient(circle, rgba(244,114,182,0.1), transparent 70%);
+      bottom: -50px; right: -100px;
+    }
+    .hero-inner {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 64px;
+      align-items: center;
+    }
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--brand-purple);
+      background: rgba(139,92,246,0.1);
+      border: 1px solid rgba(139,92,246,0.25);
+      padding: 6px 14px;
+      border-radius: 20px;
+      margin-bottom: 24px;
+    }
+    .hero-badge-dot {
+      width: 6px; height: 6px;
+      background: var(--brand-purple);
+      border-radius: 50%;
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(1.3)} }
+    .hero h1 {
+      font-family: 'Syne', sans-serif;
+      font-size: clamp(38px, 5vw, 64px);
+      font-weight: 800;
+      line-height: 1.1;
+      color: var(--text-primary);
+      margin-bottom: 24px;
+    }
+    .hero-sub {
+      font-size: 18px;
+      color: var(--text-secondary);
+      line-height: 1.7;
+      margin-bottom: 40px;
+      max-width: 520px;
+    }
+    .hero-actions { display: flex; gap: 14px; flex-wrap: wrap; }
+    .hero-stats {
+      display: flex;
+      gap: 32px;
+      margin-top: 48px;
+      padding-top: 32px;
+      border-top: 1px solid var(--border);
+    }
+    .hero-stat-val {
+      font-family: 'Syne', sans-serif;
+      font-size: 28px;
+      font-weight: 800;
+      color: var(--text-primary);
+    }
+    .hero-stat-label { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+
+    /* Hero visual */
+    .hero-visual {
+      position: relative;
+      display: flex;
+      justify-content: center;
+    }
+    .hero-card-main {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 24px;
+      width: 100%;
+      max-width: 420px;
+      box-shadow: var(--shadow);
+    }
+    .hero-card-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .ruth-avatar {
+      width: 44px; height: 44px;
+      background: linear-gradient(135deg, var(--brand-purple), var(--brand-pink));
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Syne', sans-serif;
+      font-size: 18px;
+      font-weight: 800;
+      color: #fff;
+      flex-shrink: 0;
+    }
+    .ruth-name-block .name { font-weight: 700; font-size: 15px; }
+    .ruth-name-block .sub { font-size: 12px; color: var(--text-muted); }
+    .hero-code-block {
+      background: #050510;
+      border-radius: 12px;
+      padding: 16px;
+      font-family: 'JetBrains Mono', 'Fira Code', monospace;
+      font-size: 13px;
+      line-height: 1.8;
+      margin-bottom: 16px;
+      border: 1px solid rgba(139,92,246,0.15);
+    }
+    .code-line { display: block; }
+    .code-kw { color: #c084fc; }
+    .code-fn { color: #60a5fa; }
+    .code-str { color: #86efac; }
+    .code-comment { color: var(--text-muted); }
+    .hero-card-progress {
+      background: rgba(139,92,246,0.08);
+      border-radius: 8px;
+      padding: 12px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 13px;
+    }
+    .progress-bar-wrap { flex: 1; height: 4px; background: rgba(255,255,255,0.08); border-radius: 4px; margin: 0 12px; }
+    .progress-bar-fill { height: 100%; background: linear-gradient(90deg, var(--brand-purple), var(--brand-pink)); border-radius: 4px; animation: progressFill 2s ease-in-out infinite alternate; }
+    @keyframes progressFill { from{width:60%} to{width:90%} }
+    .floating-pill {
+      position: absolute;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 8px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      box-shadow: var(--shadow);
+      animation: float 3s ease-in-out infinite;
+    }
+    .pill-1 { top: -20px; right: 20px; animation-delay: 0s; }
+    .pill-2 { bottom: 40px; left: -20px; animation-delay: 1.5s; }
+    @keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
+
+    /* =================== SERVICES =================== */
+    .services { padding: 100px 0; background: var(--bg); }
+    .services-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+      margin-top: 48px;
+    }
+    .service-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px;
+      transition: border-color 0.3s, transform 0.3s, box-shadow 0.3s;
+    }
+    .service-card:hover {
+      border-color: rgba(139,92,246,0.35);
+      transform: translateY(-6px);
+      box-shadow: 0 20px 40px rgba(139,92,246,0.1);
+    }
+    .service-icon {
+      width: 48px; height: 48px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      margin-bottom: 18px;
+    }
+    .service-card h3 { font-family: 'Syne', sans-serif; font-size: 18px; font-weight: 700; margin-bottom: 10px; }
+    .service-card p { font-size: 14px; color: var(--text-secondary); line-height: 1.65; }
+
+    /* =================== RUTH SECTION =================== */
+    .ruth-section {
+      padding: 100px 0;
+      background: var(--bg2);
+      position: relative;
+      overflow: hidden;
+    }
+    .ruth-inner {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 80px;
+      align-items: center;
+    }
+    .ruth-profile {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .ruth-avatar-lg {
+      width: 100px; height: 100px;
+      background: linear-gradient(135deg, var(--brand-purple), var(--brand-pink));
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Syne', sans-serif;
+      font-size: 40px;
+      font-weight: 800;
+      color: #fff;
+      box-shadow: 0 0 40px rgba(139,92,246,0.4);
+      border: 3px solid rgba(139,92,246,0.3);
+    }
+    .ruth-section h2 { font-family: 'Syne', sans-serif; font-size: 38px; font-weight: 800; line-height: 1.15; }
+    .ruth-section p { font-size: 16px; color: var(--text-secondary); line-height: 1.75; }
+    .ruth-traits { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+    .ruth-trait {
+      font-size: 13px; font-weight: 600;
+      padding: 6px 14px;
+      border-radius: 20px;
+      background: rgba(139,92,246,0.1);
+      border: 1px solid rgba(139,92,246,0.2);
+      color: #c4b5fd;
+    }
+    .ruth-socials { display: flex; gap: 12px; margin-top: 8px; }
+    .social-link {
+      display: flex; align-items: center; gap: 7px;
+      font-size: 13px; font-weight: 600;
+      padding: 9px 16px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      background: var(--bg3);
+      transition: border-color 0.2s, color 0.2s;
+    }
+    .social-link:hover { border-color: var(--brand-purple); color: var(--text-primary); }
+
+    /* =================== BLOG =================== */
+    .blog-section { padding: 100px 0; background: var(--bg); }
+    .section-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 48px; flex-wrap: wrap; gap: 16px; }
+    .blog-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+    }
+    .blog-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      transition: transform 0.3s, border-color 0.3s;
+      cursor: pointer;
+    }
+    .blog-card:hover { transform: translateY(-6px); border-color: rgba(139,92,246,0.3); }
+    .blog-card-thumb {
+      height: 180px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 48px;
+    }
+    .blog-card-body { padding: 22px; }
+    .blog-tag {
+      font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+      padding: 3px 10px; border-radius: 20px; margin-bottom: 12px; display: inline-block;
+    }
+    .blog-card h3 { font-family: 'Syne', sans-serif; font-size: 16px; font-weight: 700; line-height: 1.4; margin-bottom: 10px; }
+    .blog-card p { font-size: 13px; color: var(--text-secondary); line-height: 1.6; margin-bottom: 16px; }
+    .blog-card-footer { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--text-muted); }
+    .read-more { color: var(--brand-purple); font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 4px; }
+
+    /* =================== PACKAGES =================== */
+    .packages { padding: 100px 0; background: var(--bg2); }
+    .packages-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+      margin-top: 48px;
+    }
+    .package-card {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 32px;
+      position: relative;
+      transition: transform 0.3s, box-shadow 0.3s;
+    }
+    .package-card:hover { transform: translateY(-6px); box-shadow: var(--shadow); }
+    .package-card.popular {
+      border-color: rgba(139,92,246,0.5);
+      background: linear-gradient(160deg, rgba(139,92,246,0.08), var(--bg3));
+      transform: scale(1.03);
+    }
+    .package-card.popular:hover { transform: scale(1.03) translateY(-6px); }
+    .popular-badge {
+      position: absolute;
+      top: -14px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: linear-gradient(135deg, var(--brand-purple), var(--brand-pink));
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 4px 16px;
+      border-radius: 20px;
+      white-space: nowrap;
+    }
+    .package-name { font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 700; margin-bottom: 6px; }
+    .package-desc { font-size: 13px; color: var(--text-secondary); margin-bottom: 24px; line-height: 1.5; }
+    .package-price {
+      margin-bottom: 28px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid var(--border);
+    }
+    .price-amount {
+      font-family: 'Syne', sans-serif;
+      font-size: 48px;
+      font-weight: 800;
+      color: var(--text-primary);
+    }
+    .price-period { font-size: 14px; color: var(--text-muted); }
+    .price-note { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+    .package-features { list-style: none; display: flex; flex-direction: column; gap: 12px; margin-bottom: 28px; }
+    .package-features li {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      font-size: 14px;
+      color: var(--text-secondary);
+    }
+    .feature-check {
+      width: 18px; height: 18px; border-radius: 50%; flex-shrink: 0; margin-top: 1px;
+      display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700;
+    }
+    .pkg-btn {
+      width: 100%;
+      padding: 14px;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 700;
+      border: none;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .pkg-btn:hover { transform: translateY(-2px); }
+    .pkg-btn-primary {
+      background: linear-gradient(135deg, var(--brand-purple), var(--brand-pink));
+      color: #fff;
+      box-shadow: 0 4px 20px rgba(139,92,246,0.3);
+    }
+    .pkg-btn-primary:hover { box-shadow: 0 8px 32px rgba(139,92,246,0.5); }
+    .pkg-btn-secondary {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+    }
+    .pkg-btn-secondary:hover { background: rgba(255,255,255,0.1); }
+
+    /* =================== ORDER FORM =================== */
+    .order-section { padding: 100px 0; background: var(--bg); }
+    .order-inner {
+      display: grid;
+      grid-template-columns: 1fr 1.6fr;
+      gap: 64px;
+      align-items: start;
+    }
+    .order-info h2 { font-family: 'Syne', sans-serif; font-size: 36px; font-weight: 800; line-height: 1.2; margin-bottom: 16px; }
+    .order-info p { font-size: 16px; color: var(--text-secondary); line-height: 1.7; margin-bottom: 28px; }
+    .order-trust { display: flex; flex-direction: column; gap: 14px; }
+    .trust-item {
+      display: flex; align-items: center; gap: 12px;
+      font-size: 14px; color: var(--text-secondary);
+    }
+    .trust-icon {
+      width: 36px; height: 36px; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 17px; flex-shrink: 0;
+    }
+    .order-form-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 36px;
+    }
+    .form-title { font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 700; margin-bottom: 28px; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .form-group { display: flex; flex-direction: column; gap: 7px; margin-bottom: 16px; }
+    .form-label { font-size: 13px; font-weight: 600; color: var(--text-secondary); }
+    .form-input, .form-select, .form-textarea {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-size: 14px;
+      color: var(--text-primary);
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.2s, background 0.2s;
+      width: 100%;
+    }
+    .form-input:focus, .form-select:focus, .form-textarea:focus {
+      border-color: rgba(139,92,246,0.5);
+      background: rgba(139,92,246,0.04);
+    }
+    .form-select option { background: #111125; }
+    .form-textarea { resize: vertical; min-height: 110px; }
+    .form-input::placeholder, .form-textarea::placeholder { color: var(--text-muted); }
+    /* Honeypot — hidden from humans, traps bots */
+    .hp-field { display: none !important; visibility: hidden; position: absolute; left: -9999px; }
+    .form-submit {
+      width: 100%;
+      padding: 15px;
+      font-size: 16px;
+      font-weight: 700;
+      border: none;
+      border-radius: 12px;
+      background: linear-gradient(135deg, var(--brand-purple), var(--brand-pink));
+      color: #fff;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+      box-shadow: 0 4px 20px rgba(139,92,246,0.35);
+      margin-top: 8px;
+    }
+    .form-submit:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(139,92,246,0.5); }
+    .form-submit:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+    .form-success {
+      display: none;
+      text-align: center;
+      padding: 32px;
+      color: #86efac;
+    }
+    .form-success-icon { font-size: 48px; margin-bottom: 16px; }
+    .form-success h3 { font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 700; margin-bottom: 10px; color: var(--text-primary); }
+    .form-success p { font-size: 14px; color: var(--text-secondary); }
+
+    /* =================== FAQ =================== */
+    .faq-section { padding: 100px 0; background: var(--bg2); }
+    .faq-list { max-width: 760px; margin: 48px auto 0; display: flex; flex-direction: column; gap: 12px; }
+    .faq-item {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+    }
+    .faq-q {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 18px 22px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 15px;
+      user-select: none;
+      transition: color 0.2s;
+      gap: 12px;
+    }
+    .faq-q:hover { color: var(--brand-purple); }
+    .faq-chevron { flex-shrink: 0; transition: transform 0.3s; color: var(--text-muted); }
+    .faq-item.open .faq-chevron { transform: rotate(180deg); }
+    .faq-a {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.4s ease;
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.7;
+    }
+    .faq-a-inner { padding: 0 22px 20px; }
+    .faq-item.open .faq-a { max-height: 300px; }
+
+    /* =================== FOOTER =================== */
+    .site-footer {
+      padding: 64px 0 32px;
+      background: #050510;
+      border-top: 1px solid var(--border);
+    }
+    .footer-top {
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr 1fr;
+      gap: 48px;
+      margin-bottom: 48px;
+    }
+    .footer-brand p { font-size: 14px; color: var(--text-muted); line-height: 1.7; margin: 12px 0 20px; }
+    .footer-col h4 { font-family: 'Syne', sans-serif; font-size: 14px; font-weight: 700; margin-bottom: 16px; color: var(--text-primary); }
+    .footer-col ul { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+    .footer-col li a { font-size: 13px; color: var(--text-muted); transition: color 0.2s; }
+    .footer-col li a:hover { color: var(--text-secondary); }
+    .footer-socials { display: flex; gap: 10px; }
+    .footer-social-btn {
+      width: 36px; height: 36px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px;
+      transition: background 0.2s, border-color 0.2s;
+    }
+    .footer-social-btn:hover { background: rgba(139,92,246,0.1); border-color: rgba(139,92,246,0.3); }
+    .footer-bottom {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+      font-size: 13px;
+      color: var(--text-muted);
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .security-badges { display: flex; gap: 12px; }
+    .sec-badge {
+      display: flex; align-items: center; gap: 5px;
+      font-size: 11px; font-weight: 600;
+      color: var(--text-muted);
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      padding: 4px 10px;
+      border-radius: 6px;
+    }
+
+    /* =================== SCROLL REVEAL =================== */
+    .reveal { opacity: 0; transform: translateY(30px); transition: opacity 0.7s ease, transform 0.7s ease; }
+    .reveal.visible { opacity: 1; transform: translateY(0); }
+
+    /* =================== TOAST =================== */
+    .toast {
+      position: fixed;
+      bottom: 28px;
+      left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: var(--bg3);
+      border: 1px solid rgba(34,197,94,0.3);
+      color: #86efac;
+      padding: 12px 24px;
+      border-radius: 50px;
+      font-size: 14px;
+      font-weight: 600;
+      z-index: 9999;
+      transition: transform 0.35s cubic-bezier(0.175,0.885,0.32,1.275);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .toast.show { transform: translateX(-50%) translateY(0); }
+    .toast.error { border-color: rgba(239,68,68,0.3); color: #fca5a5; }
+
+    /* =================== RESPONSIVE =================== */
+    @media (max-width: 1024px) {
+      .services-grid, .blog-grid, .packages-grid { grid-template-columns: repeat(2, 1fr); }
+      .footer-top { grid-template-columns: 1fr 1fr; gap: 32px; }
+    }
+    @media (max-width: 768px) {
+      .hero-inner { grid-template-columns: 1fr; }
+      .hero-visual { display: none; }
+      .ruth-inner, .order-inner { grid-template-columns: 1fr; }
+      .services-grid, .blog-grid, .packages-grid { grid-template-columns: 1fr; }
+      .nav-links { display: none; }
+      .hamburger { display: flex; }
+      .package-card.popular { transform: scale(1); }
+      .footer-top { grid-template-columns: 1fr; }
+      .form-row { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- =================== HEADER =================== -->
+  <header class="site-header">
+    <div class="container">
+      <nav class="nav">
+        <a href="#" class="nav-logo">
+          <div class="nav-logo-mark">S</div>
+          <span>Syntiq<span class="gradient-text">AI</span></span>
+        </a>
+        <ul class="nav-links">
+          <li><a href="#services">Services</a></li>
+          <li><a href="#learn">Learn with Ruth</a></li>
+          <li><a href="#blog">Blog</a></li>
+          <li><a href="#packages">Packages</a></li>
+          <li><a href="#order">Contact</a></li>
+        </ul>
+        <div class="nav-cta">
+          <a href="#packages" class="btn-secondary" style="padding:10px 18px;font-size:14px">See Packages</a>
+          <a href="#order" class="btn-primary" style="padding:10px 18px;font-size:14px">Get Started</a>
+        </div>
+        <div class="hamburger" id="hamburger" aria-label="Menu" role="button" tabindex="0">
+          <span></span><span></span><span></span>
+        </div>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Mobile nav -->
+  <div id="mobileNav" style="display:none;position:fixed;top:68px;left:0;right:0;background:rgba(8,8,16,0.98);z-index:999;border-bottom:1px solid rgba(255,255,255,0.08);padding:20px 24px;display:flex;flex-direction:column;gap:16px">
+    <a href="#services" onclick="closeMobileNav()" style="font-size:16px;font-weight:600;color:#e2e8f0">Services</a>
+    <a href="#learn" onclick="closeMobileNav()" style="font-size:16px;font-weight:600;color:#e2e8f0">Learn with Ruth</a>
+    <a href="#blog" onclick="closeMobileNav()" style="font-size:16px;font-weight:600;color:#e2e8f0">Blog</a>
+    <a href="#packages" onclick="closeMobileNav()" style="font-size:16px;font-weight:600;color:#e2e8f0">Packages</a>
+    <a href="#order" onclick="closeMobileNav()" style="font-size:16px;font-weight:600;color:#e2e8f0">Order Now</a>
+  </div>
+
+  <main>
+    <!-- =================== HERO =================== -->
+    <section class="hero" id="hero">
+      <div class="hero-bg">
+        <div class="hero-glow-1"></div>
+        <div class="hero-glow-2"></div>
+      </div>
+      <div class="container">
+        <div class="hero-inner">
+          <div class="hero-content reveal">
+            <div class="hero-badge">
+              <span class="hero-badge-dot"></span>
+              Powered by AI · Designed for Humans
+            </div>
+            <h1>Learn to Build the <span class="gradient-text">Web with AI</span></h1>
+            <p class="hero-sub">
+              Syntiq AI teaches you web development and the latest AI tools — step by step, from scratch. No degree required. No fluff. Just skills that actually get you hired.
+            </p>
+            <div class="hero-actions">
+              <a href="#packages" class="btn-primary">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                Start Learning
+              </a>
+              <a href="https://youtube.com/@syntiqai" target="_blank" rel="noopener" class="btn-secondary">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M22.54 6.42a2.78 2.78 0 0 0-1.95-1.96C18.88 4 12 4 12 4s-6.88 0-8.59.46a2.78 2.78 0 0 0-1.95 1.96A29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58 2.78 2.78 0 0 0 1.95 1.95C5.12 20 12 20 12 20s6.88 0 8.59-.47a2.78 2.78 0 0 0 1.95-1.95A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58z"/></svg>
+                Free YouTube Lessons
+              </a>
+            </div>
+            <div class="hero-stats">
+              <div>
+                <div class="hero-stat-val">500+</div>
+                <div class="hero-stat-label">Students Enrolled</div>
+              </div>
+              <div>
+                <div class="hero-stat-val">4.9★</div>
+                <div class="hero-stat-label">Average Rating</div>
+              </div>
+              <div>
+                <div class="hero-stat-val">100%</div>
+                <div class="hero-stat-label">Online & Self-Paced</div>
+              </div>
+            </div>
+          </div>
+          <div class="hero-visual reveal" style="transition-delay:0.15s">
+            <div class="hero-card-main">
+              <div class="hero-card-header">
+                <div class="ruth-avatar">R</div>
+                <div class="ruth-name-block">
+                  <div class="name">Ruth · Syntiq AI</div>
+                  <div class="sub">Your personal web dev instructor</div>
+                </div>
+              </div>
+              <div class="hero-code-block">
+                <span class="code-line"><span class="code-comment">// Your first website in 60 min</span></span>
+                <span class="code-line"><span class="code-kw">const</span> <span class="code-fn">website</span> = <span class="code-fn">build</span>({</span>
+                <span class="code-line">&nbsp;&nbsp;design: <span class="code-str">"stunning"</span>,</span>
+                <span class="code-line">&nbsp;&nbsp;ai: <span class="code-str">"powered"</span>,</span>
+                <span class="code-line">&nbsp;&nbsp;you: <span class="code-str">"ready"</span>,</span>
+                <span class="code-line">});</span>
+                <span class="code-line"></span>
+                <span class="code-line"><span class="code-comment">// No prior experience needed ✓</span></span>
+              </div>
+              <div class="hero-card-progress">
+                <span style="font-size:13px">Module 3: Building with AI</span>
+                <div class="progress-bar-wrap"><div class="progress-bar-fill"></div></div>
+                <span style="font-size:12px;color:#8b5cf6;font-weight:700">73%</span>
+              </div>
+            </div>
+            <div class="floating-pill pill-1">🎓 500+ Students</div>
+            <div class="floating-pill pill-2">🤖 AI-Powered</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =================== SERVICES =================== -->
+    <section class="services" id="services">
+      <div class="container">
+        <div style="text-align:center" class="reveal">
+          <div class="section-label">⚡ What We Offer</div>
+          <h2 style="font-family:'Syne',sans-serif;font-size:clamp(28px,4vw,44px);font-weight:800;margin-bottom:16px">Everything You Need to Go <span class="gradient-text">From Zero to Pro</span></h2>
+          <p style="color:var(--text-secondary);font-size:16px;max-width:560px;margin:0 auto">From beginner-friendly lessons to advanced AI automation — Syntiq covers the full stack.</p>
+        </div>
+        <div class="services-grid">
+          <div class="service-card reveal">
+            <div class="service-icon" style="background:rgba(139,92,246,0.1)">🌐</div>
+            <h3>Web Development</h3>
+            <p>HTML, CSS, JavaScript — the complete foundation. Learn to build real websites from scratch, fast.</p>
+          </div>
+          <div class="service-card reveal" style="transition-delay:0.08s">
+            <div class="service-icon" style="background:rgba(6,182,212,0.1)">🤖</div>
+            <h3>AI Tools Mastery</h3>
+            <p>ChatGPT, Claude, Midjourney, GitHub Copilot — master the AI tools that 10x your output.</p>
+          </div>
+          <div class="service-card reveal" style="transition-delay:0.16s">
+            <div class="service-icon" style="background:rgba(244,114,182,0.1)">📱</div>
+            <h3>No-Code Platforms</h3>
+            <p>Webflow, Framer, Bubble — build powerful apps without writing a single line of code.</p>
+          </div>
+          <div class="service-card reveal" style="transition-delay:0.08s">
+            <div class="service-icon" style="background:rgba(249,115,22,0.1)">⚡</div>
+            <h3>Automation & Workflows</h3>
+            <p>Make.com, Zapier, n8n — automate your business and save hours every week on autopilot.</p>
+          </div>
+          <div class="service-card reveal" style="transition-delay:0.16s">
+            <div class="service-icon" style="background:rgba(34,197,94,0.1)">📈</div>
+            <h3>Content & Marketing</h3>
+            <p>Use AI to create viral Instagram Reels, YouTube scripts, SEO articles — consistently and fast.</p>
+          </div>
+          <div class="service-card reveal" style="transition-delay:0.24s">
+            <div class="service-icon" style="background:rgba(234,179,8,0.1)">🚀</div>
+            <h3>Freelance Launch Kit</h3>
+            <p>Portfolio, cold emails, pricing, client acquisition — everything you need to get your first paid client.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =================== RUTH SECTION =================== -->
+    <section class="ruth-section" id="learn">
+      <div class="container">
+        <div class="ruth-inner">
+          <div class="ruth-profile reveal">
+            <div class="ruth-avatar-lg">R</div>
+            <div class="section-label">👩‍💻 Meet Your Instructor</div>
+            <h2>Hi, I'm <span class="gradient-text">Ruth</span> — and I'll make this easy for you.</h2>
+            <p>I'm your instructor at Syntiq AI. I remember what it felt like to have no idea where to start — so I built the course I wished existed. No jargon, no gatekeeping. Just clear, friendly lessons that make you feel capable from day one.</p>
+            <div class="ruth-traits">
+              <span class="ruth-trait">Warm</span>
+              <span class="ruth-trait">Educational</span>
+              <span class="ruth-trait">American English</span>
+              <span class="ruth-trait">Beginner-Friendly</span>
+              <span class="ruth-trait">Web Dev + AI Tools</span>
+            </div>
+            <div class="ruth-socials">
+              <a href="https://instagram.com/syntiq.ai" target="_blank" rel="noopener" class="social-link">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
+                @syntiq.ai
+              </a>
+              <a href="https://youtube.com/@syntiqai" target="_blank" rel="noopener" class="social-link">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M22.54 6.42a2.78 2.78 0 0 0-1.95-1.96C18.88 4 12 4 12 4s-6.88 0-8.59.46a2.78 2.78 0 0 0-1.95 1.96A29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58 2.78 2.78 0 0 0 1.95 1.95C5.12 20 12 20 12 20s6.88 0 8.59-.47a2.78 2.78 0 0 0 1.95-1.95A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58z"/></svg>
+                YouTube Channel
+              </a>
+            </div>
+          </div>
+          <div class="reveal" style="transition-delay:0.15s">
+            <div style="display:flex;flex-direction:column;gap:16px">
+              <div class="card" style="cursor:default">
+                <div style="font-size:22px;margin-bottom:12px">🎓</div>
+                <h3 style="font-family:'Syne',sans-serif;font-size:16px;font-weight:700;margin-bottom:8px">Structured Learning Path</h3>
+                <p style="font-size:14px;color:var(--text-secondary);line-height:1.6">Every course is organized from absolute zero to deployment-ready. You always know exactly what to do next.</p>
+              </div>
+              <div class="card" style="cursor:default">
+                <div style="font-size:22px;margin-bottom:12px">💬</div>
+                <h3 style="font-family:'Syne',sans-serif;font-size:16px;font-weight:700;margin-bottom:8px">Community & Support</h3>
+                <p style="font-size:14px;color:var(--text-secondary);line-height:1.6">Join a community of American learners at the same level as you. Get answers, share wins, stay accountable.</p>
+              </div>
+              <div class="card" style="cursor:default">
+                <div style="font-size:22px;margin-bottom:12px">🏆</div>
+                <h3 style="font-family:'Syne',sans-serif;font-size:16px;font-weight:700;margin-bottom:8px">Real-World Projects</h3>
+                <p style="font-size:14px;color:var(--text-secondary);line-height:1.6">Every module ends with a real project you can add to your portfolio and show to clients.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =================== BLOG =================== -->
+    <section class="blog-section" id="blog">
+      <div class="container">
+        <div class="section-header reveal">
+          <div>
+            <div class="section-label">📝 Latest Articles</div>
+            <h2 style="font-family:'Syne',sans-serif;font-size:clamp(26px,3.5vw,40px);font-weight:800">AI Tools & Web Dev <span class="gradient-text">Resources</span></h2>
+          </div>
+          <a href="#blog" class="btn-secondary" style="padding:10px 18px;font-size:13px">View All Articles →</a>
+        </div>
+        <div class="blog-grid">
+          <article class="blog-card reveal" id="blog-1">
+            <div class="blog-card-thumb" style="background:linear-gradient(135deg,rgba(139,92,246,0.15),rgba(6,182,212,0.1))">🤖</div>
+            <div class="blog-card-body">
+              <span class="blog-tag" style="background:rgba(139,92,246,0.1);color:#c4b5fd">AI Tools</span>
+              <h3>Top 10 AI Tools Every Web Developer Must Know in 2025</h3>
+              <p>From GitHub Copilot to Claude — the AI tools that are changing how developers work and how fast they ship.</p>
+              <div class="blog-card-footer">
+                <span>Ruth · 8 min read</span>
+                <span class="read-more">Read →</span>
+              </div>
+            </div>
+          </article>
+          <article class="blog-card reveal" id="blog-2" style="transition-delay:0.1s">
+            <div class="blog-card-thumb" style="background:linear-gradient(135deg,rgba(244,114,182,0.12),rgba(249,115,22,0.1))">🌐</div>
+            <div class="blog-card-body">
+              <span class="blog-tag" style="background:rgba(244,114,182,0.1);color:#f9a8d4">Web Dev</span>
+              <h3>Build a Professional Website in 1 Hour — No Experience Needed</h3>
+              <p>A step-by-step beginner's guide using only free tools. You'll have a live website by the end of this article.</p>
+              <div class="blog-card-footer">
+                <span>Ruth · 12 min read</span>
+                <span class="read-more">Read →</span>
+              </div>
+            </div>
+          </article>
+          <article class="blog-card reveal" id="blog-3" style="transition-delay:0.2s">
+            <div class="blog-card-thumb" style="background:linear-gradient(135deg,rgba(34,197,94,0.12),rgba(6,182,212,0.1))">⚡</div>
+            <div class="blog-card-body">
+              <span class="blog-tag" style="background:rgba(34,197,94,0.1);color:#86efac">Automation</span>
+              <h3>How I Automated My Entire Business with Make.com (Free)</h3>
+              <p>The exact automations that saved me 20+ hours a week — email, social media, client onboarding, and more.</p>
+              <div class="blog-card-footer">
+                <span>Ruth · 10 min read</span>
+                <span class="read-more">Read →</span>
+              </div>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- =================== PACKAGES =================== -->
+    <section class="packages" id="packages">
+      <div class="container">
+        <div style="text-align:center" class="reveal">
+          <div class="section-label">🎓 Learning Packages</div>
+          <h2 style="font-family:'Syne',sans-serif;font-size:clamp(28px,4vw,44px);font-weight:800;margin-bottom:16px">Pick Your <span class="gradient-text">Learning Path</span></h2>
+          <p style="color:var(--text-secondary);font-size:16px;max-width:520px;margin:0 auto">One-time payment. Lifetime access. No subscriptions.</p>
+        </div>
+        <div class="packages-grid">
+          <!-- Starter -->
+          <div class="package-card reveal">
+            <div class="package-name">Starter Pack</div>
+            <div class="package-desc">Perfect if you're starting from absolute zero. Learn the fundamentals that every web developer needs.</div>
+            <div class="package-price">
+              <div><span class="price-amount">$97</span> <span class="price-period">one-time</span></div>
+              <div class="price-note">Lifetime access · Instant download</div>
+            </div>
+            <ul class="package-features">
+              <li><span class="feature-check" style="background:rgba(139,92,246,0.15);color:#c4b5fd">✓</span>HTML & CSS fundamentals (8 modules)</li>
+              <li><span class="feature-check" style="background:rgba(139,92,246,0.15);color:#c4b5fd">✓</span>JavaScript basics for beginners</li>
+              <li><span class="feature-check" style="background:rgba(139,92,246,0.15);color:#c4b5fd">✓</span>Build 3 real websites</li>
+              <li><span class="feature-check" style="background:rgba(139,92,246,0.15);color:#c4b5fd">✓</span>Free hosting setup guide</li>
+              <li><span class="feature-check" style="background:rgba(139,92,246,0.15);color:#c4b5fd">✓</span>Community Discord access</li>
+            </ul>
+            <button class="pkg-btn pkg-btn-secondary" onclick="selectPackage('Starter Pack - $97')">Get Started →</button>
+          </div>
+
+          <!-- Pro (Popular) -->
+          <div class="package-card popular reveal" style="transition-delay:0.1s">
+            <div class="popular-badge">⭐ Most Popular</div>
+            <div class="package-name">Full-Stack Pro</div>
+            <div class="package-desc">The complete package. Master web development AND AI tools — everything you need to get hired or go freelance.</div>
+            <div class="package-price">
+              <div><span class="price-amount gradient-text">$297</span> <span class="price-period">one-time</span></div>
+              <div class="price-note">Lifetime access · All future updates included</div>
+            </div>
+            <ul class="package-features">
+              <li><span class="feature-check" style="background:rgba(139,92,246,0.15);color:#c4b5fd">✓</span>Everything in Starter Pack</li>
+              <li><span class="feature-check" style="background:rgba(139,92,246,0.15);color:#c4b5fd">✓</span>React & modern JavaScript (12 modules)</li>
+              <li><span class="feature-check" style="background:rgba(139,92,246,0.15);color:#c4b5fd">✓</span>AI tools mastery (ChatGPT, Claude, Copilot)</li>
+              <li><span class="feature-check" style="background:rgba(139,92,246,0.15);color:#c4b5fd">✓</span>No-code tools (Webflow, Framer)</li>
+              <li><span class="feature-check" style="background:rgba(139,92,246,0.15);color:#c4b5fd">✓</span>Build a portfolio that gets clients</li>
+              <li><span class="feature-check" style="background:rgba(139,92,246,0.15);color:#c4b5fd">✓</span>Private community + monthly live Q&A</li>
+            </ul>
+            <button class="pkg-btn pkg-btn-primary" onclick="selectPackage('Full-Stack Pro - $297')">Enroll Now →</button>
+          </div>
+
+          <!-- Elite -->
+          <div class="package-card reveal" style="transition-delay:0.2s">
+            <div class="package-name">AI Agency Elite</div>
+            <div class="package-desc">For those ready to go all-in. Build an AI-powered business, automate everything, and scale fast.</div>
+            <div class="package-price">
+              <div><span class="price-amount">$997</span> <span class="price-period">one-time</span></div>
+              <div class="price-note">Includes 2x 1:1 coaching calls with Ruth</div>
+            </div>
+            <ul class="package-features">
+              <li><span class="feature-check" style="background:rgba(249,115,22,0.15);color:#fdba74">✓</span>Everything in Full-Stack Pro</li>
+              <li><span class="feature-check" style="background:rgba(249,115,22,0.15);color:#fdba74">✓</span>AI Agency setup from scratch</li>
+              <li><span class="feature-check" style="background:rgba(249,115,22,0.15);color:#fdba74">✓</span>Full automation stack (Make.com, n8n)</li>
+              <li><span class="feature-check" style="background:rgba(249,115,22,0.15);color:#fdba74">✓</span>Content + Instagram + YouTube system</li>
+              <li><span class="feature-check" style="background:rgba(249,115,22,0.15);color:#fdba74">✓</span>2× 1:1 coaching calls with Ruth</li>
+              <li><span class="feature-check" style="background:rgba(249,115,22,0.15);color:#fdba74">✓</span>Done-with-you project review</li>
+            </ul>
+            <button class="pkg-btn pkg-btn-secondary" onclick="selectPackage('AI Agency Elite - $997')">Apply Now →</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =================== ORDER FORM =================== -->
+    <section class="order-section" id="order">
+      <div class="container">
+        <div class="order-inner">
+          <div class="order-info reveal">
+            <div class="section-label">📬 Get in Touch</div>
+            <h2>Ready to Start? <span class="gradient-text">Let's Talk.</span></h2>
+            <p>Have questions about a package? Want to order a custom AI solution for your business? Fill in the form — Ruth or the Syntiq team will get back to you within 24 hours.</p>
+            <div class="order-trust">
+              <div class="trust-item">
+                <div class="trust-icon" style="background:rgba(34,197,94,0.1)">🔒</div>
+                <span>SSL-encrypted. Your info is never sold or shared.</span>
+              </div>
+              <div class="trust-item">
+                <div class="trust-icon" style="background:rgba(139,92,246,0.1)">⏱️</div>
+                <span>Response within 24 hours, usually much faster.</span>
+              </div>
+              <div class="trust-item">
+                <div class="trust-icon" style="background:rgba(6,182,212,0.1)">💯</div>
+                <span>30-day money-back guarantee on all packages.</span>
+              </div>
+              <div class="trust-item">
+                <div class="trust-icon" style="background:rgba(249,115,22,0.1)">📱</div>
+                <span>Also reach us on Instagram <strong>@syntiq.ai</strong></span>
+              </div>
+            </div>
+          </div>
+
+          <div class="order-form-card reveal" style="transition-delay:0.15s">
+            <div class="form-title">Send Us a Message</div>
+            <form id="orderForm" action="https://formspree.io/f/YOUR_FORM_ID" method="POST" novalidate>
+              <!-- Honeypot field — bots fill this, humans don't see it -->
+              <input type="text" name="_gotcha" class="hp-field" tabindex="-1" autocomplete="off" aria-hidden="true" />
+              <input type="hidden" name="_subject" value="New Syntiq Inquiry" />
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label" for="fname">First Name *</label>
+                  <input type="text" id="fname" name="firstName" class="form-input" placeholder="Alex" required maxlength="50" autocomplete="given-name" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="lname">Last Name</label>
+                  <input type="text" id="lname" name="lastName" class="form-input" placeholder="Johnson" maxlength="50" autocomplete="family-name" />
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="email">Email Address *</label>
+                <input type="email" id="email" name="email" class="form-input" placeholder="alex@example.com" required maxlength="100" autocomplete="email" />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="service">I'm Interested In</label>
+                <select id="service" name="service" class="form-select">
+                  <option value="">— Select a package or service —</option>
+                  <option value="Starter Pack - $97">Starter Pack ($97)</option>
+                  <option value="Full-Stack Pro - $297">Full-Stack Pro ($297)</option>
+                  <option value="AI Agency Elite - $997">AI Agency Elite ($997)</option>
+                  <option value="Custom AI Solution">Custom AI Solution for my business</option>
+                  <option value="Question">Just have a question</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="message">Your Message *</label>
+                <textarea id="message" name="message" class="form-textarea" placeholder="Tell us a little about yourself and what you're hoping to achieve..." required maxlength="1000"></textarea>
+              </div>
+              <button type="submit" class="form-submit" id="submitBtn">
+                Send Message ✉️
+              </button>
+            </form>
+            <div class="form-success" id="formSuccess">
+              <div class="form-success-icon">🎉</div>
+              <h3>Message Sent!</h3>
+              <p>Thanks for reaching out. Ruth will get back to you within 24 hours. Check your email (including spam just in case).</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =================== FAQ =================== -->
+    <section class="faq-section" id="faq">
+      <div class="container">
+        <div style="text-align:center" class="reveal">
+          <div class="section-label">❓ FAQ</div>
+          <h2 style="font-family:'Syne',sans-serif;font-size:clamp(28px,4vw,44px);font-weight:800">Frequently Asked <span class="gradient-text">Questions</span></h2>
+        </div>
+        <div class="faq-list">
+          <div class="faq-item reveal">
+            <div class="faq-q">Do I need any experience to start?
+              <svg class="faq-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+            <div class="faq-a"><div class="faq-a-inner">Zero experience needed. The Starter Pack begins with absolute basics — we explain everything from "what is HTML" to deploying your first live website. Ruth is specifically trained to teach beginners.</div></div>
+          </div>
+          <div class="faq-item reveal">
+            <div class="faq-q">How long does it take to finish a course?
+              <svg class="faq-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+            <div class="faq-a"><div class="faq-a-inner">The Starter Pack is designed for about 4–6 weeks at 1 hour/day. Full-Stack Pro is 8–12 weeks. But since it's self-paced, you can go faster or slower. You keep lifetime access so there's no pressure.</div></div>
+          </div>
+          <div class="faq-item reveal">
+            <div class="faq-q">Is there a money-back guarantee?
+              <svg class="faq-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+            <div class="faq-a"><div class="faq-a-inner">Yes — 30-day full refund, no questions asked. If you go through the first two modules and feel it's not the right fit, just email us and we'll refund you immediately.</div></div>
+          </div>
+          <div class="faq-item reveal">
+            <div class="faq-q">What AI tools are covered in the courses?
+              <svg class="faq-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+            <div class="faq-a"><div class="faq-a-inner">Full-Stack Pro and Elite cover: ChatGPT, Claude, GitHub Copilot, Midjourney, Make.com automation, Webflow, Framer, and more. We update the course as new tools come out — you get all updates free for life.</div></div>
+          </div>
+          <div class="faq-item reveal">
+            <div class="faq-q">Can I hire Syntiq to build an AI solution for my business?
+              <svg class="faq-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+            <div class="faq-a"><div class="faq-a-inner">Yes! We offer custom AI automation, website builds, and content systems for businesses. Use the contact form above and select "Custom AI Solution" — we'll get back to you with a free consultation.</div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- =================== FOOTER =================== -->
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-top">
+        <div class="footer-brand">
+          <a href="#" class="nav-logo">
+            <div class="nav-logo-mark">S</div>
+            <span>Syntiq<span class="gradient-text">AI</span></span>
+          </a>
+          <p>Helping Americans learn web development and AI tools — through friendly, practical, and empowering education. Follow Ruth on Instagram and YouTube for free weekly lessons.</p>
+          <div class="footer-socials">
+            <a href="https://instagram.com/syntiq.ai" target="_blank" rel="noopener" class="footer-social-btn" aria-label="Instagram">📸</a>
+            <a href="https://youtube.com/@syntiqai" target="_blank" rel="noopener" class="footer-social-btn" aria-label="YouTube">▶️</a>
+            <a href="mailto:hello@syntiq.ai" class="footer-social-btn" aria-label="Email">✉️</a>
+          </div>
+        </div>
+        <div class="footer-col">
+          <h4>Learn</h4>
+          <ul>
+            <li><a href="#packages">Starter Pack</a></li>
+            <li><a href="#packages">Full-Stack Pro</a></li>
+            <li><a href="#packages">AI Agency Elite</a></li>
+            <li><a href="https://youtube.com/@syntiqai" target="_blank" rel="noopener">Free YouTube Lessons</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h4>Resources</h4>
+          <ul>
+            <li><a href="#blog">AI Tools Blog</a></li>
+            <li><a href="#blog">Web Dev Guides</a></li>
+            <li><a href="#faq">FAQ</a></li>
+            <li><a href="#order">Contact Ruth</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h4>Company</h4>
+          <ul>
+            <li><a href="#learn">About Syntiq</a></li>
+            <li><a href="#order">Work with Us</a></li>
+            <li><a href="#" id="privacyLink">Privacy Policy</a></li>
+            <li><a href="#" id="termsLink">Terms of Service</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span>© 2025 Syntiq AI. All rights reserved. Made with ❤️ for learners everywhere.</span>
+        <div class="security-badges">
+          <span class="sec-badge">🔒 SSL Secured</span>
+          <span class="sec-badge">🛡️ HTTPS Only</span>
+          <span class="sec-badge">✓ CSP Enabled</span>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <script>
+    'use strict';
+
+    // =================== SECURITY: HTTPS REDIRECT ===================
+    if (location.protocol === 'http:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+      location.replace('https:' + location.href.substring(5));
+    }
+
+    // =================== MOBILE NAV ===================
+    const hamburger = document.getElementById('hamburger');
+    const mobileNav = document.getElementById('mobileNav');
+    let mobileOpen = false;
+    hamburger.addEventListener('click', () => {
+      mobileOpen = !mobileOpen;
+      mobileNav.style.display = mobileOpen ? 'flex' : 'none';
+    });
+    function closeMobileNav() {
+      mobileOpen = false;
+      mobileNav.style.display = 'none';
+    }
+    hamburger.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') hamburger.click(); });
+
+    // =================== SCROLL REVEAL ===================
+    const revealObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+          revealObserver.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+    document.querySelectorAll('.reveal').forEach(el => revealObserver.observe(el));
+
+    // =================== FAQ ACCORDION ===================
+    document.querySelectorAll('.faq-q').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const item = btn.parentElement;
+        const isOpen = item.classList.contains('open');
+        document.querySelectorAll('.faq-item').forEach(i => i.classList.remove('open'));
+        if (!isOpen) item.classList.add('open');
+      });
+    });
+
+    // =================== PACKAGE SELECT ===================
+    function selectPackage(pkg) {
+      const serviceSelect = document.getElementById('service');
+      if (serviceSelect) serviceSelect.value = pkg;
+      document.getElementById('order').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      setTimeout(() => document.getElementById('message').focus(), 600);
+    }
+
+    // =================== FORM SUBMISSION ===================
+    const form = document.getElementById('orderForm');
+    const submitBtn = document.getElementById('submitBtn');
+    const formSuccess = document.getElementById('formSuccess');
+
+    // Simple client-side sanitization
+    function sanitize(str) {
+      const div = document.createElement('div');
+      div.appendChild(document.createTextNode(str));
+      return div.innerHTML;
+    }
+
+    // Rate limit: prevent form spam (max 3 submits per session)
+    let submitCount = parseInt(sessionStorage.getItem('sq_submits') || '0');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      // Honeypot check
+      if (form.querySelector('[name="_gotcha"]').value) return;
+
+      // Rate limit
+      if (submitCount >= 3) {
+        showToast('Too many submissions. Please email us directly at hello@syntiq.ai', 'error');
+        return;
+      }
+
+      // Basic validation
+      const fname = sanitize(document.getElementById('fname').value.trim());
+      const email = sanitize(document.getElementById('email').value.trim());
+      const message = sanitize(document.getElementById('message').value.trim());
+
+      if (!fname) { showToast('Please enter your first name', 'error'); document.getElementById('fname').focus(); return; }
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showToast('Please enter a valid email', 'error'); document.getElementById('email').focus(); return; }
+      if (message.length < 10) { showToast('Please write a message (at least 10 characters)', 'error'); document.getElementById('message').focus(); return; }
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Sending...';
+
+      try {
+        const data = new FormData(form);
+        const res = await fetch(form.action, {
+          method: 'POST',
+          body: data,
+          headers: { 'Accept': 'application/json' }
+        });
+        if (res.ok) {
+          form.style.display = 'none';
+          formSuccess.style.display = 'block';
+          submitCount++;
+          sessionStorage.setItem('sq_submits', submitCount);
+          showToast('Message sent! We\'ll reply within 24 hours.');
+        } else {
+          throw new Error('Server error ' + res.status);
+        }
+      } catch (err) {
+        showToast('Could not send — try emailing hello@syntiq.ai directly', 'error');
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Send Message ✉️';
+      }
+    });
+
+    // =================== SMOOTH SCROLL (fallback for older browsers) ===================
+    document.querySelectorAll('a[href^="#"]').forEach(link => {
+      link.addEventListener('click', e => {
+        const target = document.querySelector(link.getAttribute('href'));
+        if (target) {
+          e.preventDefault();
+          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          closeMobileNav();
+        }
+      });
+    });
+
+    // =================== HEADER SCROLL SHADOW ===================
+    window.addEventListener('scroll', () => {
+      const header = document.querySelector('.site-header');
+      if (window.scrollY > 20) {
+        header.style.boxShadow = '0 4px 30px rgba(0,0,0,0.4)';
+      } else {
+        header.style.boxShadow = 'none';
+      }
+    }, { passive: true });
+
+    // =================== TOAST ===================
+    function showToast(msg, type = 'success') {
+      const toast = document.getElementById('toast');
+      toast.textContent = msg;
+      toast.className = 'toast show' + (type === 'error' ? ' error' : '');
+      clearTimeout(toast._timer);
+      toast._timer = setTimeout(() => toast.classList.remove('show'), 3500);
+    }
+
+    // =================== PRIVACY / TERMS PLACEHOLDERS ===================
+    document.getElementById('privacyLink').addEventListener('click', e => {
+      e.preventDefault();
+      showToast('Privacy Policy coming soon at syntiq.ai/privacy');
+    });
+    document.getElementById('termsLink').addEventListener('click', e => {
+      e.preventDefault();
+      showToast('Terms of Service coming soon at syntiq.ai/terms');
+    });
+  </script>
+</body>
+</html>

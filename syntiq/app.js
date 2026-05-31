@@ -1703,6 +1703,10 @@ function setupMission() {
     launchQuickPack('growth', { niche });
   });
   $('growthPackNiche').addEventListener('keydown', e => { if (e.key === 'Enter') $('btnLaunchGrowthPack').click(); });
+
+  $('btnLaunchWebsitePack').addEventListener('click', launchWebsitePack);
+  $('websitePackTopic').addEventListener('keydown', e => { if (e.key === 'Enter') $('btnLaunchWebsitePack').click(); });
+  $('btnDownloadSite').addEventListener('click', downloadSyntiqSite);
 }
 
 // ================================================================
@@ -1809,6 +1813,146 @@ function buildGrowthPackTasks(niche) {
     { agent: 'atlas', label: `🏷️ Hashtag Strategy — ${niche}`,    type: 'hashtag-strategy',  params: { niche, audience: 'US audience', location: 'United States', style: 'professional' } },
     { agent: 'atlas', label: `📅 30-Day Growth Schedule — ${niche}`, type: 'growth-schedule', params: { niche, audience: 'US audience', location: 'United States', style: 'professional' } },
   ];
+}
+
+function buildWebsitePackTasks(topic) {
+  return [
+    { agent: 'seo',   label: '🔍 Homepage SEO & Keywords',    type: 'keyword-research',   params: { topic: topic || 'Learn Web Development and AI Tools', platform: 'both', niche: 'Web Dev & AI Tools for beginners' } },
+    { agent: 'nova',  label: '📝 Blog Article 1 — AI Tools',  type: 'content-strategy',   params: { business: 'Syntiq AI', industry: 'Online Education', audience: 'American beginners learning web dev and AI', topic: 'Top AI tools every web developer must know in 2025', tone: 'educational' } },
+    { agent: 'nova',  label: '📝 Blog Article 2 — Web Dev',   type: 'content-strategy',   params: { business: 'Syntiq AI', industry: 'Online Education', audience: 'American beginners', topic: 'How to build a professional website in 1 hour with no experience', tone: 'educational' } },
+    { agent: 'seo',   label: '🎬 YouTube Video SEO',          type: 'video-seo',          params: { topic: topic || 'Learn web development with AI in 2025', platform: 'youtube', niche: 'Web Dev & AI Education' } },
+    { agent: 'tube',  label: '🎓 Package Sales Copy',         type: 'channel-bio',        params: { topic: 'Syntiq AI educational packages — Starter, Full-Stack Pro, AI Agency Elite', audience: 'American beginners wanting to learn web dev and AI', value: 'go from zero to professional in weeks' } },
+    { agent: 'seo',   label: '📢 Promotion & Backlink Plan',  type: 'channel-promotion',  params: { topic: 'Syntiq AI — web development and AI education', platform: 'both', niche: 'Online education, Web Dev, AI Tools' } },
+  ];
+}
+
+// ---- Website Content Pack: generate content then inject into site HTML ----
+async function launchWebsitePack() {
+  const topic = $('websitePackTopic')?.value.trim() || 'Learn web development and AI tools';
+  if (!state.apiKey) { $('apiPanel').classList.add('open'); showToast('Add API key first', 'error'); return; }
+  if (zeusState.running) { showToast('A mission is already running', 'error'); return; }
+
+  switchAgent('mission');
+  const tasks = buildWebsitePackTasks(topic);
+  zeusState.running = true;
+  zeusState.queue = [];
+  zeusState.nextId = 1;
+
+  missionSetProgress(5, '🌐 Website Content Pack — launching agents...');
+  $('missionProgressCard').style.display = 'block';
+  $('missionQueueZone').style.display = 'block';
+  $('missionDoneZone').style.display = 'none';
+
+  ['btnLaunchRuthPack','btnLaunchSalesPack','btnLaunchGrowthPack','btnLaunchWebsitePack','btnLaunchMission'].forEach(id => {
+    const el = $(id); if (el) el.disabled = true;
+  });
+
+  try {
+    tasks.forEach(task => {
+      const id = zeusState.nextId++;
+      zeusState.queue.push({ id, ...task, content: '', status: 'loading' });
+    });
+    renderMissionQueue();
+    updateMissionStats();
+
+    for (let i = 0; i < zeusState.queue.length; i++) {
+      const item = zeusState.queue[i];
+      const pct = 10 + Math.round(((i + 1) / zeusState.queue.length) * 85);
+      missionSetProgress(pct, `${agentEmojis[item.agent] || '⚡'} ${item.agent.toUpperCase()} — ${item.label}...`);
+      try {
+        item.content = await executeTask(item);
+        item.status = 'pending';
+      } catch (e) {
+        item.content = `Error: ${e.message}`;
+        item.status = 'pending';
+      }
+      renderMissionQueue();
+      updateMissionStats();
+      await new Promise(r => setTimeout(r, 250));
+    }
+
+    missionSetProgress(100, '🌐 Website content ready — approve & download below ✅');
+    showToast('Website pack done! Approve content then click Download Site.');
+    setTimeout(() => { $('missionProgressCard').style.display = 'none'; }, 3000);
+
+  } catch (err) {
+    missionSetProgress(0, 'Pack failed: ' + err.message);
+    showToast(err.message, 'error');
+  } finally {
+    zeusState.running = false;
+    ['btnLaunchRuthPack','btnLaunchSalesPack','btnLaunchGrowthPack','btnLaunchWebsitePack','btnLaunchMission'].forEach(id => {
+      const el = $(id); if (el) el.disabled = false;
+    });
+    updateMissionStats();
+  }
+}
+
+async function downloadSyntiqSite() {
+  const btn = $('btnDownloadSite');
+  btn.disabled = true;
+  btn.textContent = 'Loading...';
+
+  try {
+    // Fetch the website template
+    const res = await fetch('website/index.html');
+    if (!res.ok) throw new Error('website/index.html not found');
+    let html = await res.text();
+
+    // Inject approved content from queue into the blog section
+    const approved = zeusState.queue.filter(i => i.status === 'approved');
+
+    // Blog articles from nova
+    const blogItems = approved.filter(i => i.agent === 'nova' && i.type === 'content-strategy');
+    blogItems.slice(0, 3).forEach((item, idx) => {
+      const num = idx + 1;
+      const cardEl = `id="blog-${num}"`;
+      const titleMatch = item.content.match(/##[^\n]*\n([^\n]+)/);
+      const title = titleMatch ? titleMatch[1].trim().slice(0, 80) : item.label.replace(/📝\s*/, '');
+      const excerpt = item.content.replace(/##[^\n]*/g, '').replace(/\*\*/g, '').trim().slice(0, 120) + '...';
+      html = html.replace(
+        new RegExp(`<article class="blog-card[^"]*" ${cardEl}>([\\s\\S]*?)</article>`),
+        `<article class="blog-card reveal" ${cardEl}><div class="blog-card-thumb" style="background:linear-gradient(135deg,rgba(139,92,246,0.15),rgba(6,182,212,0.1))">📝</div><div class="blog-card-body"><span class="blog-tag" style="background:rgba(139,92,246,0.1);color:#c4b5fd">AI Tools</span><h3>${escapeHtml(title)}</h3><p>${escapeHtml(excerpt)}</p><div class="blog-card-footer"><span>Ruth · 8 min read</span><span class="read-more">Read →</span></div></div></article>`
+      );
+    });
+
+    // SEO keywords → update meta description
+    const seoItem = approved.find(i => i.agent === 'seo' && i.type === 'keyword-research');
+    if (seoItem) {
+      const kwMatch = seoItem.content.match(/PRIMARY KEYWORDS[\s\S]*?\n([^\n]+)/i);
+      if (kwMatch) {
+        const kw = kwMatch[1].replace(/\*\*/g, '').trim().slice(0, 120);
+        html = html.replace(
+          /<meta name="keywords"[^>]*>/,
+          `<meta name="keywords" content="${kw.replace(/"/g, '&quot;')}" />`
+        );
+      }
+    }
+
+    // Timestamp injection
+    const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    html = html.replace('<!-- GENERATED -->', `<!-- Generated by Syntiq AI Dashboard on ${today} -->`);
+
+    // Download
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'syntiq-website.html';
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('🌐 Website downloaded! Open syntiq-website.html in your browser.');
+
+  } catch (err) {
+    // Fallback: download the template as-is
+    showToast('Downloading base template (run Website Pack first for AI content)');
+    const a = document.createElement('a');
+    a.href = 'website/index.html';
+    a.download = 'syntiq-website.html';
+    a.click();
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Download syntiq.ai Website';
+  }
 }
 
 async function launchMission() {

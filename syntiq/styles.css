@@ -2080,6 +2080,8 @@ body {
 .sales-pack:hover { border-color: rgba(245,158,11,0.4); }
 .growth-pack { border-color: rgba(16,185,129,0.2); }
 .growth-pack:hover { border-color: rgba(16,185,129,0.4); }
+.website-pack { border-color: rgba(139,92,246,0.2); }
+.website-pack:hover { border-color: rgba(139,92,246,0.4); }
 
 .pack-header { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
 .pack-icon { font-size: 22px; line-height: 1; }
@@ -2117,6 +2119,16 @@ body {
 .ruth-pack-btn { background: linear-gradient(135deg, #f43f5e, #f97316); }
 .sales-pack-btn { background: linear-gradient(135deg, #f59e0b, #f472b6); }
 .growth-pack-btn { background: linear-gradient(135deg, #10b981, #06b6d4); }
+.website-pack-btn { background: linear-gradient(135deg, #8b5cf6, #06b6d4); }
+.btn-download-site {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 14px; border-radius: 8px; font-size: 12px; font-weight: 600;
+  background: linear-gradient(135deg, rgba(139,92,246,0.15), rgba(6,182,212,0.1));
+  border: 1px solid rgba(139,92,246,0.3); color: #c4b5fd; cursor: pointer;
+  transition: opacity 0.2s, border-color 0.2s; white-space: nowrap;
+}
+.btn-download-site:hover { opacity: 0.85; border-color: rgba(139,92,246,0.5); }
+.btn-download-site:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* Mission input zone */
 .mission-input-zone {
