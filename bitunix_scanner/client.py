@@ -86,6 +86,12 @@ class AsyncBitunixClient:
         data = await self._get_public("/api/v1/futures/market/tickers")
         return data.get("data") or []
 
+    async def get_depth(self, symbol: str, limit: int = 5) -> dict:
+        data = await self._get_public("/api/v1/futures/market/depth", {
+            "symbol": symbol, "limit": limit,
+        })
+        return data.get("data") or {}
+
     async def get_klines(self, symbol: str, interval: str,
                          limit: int = 200) -> List[dict]:
         data = await self._get_public("/api/v1/futures/market/kline", {
