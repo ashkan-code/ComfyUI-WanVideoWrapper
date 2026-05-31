@@ -1822,6 +1822,90 @@ body {
 .toggle-switch.on::after { left: 19px; }
 
 /* ==============================
+   TUBE — YouTube Content Studio
+   ============================== */
+
+:root {
+  --tube-primary: #f43f5e;
+  --tube-secondary: #ef4444;
+  --tube-glow: rgba(244,63,94,0.2);
+}
+
+.tube-dot { background: var(--tube-primary); }
+
+.tube-tab {
+  background: rgba(244,63,94,0.08) !important;
+  border: 1px solid rgba(244,63,94,0.2) !important;
+  color: var(--tube-primary) !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+}
+.tube-tab.active, .tube-tab:hover {
+  background: rgba(244,63,94,0.16) !important;
+}
+
+.tube-hero {
+  background: linear-gradient(135deg,
+    rgba(244,63,94,0.1) 0%,
+    rgba(239,68,68,0.05) 50%,
+    rgba(244,63,94,0.02) 100%);
+  border-bottom: 1px solid rgba(244,63,94,0.15);
+}
+.tube-avatar .avatar-ring {
+  background: conic-gradient(var(--tube-primary), var(--tube-secondary), var(--tube-primary));
+}
+.tube-name {
+  background: linear-gradient(135deg, #fca5a5, var(--tube-primary), var(--tube-secondary));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.tube-badge {
+  background: rgba(244,63,94,0.1);
+  border-color: rgba(244,63,94,0.25);
+  color: var(--tube-primary);
+}
+.tube-btn {
+  background: linear-gradient(135deg, #e11d48, #f43f5e);
+  box-shadow: 0 4px 20px rgba(244,63,94,0.35);
+}
+.tube-btn:hover { box-shadow: 0 6px 28px rgba(244,63,94,0.5); }
+
+/* Ruth persona card */
+.ruth-persona-card {
+  background: linear-gradient(135deg, rgba(244,63,94,0.06), rgba(139,92,246,0.06));
+  border: 1px solid rgba(244,63,94,0.2);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 4px;
+}
+.ruth-avatar-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.ruth-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #f43f5e, #818cf8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 800;
+  color: white;
+  flex-shrink: 0;
+}
+.ruth-name { font-size: 15px; font-weight: 700; color: var(--text-primary); }
+.ruth-handle { font-size: 11px; color: var(--tube-primary); margin-top: 2px; }
+.ruth-desc { font-size: 11px; color: var(--text-secondary); line-height: 1.6; }
+
+.tube-placeholder-icon { background: rgba(244,63,94,0.06) !important; }
+
+/* ==============================
    MISSION / ZEUS
    ============================== */
 
