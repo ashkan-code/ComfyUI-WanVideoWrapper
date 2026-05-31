@@ -1,106 +1,96 @@
+"""استخراج سوالات از PDF/تصویر با Claude Vision"""
+
 import anthropic
 import base64
 import json
 import re
-from io import BytesIO
 
 
-EXTRACTION_PROMPT = """تصویر زیر شامل سوالات تستی چندگزینه‌ای است (احتمالاً از کنکور یا آزمون‌های تستی ایران).
+PROMPT = """این تصویر از دفترچه آزمون دکتری رشته سازه (مهندسی عمران - گرایش سازه) است.
 
-تمام سوالات را از این تصویر استخراج کن. برای هر سوال یک آبجکت JSON بساز:
+تمام سوالات چهارگزینه‌ای را استخراج کن. برای هر سوال یک آبجکت JSON بساز:
 
 {
-  "text": "متن کامل سوال",
-  "options": ["گزینه الف", "گزینه ب", "گزینه ج", "گزینه د"],
-  "correct_answer": 0,
-  "subject": "نام درس (مثلاً: فیزیک، شیمی، ریاضی، زیست، ادبیات، عربی، دینی)",
-  "topic": "فصل یا موضوع اصلی",
-  "subtopic": "زیرموضوع",
+  "text": "متن کامل سوال (با فرمول‌ها به صورت متن یا LaTeX اگر ممکن است)",
+  "options": ["گزینه ۱", "گزینه ۲", "گزینه ۳", "گزینه ۴"],
+  "correct_answer": null,
+  "subject": "نام درس از این لیست: مکانیک جامدات | مقاومت مصالح | تحلیل سازه | دینامیک سازه | طراحی بتن | طراحی فولاد | خاک و پی | ریاضی مهندسی | المان محدود | عمومی",
+  "topic": "موضوع اصلی (مثلاً: تنش محوری، خمش، ارتعاش آزاد، ظرفیت باربری)",
+  "subtopic": "زیرموضوع دقیق‌تر اگر وجود دارد",
   "difficulty": "easy یا medium یا hard",
   "year": null
 }
 
-قوانین:
-- اگر پاسخ صحیح مشخص نیست، correct_answer را null بگذار
-- اگر سال مشخص است، آن را وارد کن
-- options باید دقیقاً ۴ عنصر داشته باشد
-- اگر تصویر سوال ندارد، آرایه خالی [] برگردان
-
-فقط یک آرایه JSON خروجی بده. هیچ توضیح اضافه‌ای نده."""
+اگر تصویر سوال ندارد یا خوانا نیست، [] برگردان.
+فقط آرایه JSON خروجی بده."""
 
 
-def _call_claude_vision(client: anthropic.Anthropic, image_b64: str, media_type: str) -> list[dict]:
+def _extract_from_b64(client: anthropic.Anthropic, b64: str, media_type: str) -> list[dict]:
     response = client.messages.create(
         model="claude-opus-4-8",
         max_tokens=4096,
-        messages=[
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": media_type,
-                            "data": image_b64,
-                        },
-                    },
-                    {"type": "text", "text": EXTRACTION_PROMPT},
-                ],
-            }
-        ],
+        messages=[{
+            "role": "user",
+            "content": [
+                {
+                    "type": "image",
+                    "source": {"type": "base64", "media_type": media_type, "data": b64},
+                },
+                {"type": "text", "text": PROMPT},
+            ],
+        }],
     )
     text = response.content[0].text.strip()
-    match = re.search(r"\[.*\]", text, re.DOTALL)
-    raw = match.group() if match else text
-    return json.loads(raw)
+    m = re.search(r"\[.*\]", text, re.DOTALL)
+    return json.loads(m.group() if m else text)
 
 
-def extract_from_image_bytes(
+def extract_from_image(
     client: anthropic.Anthropic,
     image_bytes: bytes,
     media_type: str,
     source_name: str = "",
+    year: int = None,
 ) -> list[dict]:
-    b64 = base64.standard_b64encode(image_bytes).decode("utf-8")
-    questions = _call_claude_vision(client, b64, media_type)
+    b64 = base64.standard_b64encode(image_bytes).decode()
+    questions = _extract_from_b64(client, b64, media_type)
     for q in questions:
         q["source_file"] = source_name
+        if year:
+            q["year"] = year
     return questions
 
 
-def extract_from_pdf_bytes(
+def extract_from_pdf(
     client: anthropic.Anthropic,
     pdf_bytes: bytes,
     source_name: str = "",
-    progress_callback=None,
+    year: int = None,
+    progress_cb=None,
 ) -> list[dict]:
-    import fitz  # PyMuPDF — imported lazily so the module loads without it
+    import fitz
 
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-    total_pages = len(doc)
-    all_questions: list[dict] = []
+    total = len(doc)
+    all_qs: list[dict] = []
 
-    for page_num in range(total_pages):
-        if progress_callback:
-            progress_callback(page_num, total_pages)
-
-        page = doc.load_page(page_num)
-        mat = fitz.Matrix(2.0, 2.0)
-        pix = page.get_pixmap(matrix=mat)
-        img_bytes = pix.tobytes("png")
-        b64 = base64.standard_b64encode(img_bytes).decode("utf-8")
-
+    for i in range(total):
+        if progress_cb:
+            progress_cb(i, total)
+        page = doc.load_page(i)
+        pix = page.get_pixmap(matrix=fitz.Matrix(2.0, 2.0))
+        b64 = base64.standard_b64encode(pix.tobytes("png")).decode()
         try:
-            questions = _call_claude_vision(client, b64, "image/png")
-            for q in questions:
-                q["source_file"] = f"{source_name} | صفحه {page_num + 1}"
-            all_questions.extend(questions)
+            qs = _extract_from_b64(client, b64, "image/png")
+            for q in qs:
+                q["source_file"] = f"{source_name} | ص{i+1}"
+                if year:
+                    q["year"] = year
+            all_qs.extend(qs)
         except Exception as e:
-            print(f"[extractor] خطا در صفحه {page_num + 1}: {e}")
+            print(f"[extractor] خطا ص{i+1}: {e}")
 
-    if progress_callback:
-        progress_callback(total_pages, total_pages)
-
+    if progress_cb:
+        progress_cb(total, total)
     doc.close()
-    return all_questions
+    return all_qs
