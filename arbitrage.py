@@ -19,18 +19,18 @@ from bitunix_scanner.client    import AsyncBitunixClient
 from bitunix_scanner.arbitrage import (
     scan, ArbOpp, _bar, _rank,
     ROUND_TRIP_FEES, TOP_SYMBOLS,
-    _corr, _ratio_stats, _closes,
+    _corr, _ratio_stats, _closes, _half_life,
 )
 from bitunix_scanner.signals import _fmt
 
 API_KEY    = os.getenv("BITUNIX_API_KEY",    "68f0a1765f124bacb847afa8db78e480")
 SECRET_KEY = os.getenv("BITUNIX_SECRET_KEY", "159808597389a1cd1fc429f9f469209b")
 
-SCAN_INTERVAL  = 30      # ثانیه بین هر اسکن اولیه
-MONITOR_MINS   = 30      # دقیقه بین هر چک روی open signals
-TIMEOUT_HOURS  = 6       # ساعت -- بعد از این EXIT بزن هر چی بود
-Z_EXIT         = 0.5     # z-score زیر این → EXIT (برگشت به میانگین)
-SHOW_TOP       = 5       # نمایش top N فرصت
+SCAN_INTERVAL  = 30      # seconds between scans
+MONITOR_MINS   = 30      # minutes between exit checks
+TIMEOUT_HOURS  = 6       # hours -- force EXIT after this
+Z_EXIT         = 0.5     # exit when z < this
+SHOW_TOP       = 3       # show top N sniper signals only
 W = 46
 
 
@@ -65,20 +65,23 @@ _open_signals: List[OpenSignal] = []
 def _fmt_entry(rank: int, o: ArbOpp) -> str:
     a_dir = "LONG " if o.direction_a == "LONG" else "SHORT"
     b_dir = "LONG " if o.direction_b == "LONG" else "SHORT"
+    hl_tag = (f"{o.half_life:.0f}h" if o.half_life < 999 else "n/a")
     lines = [
         "",
         _line("="),
-        f" ENTRY SIGNAL #{rank}  {_rank(o.score)}",
+        f" SNIPER #{rank}  {_rank(o.score)}",
         f" score: {o.score:.1f}/100  {_bar(o.score)}",
-        f" corr={o.corr:.2f}  z={o.entry_z if hasattr(o,'entry_z') else o.z_score:+.2f}s",
         _line("-"),
         f" {a_dir} {o.sym_a}",
         f"        @ {_fmt(o.price_a)}",
         f" {b_dir} {o.sym_b}",
         f"        @ {_fmt(o.price_b)}",
         _line("-"),
-        f" net profit est : {o.net*100:>+.3f}%",
-        f" exit when      : z < {Z_EXIT} OR {TIMEOUT_HOURS}h",
+        f" z        : {o.z_score:+.2f}",
+        f" corr     : {o.corr:.2f} / {o.corr_recent:.2f}",
+        f" half-life: {hl_tag}  (revert speed)",
+        f" net est  : {o.net*100:>+.3f}%",
+        f" exit     : z<{Z_EXIT} OR {TIMEOUT_HOURS}h",
         _line("="),
         "",
     ]
