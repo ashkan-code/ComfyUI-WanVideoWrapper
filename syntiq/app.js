@@ -47,6 +47,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupTracker();
   setupNovaPreview();
   setupAria();
+  setupMission();
   renderAllHistories();
   renderTracker();
   if (state.apiKey) updateApiStatus(true);
@@ -903,6 +904,19 @@ async function callAnthropic(agent, prompt) {
   return callAnthropicDirect(agent, prompt);
 }
 
+// Call with a custom system prompt (used by ZEUS orchestrator)
+async function callAnthropicWithSystem(system, userContent) {
+  const prompt = { label: 'zeus', content: userContent };
+  const fakeAgent = '_zeus_';
+  const savedPrompts = systemPrompts;
+  systemPrompts[fakeAgent] = system;
+  try {
+    return await callAnthropic(fakeAgent, prompt);
+  } finally {
+    delete systemPrompts[fakeAgent];
+  }
+}
+
 async function callGroq(agent, prompt) {
   const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
@@ -1180,6 +1194,393 @@ function showLoading(agent) {
 function hideLoading() {
   $('loadingOverlay').classList.remove('active');
   if (thinkingInterval) { clearInterval(thinkingInterval); thinkingInterval = null; }
+}
+
+// ================================================================
+//  ZEUS — Mission Orchestrator
+// ================================================================
+
+const zeusState = {
+  queue: [],    // { id, agent, label, type, content, status:'loading'|'pending'|'approved'|'rejected' }
+  running: false,
+  nextId: 1,
+};
+
+function setupMission() {
+  $('btnLaunchMission').addEventListener('click', launchMission);
+  $('missionInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) launchMission();
+  });
+  $('btnApproveAll').addEventListener('click', approveAll);
+  $('btnClearMission').addEventListener('click', clearMission);
+
+  // Example chips
+  document.querySelectorAll('.mission-example-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      $('missionInput').value = chip.dataset.example;
+      $('missionInput').focus();
+    });
+  });
+}
+
+async function launchMission() {
+  const mission = $('missionInput').value.trim();
+  if (!mission) { showToast('Write your mission first', 'error'); return; }
+  if (!state.apiKey) { $('apiPanel').classList.add('open'); showToast('Add API key first', 'error'); return; }
+  if (zeusState.running) return;
+
+  zeusState.running = true;
+  zeusState.queue = [];
+  zeusState.nextId = 1;
+  renderMissionQueue();
+
+  const btn = $('btnLaunchMission');
+  btn.disabled = true;
+  btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="animation:spin .7s linear infinite"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Planning...`;
+
+  missionSetProgress(5, 'ZEUS is planning your mission...');
+  $('missionProgressCard').style.display = 'block';
+  $('missionQueueZone').style.display = 'block';
+  $('missionDoneZone').style.display = 'none';
+
+  try {
+    // Step 1: parse mission into tasks
+    missionSetProgress(10, 'Analyzing mission...');
+    const tasks = await parseMissionToTasks(mission);
+    if (!tasks.length) throw new Error('Could not parse mission into tasks');
+
+    missionSetProgress(20, `${tasks.length} tasks planned — agents launching...`);
+    updateMissionStats();
+
+    // Step 2: add all as loading cards immediately
+    tasks.forEach(task => {
+      const id = zeusState.nextId++;
+      zeusState.queue.push({ id, ...task, content: '', status: 'loading' });
+    });
+    renderMissionQueue();
+
+    // Step 3: execute each task sequentially
+    for (let i = 0; i < zeusState.queue.length; i++) {
+      const item = zeusState.queue[i];
+      const pct = 20 + Math.round(((i + 1) / zeusState.queue.length) * 75);
+      missionSetProgress(pct, `${agentEmojis[item.agent] || '⚡'} ${item.agent.toUpperCase()} — ${item.label}...`);
+
+      try {
+        const result = await executeTask(item);
+        item.content = result;
+        item.status = 'pending';
+      } catch (e) {
+        item.content = `Error: ${e.message}`;
+        item.status = 'pending';
+      }
+      renderMissionQueue();
+      updateMissionStats();
+      await new Promise(r => setTimeout(r, 300));
+    }
+
+    missionSetProgress(100, 'All tasks complete — review and approve below ✅');
+    showToast('Mission complete! Review the queue below.');
+    setTimeout(() => { $('missionProgressCard').style.display = 'none'; }, 3000);
+
+  } catch (err) {
+    missionSetProgress(0, 'Mission failed: ' + err.message);
+    showToast(err.message, 'error');
+  } finally {
+    zeusState.running = false;
+    btn.disabled = false;
+    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Launch Mission`;
+    updateMissionStats();
+  }
+}
+
+// ---- ZEUS: Parse mission into tasks via AI ----
+async function parseMissionToTasks(mission) {
+  const systemPrompt = `You are ZEUS, mission orchestrator for Syntiq AI Agency.
+Parse the user's mission into 3-6 specific tasks for these agents: nova, rex, pixel, atlas.
+Return ONLY a valid JSON array. No markdown, no explanation.
+
+Agent capabilities:
+- nova: instagram-caption, youtube-script, reel-script, content-strategy
+- rex: cold-email, email-sequence, linkedin-dm
+- pixel: website (landing page HTML)
+- atlas: hashtag-strategy, follow-targets, engagement-templates, growth-schedule
+
+JSON format per task:
+{"agent":"nova","label":"Instagram Caption — Product Launch","type":"instagram-caption","params":{"business":"BrandName","industry":"niche","audience":"target audience","topic":"specific topic","tone":"casual-fun|inspirational|educational|luxury|bold-edgy"}}
+{"agent":"rex","label":"Cold Email — SaaS Outreach","type":"cold-email","params":{"business":"BrandName","service":"what you sell","prospect":"prospect type","painpoint":"their pain","offer":"your offer"}}
+{"agent":"atlas","label":"Hashtag Strategy","type":"hashtag-strategy","params":{"niche":"industry","audience":"target","location":"city or country","style":"professional"}}
+{"agent":"pixel","label":"Landing Page","type":"website","params":{"business":"BrandName","industry":"niche","style":"modern-dark","services":"service1, service2"}}
+
+Return 3-6 tasks as a JSON array.`;
+
+  const prompt = { label: 'zeus-parse', content: `Mission: "${mission}"` };
+
+  let raw = '';
+  try {
+    raw = await callAnthropicWithSystem(systemPrompt, prompt.content);
+    // Extract JSON array from response
+    const match = raw.match(/\[[\s\S]*\]/);
+    if (!match) throw new Error('No JSON array found');
+    return JSON.parse(match[0]);
+  } catch (e) {
+    // Fallback: create sensible default tasks from mission
+    return buildFallbackTasks(mission);
+  }
+}
+
+function buildFallbackTasks(mission) {
+  const lower = mission.toLowerCase();
+  const tasks = [];
+  const brand = extractBrandFromMission(mission);
+
+  if (lower.includes('instagram') || lower.includes('social') || lower.includes('caption') || lower.includes('content')) {
+    tasks.push({ agent: 'nova', label: 'Instagram Caption #1', type: 'instagram-caption', params: { business: brand, industry: 'Business', audience: 'US professionals', topic: mission.slice(0, 80), tone: 'bold-edgy' } });
+    tasks.push({ agent: 'nova', label: 'Instagram Caption #2', type: 'instagram-caption', params: { business: brand, industry: 'Business', audience: 'US professionals', topic: 'Building with AI in 2025', tone: 'inspirational' } });
+  }
+  if (lower.includes('hashtag') || lower.includes('instagram') || lower.includes('social')) {
+    tasks.push({ agent: 'atlas', label: 'Hashtag Strategy', type: 'hashtag-strategy', params: { niche: 'AI & Technology', audience: 'US entrepreneurs', location: 'United States', style: 'professional' } });
+  }
+  if (lower.includes('email') || lower.includes('outreach') || lower.includes('sales')) {
+    tasks.push({ agent: 'rex', label: 'Cold Email Outreach', type: 'cold-email', params: { business: brand, service: 'AI services', prospect: 'Small business owners', painpoint: 'Wasting time on repetitive tasks', offer: 'Free AI strategy call' } });
+  }
+  if (!tasks.length) {
+    tasks.push(
+      { agent: 'nova', label: 'Instagram Caption', type: 'instagram-caption', params: { business: brand, industry: 'AI Agency', audience: 'US startup founders', topic: mission.slice(0, 80), tone: 'bold-edgy' } },
+      { agent: 'atlas', label: 'Hashtag Strategy', type: 'hashtag-strategy', params: { niche: 'AI Agency', audience: 'US entrepreneurs', location: 'United States', style: 'professional' } }
+    );
+  }
+  return tasks;
+}
+
+function extractBrandFromMission(mission) {
+  const m = mission.match(/for\s+([A-Z][a-zA-Z]+)/);
+  return m ? m[1] : 'Syntiq';
+}
+
+// ---- Execute a single task ----
+async function executeTask(item) {
+  const { agent, type, params } = item;
+  let promptObj;
+
+  if (agent === 'nova') {
+    // Temporarily set nova state
+    const saved = state.selectedTypes.nova;
+    state.selectedTypes.nova = type;
+    promptObj = buildNovaPromptFromParams(params, type);
+    state.selectedTypes.nova = saved;
+  } else if (agent === 'rex') {
+    promptObj = buildRexPromptFromParams(params, type);
+  } else if (agent === 'atlas') {
+    promptObj = buildAtlasPromptFromParams(params, type);
+  } else if (agent === 'pixel') {
+    promptObj = buildPixelPromptFromParams(params, type);
+  } else {
+    throw new Error('Unknown agent: ' + agent);
+  }
+
+  return await callAnthropic(agent, promptObj);
+}
+
+// Prompt builders that take params objects (bypass DOM)
+function buildNovaPromptFromParams(p, type) {
+  const business = p.business || 'Syntiq';
+  const industry = p.industry || 'AI Agency';
+  const audience = p.audience || 'US professionals';
+  const topic = p.topic || 'Our services';
+  const tone = p.tone || 'bold-edgy';
+
+  const content = `Write a world-class Instagram caption for "${business}" in the ${industry} industry.
+Topic: "${topic}". Target audience: ${audience}. Tone: ${tone}.
+
+## 📸 INSTAGRAM CAPTION
+[3-5 sentences with powerful hook, storytelling, and CTA]
+
+## 🏷️ HASHTAGS
+[25 hashtags: mix of mega, large, medium, and niche]
+
+## ⏰ BEST TIME TO POST
+[Best day and time for US audience]
+
+## 💡 CONTENT TIPS
+[3 bullet points for visual direction and engagement]`;
+
+  return { label: `${business} — ${type}`, content };
+}
+
+function buildRexPromptFromParams(p, type) {
+  const business = p.business || 'Syntiq';
+  const service = p.service || 'AI services';
+  const prospect = p.prospect || 'business owners';
+  const painpoint = p.painpoint || 'wasting time';
+  const offer = p.offer || 'free strategy call';
+
+  const content = type === 'email-sequence'
+    ? `Write a 5-email cold outreach sequence for "${business}" selling "${service}" to ${prospect}. Pain point: ${painpoint}. Offer: ${offer}. Each email: subject line + body. Emails: Intro, Value, Social Proof, Urgency, Breakup.`
+    : `Write a high-converting cold email for "${business}" selling "${service}" to ${prospect}. Pain: ${painpoint}. Offer: ${offer}.
+
+## 📧 SUBJECT LINE (3 options)
+## 📝 EMAIL BODY
+[Personalized opening, pain identification, solution, proof, CTA]
+## 📨 FOLLOW-UP (3 days later)`;
+
+  return { label: `${business} — ${type}`, content };
+}
+
+function buildAtlasPromptFromParams(p, type) {
+  const niche = p.niche || 'AI Agency';
+  const audience = p.audience || 'US entrepreneurs';
+  const location = p.location || 'United States';
+  const style = p.style || 'professional';
+
+  const content = `You are Atlas. Create a ${type.replace('-', ' ')} for a ${niche} Instagram account targeting ${audience} in ${location}. Style: ${style}.
+
+## 🎯 STRATEGY OVERVIEW
+## 📊 HASHTAG SETS (3 rotating sets of 25 hashtags each)
+## 📅 POSTING SCHEDULE
+## 💡 KEY INSIGHTS FOR US AUDIENCE`;
+
+  return { label: `${niche} — ${type}`, content };
+}
+
+function buildPixelPromptFromParams(p, type) {
+  const business = p.business || 'Syntiq';
+  const industry = p.industry || 'AI Agency';
+  const style = p.style || 'modern-dark';
+  const services = p.services || 'AI consulting, Automation, Strategy';
+
+  const content = `Build a complete, stunning one-page landing website for "${business}" — a ${industry} company. Style: ${style}. Services: ${services}. Make it look like a $10,000 website. Return ONLY the complete HTML.`;
+  return { label: `${business} — Landing Page`, content };
+}
+
+// ---- Queue Rendering ----
+function renderMissionQueue() {
+  const list = $('missionQueueList');
+  const doneList = $('missionDoneList');
+  const pending = zeusState.queue.filter(i => i.status !== 'approved' && i.status !== 'rejected');
+  const done = zeusState.queue.filter(i => i.status === 'approved');
+
+  list.innerHTML = pending.map(item => renderQueueCard(item)).join('');
+  doneList.innerHTML = done.map(item => renderDoneCard(item)).join('');
+  $('missionQueueZone').style.display = zeusState.queue.length ? 'block' : 'none';
+  $('missionDoneZone').style.display = done.length ? 'block' : 'none';
+
+  // Attach handlers
+  pending.forEach(item => {
+    const card = document.querySelector(`[data-queue-id="${item.id}"]`);
+    if (!card) return;
+    card.querySelector('.queue-card-header').addEventListener('click', () => {
+      card.querySelector('.queue-card-body').classList.toggle('open');
+    });
+    if (item.status === 'pending') {
+      card.querySelector('.btn-q-approve')?.addEventListener('click', e => { e.stopPropagation(); approveItem(item.id); });
+      card.querySelector('.btn-q-reject')?.addEventListener('click', e => { e.stopPropagation(); rejectItem(item.id); });
+      card.querySelector('.btn-q-copy')?.addEventListener('click', e => { e.stopPropagation(); navigator.clipboard.writeText(item.content).then(() => showToast('Copied!')); });
+    }
+  });
+  done.forEach(item => {
+    document.querySelector(`[data-done-id="${item.id}"]`)?.addEventListener('click', () => {
+      navigator.clipboard.writeText(item.content).then(() => showToast('Copied!'));
+    });
+  });
+}
+
+const agentColors = { nova: '#f472b6', rex: '#f59e0b', pixel: '#06b6d4', atlas: '#10b981', aria: '#818cf8' };
+
+function renderQueueCard(item) {
+  const color = agentColors[item.agent] || '#888';
+  const isLoading = item.status === 'loading';
+  const preview = item.content ? item.content.slice(0, 120).replace(/\n/g, ' ') + '...' : '';
+
+  const statusHtml = isLoading
+    ? `<span class="queue-card-status loading"><span class="queue-loading-spin"></span>Running...</span>`
+    : `<span class="queue-card-status ${item.status}">${item.status === 'pending' ? '⏳ Pending' : item.status === 'approved' ? '✅ Approved' : '❌ Rejected'}</span>`;
+
+  const actionsHtml = item.status === 'pending' ? `
+    <div class="queue-card-actions">
+      <button class="btn-q-approve">✅ Approve</button>
+      <button class="btn-q-copy">Copy</button>
+      <button class="btn-q-reject">❌ Reject</button>
+    </div>` : '';
+
+  return `
+    <div class="queue-card ${item.status}" data-queue-id="${item.id}">
+      <div class="queue-card-header">
+        <div class="queue-card-left">
+          <div class="queue-card-agent-dot" style="background:${color}"></div>
+          <div>
+            <div class="queue-card-label">${escapeHtml(item.label)}</div>
+            <div class="queue-card-type">${item.agent.toUpperCase()} · ${item.type}</div>
+          </div>
+        </div>
+        ${statusHtml}
+      </div>
+      ${!isLoading && item.content ? `
+      <div class="queue-card-body">
+        <div class="queue-card-preview">${escapeHtml(preview)}<br><br>${escapeHtml(item.content)}</div>
+        ${actionsHtml}
+      </div>` : ''}
+    </div>`;
+}
+
+function renderDoneCard(item) {
+  const color = agentColors[item.agent] || '#888';
+  const preview = item.content.slice(0, 60).replace(/\n/g, ' ');
+  return `
+    <div class="done-card">
+      <div class="done-card-left">
+        <div class="queue-card-agent-dot" style="background:${color}"></div>
+        <div>
+          <div class="done-card-label">${escapeHtml(item.label)}</div>
+          <div class="done-card-preview">${escapeHtml(preview)}...</div>
+        </div>
+      </div>
+      <button class="btn-done-copy" data-done-id="${item.id}">Copy</button>
+    </div>`;
+}
+
+function approveItem(id) {
+  const item = zeusState.queue.find(i => i.id === id);
+  if (item) item.status = 'approved';
+  renderMissionQueue();
+  updateMissionStats();
+  showToast('Approved ✅');
+}
+
+function rejectItem(id) {
+  const item = zeusState.queue.find(i => i.id === id);
+  if (item) item.status = 'rejected';
+  renderMissionQueue();
+  updateMissionStats();
+}
+
+function approveAll() {
+  zeusState.queue.filter(i => i.status === 'pending').forEach(i => i.status = 'approved');
+  renderMissionQueue();
+  updateMissionStats();
+  showToast('All approved ✅');
+}
+
+function clearMission() {
+  zeusState.queue = [];
+  renderMissionQueue();
+  updateMissionStats();
+  $('missionQueueZone').style.display = 'none';
+  $('missionDoneZone').style.display = 'none';
+  $('missionProgressCard').style.display = 'none';
+}
+
+function updateMissionStats() {
+  const pending = zeusState.queue.filter(i => i.status === 'pending').length;
+  const approved = zeusState.queue.filter(i => i.status === 'approved').length;
+  $('missionStatPending').textContent = pending;
+  $('missionStatDone').textContent = approved;
+  $('missionStatTotal').textContent = zeusState.queue.length;
+}
+
+function missionSetProgress(pct, label) {
+  $('missionProgressFill').style.width = pct + '%';
+  $('missionProgressPct').textContent = pct + '%';
+  $('missionProgressLabel').textContent = label;
 }
 
 // ================================================================

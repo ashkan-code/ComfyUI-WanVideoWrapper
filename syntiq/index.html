@@ -48,6 +48,10 @@
       <button class="nav-tab" data-agent="aria">
         <span class="tab-dot aria-dot"></span>ARIA
       </button>
+      <button class="nav-tab mission-tab" data-agent="mission">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        Mission
+      </button>
     </div>
     <div class="nav-actions">
       <button class="btn-api" id="apiToggleBtn">
@@ -1170,6 +1174,104 @@
 
         </div>
       </div>
+    </section>
+
+    <!-- MISSION SECTION -->
+    <section class="agent-section" id="section-mission">
+
+      <!-- Hero -->
+      <div class="agent-hero mission-hero">
+        <div class="agent-hero-content">
+          <div class="agent-avatar mission-avatar">
+            <div class="avatar-ring"></div>
+            <div class="avatar-inner">
+              <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+                <circle cx="20" cy="20" r="18" fill="url(#zeusGrad)"/>
+                <polygon points="20,8 23,17 33,17 25,23 28,32 20,26 12,32 15,23 7,17 17,17" fill="white" opacity="0.95"/>
+                <defs>
+                  <linearGradient id="zeusGrad" x1="0" y1="0" x2="40" y2="40">
+                    <stop offset="0%" stop-color="#eab308"/>
+                    <stop offset="100%" stop-color="#f97316"/>
+                  </linearGradient>
+                </defs>
+              </svg>
+            </div>
+          </div>
+          <div class="agent-info">
+            <div class="agent-name-row">
+              <h1 class="agent-name zeus-name">ZEUS</h1>
+              <span class="agent-badge zeus-badge">Mission Orchestrator</span>
+              <span class="agent-status-pill online">● Active</span>
+            </div>
+            <p class="agent-bio">Tell me the goal in one sentence. I'll break it into tasks, assign each agent, run them automatically, and queue everything for your approval. You supervise — I execute.</p>
+            <div class="agent-stats">
+              <div class="stat"><span class="stat-val" id="missionStatPending">0</span><span class="stat-label">Pending Approval</span></div>
+              <div class="stat"><span class="stat-val" id="missionStatDone">0</span><span class="stat-label">Approved</span></div>
+              <div class="stat"><span class="stat-val" id="missionStatTotal">0</span><span class="stat-label">Total Tasks</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Mission Input -->
+      <div class="mission-input-zone">
+        <div class="mission-input-card">
+          <div class="mission-input-label">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            What's the mission?
+          </div>
+          <div class="mission-examples">
+            <span class="mission-example-chip" data-example="Create a weekly Instagram campaign for a fitness brand targeting American women aged 25-35">📸 Instagram Campaign</span>
+            <span class="mission-example-chip" data-example="Build a cold email sequence for a SaaS startup selling to small restaurant owners in the US">📧 Cold Email Sequence</span>
+            <span class="mission-example-chip" data-example="Create a full content strategy for a crypto education brand targeting young American investors">🎯 Content Strategy</span>
+          </div>
+          <textarea class="mission-textarea" id="missionInput" rows="3" placeholder="e.g. Create a weekly Instagram campaign for Syntiq AI Agency targeting US startup founders — include hashtag strategy, 3 captions, and an outreach email..."></textarea>
+          <div class="mission-input-footer">
+            <span class="mission-hint">ZEUS will plan the tasks and agents will execute them automatically</span>
+            <button class="btn-launch-mission" id="btnLaunchMission">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              Launch Mission
+            </button>
+          </div>
+        </div>
+
+        <!-- Progress Bar -->
+        <div class="mission-progress-card" id="missionProgressCard" style="display:none">
+          <div class="mission-progress-header">
+            <span class="mission-progress-label" id="missionProgressLabel">Planning tasks...</span>
+            <span class="mission-progress-pct" id="missionProgressPct">0%</span>
+          </div>
+          <div class="mission-progress-bg">
+            <div class="mission-progress-fill" id="missionProgressFill"></div>
+          </div>
+          <div class="mission-active-agent" id="missionActiveAgent"></div>
+        </div>
+      </div>
+
+      <!-- Approval Queue -->
+      <div class="mission-queue-zone" id="missionQueueZone" style="display:none">
+        <div class="mission-queue-header">
+          <div class="mission-queue-title">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+            Approval Queue
+          </div>
+          <div class="mission-queue-actions">
+            <button class="btn-approve-all" id="btnApproveAll">✅ Approve All</button>
+            <button class="btn-clear-mission" id="btnClearMission">Clear Queue</button>
+          </div>
+        </div>
+        <div class="mission-queue-list" id="missionQueueList"></div>
+      </div>
+
+      <!-- Approved / Completed -->
+      <div class="mission-done-zone" id="missionDoneZone" style="display:none">
+        <div class="mission-done-header">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+          Approved & Ready
+        </div>
+        <div class="mission-done-list" id="missionDoneList"></div>
+      </div>
+
     </section>
 
   </main>
