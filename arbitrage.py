@@ -179,6 +179,27 @@ async def _check_exits(client: AsyncBitunixClient):
         _open_signals.remove(sig)
 
 
+# ── Live z-score updater ───────────────────────────────────────────────────────
+
+async def _z_now_all(client: AsyncBitunixClient) -> dict:
+    """Compute current z for each open signal concurrently."""
+    if not _open_signals:
+        return {}
+
+    async def _one(sig: OpenSignal):
+        try:
+            kl_a = await client.get_klines(sig.sym_a, "1h", 100)
+            kl_b = await client.get_klines(sig.sym_b, "1h", 100)
+            ca, cb = _closes(kl_a), _closes(kl_b)
+            cur_r, mu, sd = _ratio_stats(ca, cb)
+            return id(sig), (cur_r - mu) / sd if sd > 0 else sig.entry_z
+        except Exception:
+            return id(sig), sig.entry_z
+
+    results = await asyncio.gather(*[_one(s) for s in _open_signals])
+    return dict(results)
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 async def main():
@@ -266,13 +287,17 @@ async def main():
                         await _check_exits(client)
                     last_exit_check = now
 
-                # show open signals status
+                # show open signals status with live z
                 if _open_signals:
                     print(f"\n Open signals: {len(_open_signals)}")
+                    z_map = await _z_now_all(client)
                     for s in _open_signals:
-                        print(f"  {s.sym_a}+{s.sym_b}"
-                              f"  z_entry={s.entry_z:+.2f}"
-                              f"  age={s.age_hours:.1f}h")
+                        z_now = z_map.get(id(s), s.entry_z)
+                        conv  = abs(z_now) < abs(s.entry_z)
+                        tag   = "[<]" if conv else "[>]"
+                        print(f"  {s.sym_a}+{s.sym_b}")
+                        print(f"  in={s.entry_z:+.2f} now={z_now:+.2f} {tag}"
+                              f" {s.age_hours:.1f}h")
 
             except Exception as e:
                 print(f" ERROR: {e}")
