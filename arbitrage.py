@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Pairs Arbitrage Scanner -- Bitunix Futures
-corr + z-score divergence across top symbols
+corr + z-score divergence
 
 Usage:
   python arbitrage.py           # single scan
@@ -24,45 +24,56 @@ SECRET_KEY = os.getenv("BITUNIX_SECRET_KEY", "4e0a845778d49068297106a64cbcda61")
 
 SCAN_INTERVAL = 30
 SHOW_TOP      = 10
+W = 46
+
+
+def _line(c="-"): return c * W
 
 
 def _fmt_opp(rank: int, o: ArbOpp) -> str:
     rl    = _rank(o.score)
-    a_ico = "L" if o.direction_a == "LONG" else "S"
-    b_ico = "L" if o.direction_b == "LONG" else "S"
-    z_lbl = "OVERVALUED" if o.z_score > 0 else "UNDERVALUED"
-
-    return (
-        f"\n+{'─'*60}+\n"
-        f"|  #{rank:<2}  {rl:<22}  score: {o.score:>5.1f}/100      |\n"
-        f"|  {_bar(o.score):<14}  corr={o.corr:.2f}  z={o.z_score:+.2f}s  {z_lbl:<14}  |\n"
-        f"+{'─'*60}+\n"
-        f"|  {a_ico} {o.direction_a:<5} {o.sym_a:<16}  @ {_fmt(o.price_a):<16}  |\n"
-        f"|  {b_ico} {o.direction_b:<5} {o.sym_b:<16}  @ {_fmt(o.price_b):<16}  |\n"
-        f"|  ratio: {o.ratio_now:.6f}  mean: {o.ratio_mean:.6f}  dev: {o.diverge_pct:.2f}%  |\n"
-        f"+{'─'*60}+\n"
-        f"|  gross      : {o.gross*100:>+7.3f}%                                   |\n"
-        f"|  fee x4     : {o.fee_cost*100:>+7.3f}%  (taker 0.06% x 4 legs)        |\n"
-        f"|  spread     : {o.spread_cost*100:>+7.3f}%                                   |\n"
-        f"|  ─────────────────────────────────────────────────   |\n"
-        f"|  net        : {o.net*100:>+7.3f}%  ~ {o.sim_usdt:>+7.2f} USDT / 1000     |\n"
-        f"+{'─'*60}+"
-    )
+    a_dir = "LONG " if o.direction_a == "LONG" else "SHORT"
+    b_dir = "LONG " if o.direction_b == "LONG" else "SHORT"
+    z_lbl = "OVER" if o.z_score > 0 else "UNDER"
+    lines = [
+        "",
+        _line("="),
+        f" #{rank}  {rl}",
+        f"  score: {o.score:.1f}/100  {_bar(o.score)}",
+        f"  corr={o.corr:.2f}  z={o.z_score:+.2f}s  {z_lbl}",
+        _line("-"),
+        f" {a_dir} {o.sym_a}",
+        f"        @ {_fmt(o.price_a)}",
+        f" {b_dir} {o.sym_b}",
+        f"        @ {_fmt(o.price_b)}",
+        f" ratio  : {o.ratio_now:.6f}",
+        f" mean   : {o.ratio_mean:.6f}",
+        f" dev    : {o.diverge_pct:.2f}%",
+        _line("-"),
+        f" gross  : {o.gross*100:>+.3f}%",
+        f" fee x4 : {o.fee_cost*100:>+.3f}%  (0.06%x4)",
+        f" spread : {o.spread_cost*100:>+.3f}%",
+        f" ---",
+        f" net    : {o.net*100:>+.3f}%",
+        f" profit : {o.sim_usdt:>+.2f} USDT / 1000",
+        _line("="),
+    ]
+    return "\n".join(lines)
 
 
 def _summary(opps: List[ArbOpp], elapsed: float, n_sym: int):
-    print(f"\n{'='*62}")
-    print(f"  {len(opps)} opportunities from {n_sym} symbols  [{elapsed:.1f}s]")
+    print(f"\n{_line('=')}")
+    print(f" {len(opps)} opps from {n_sym} symbols  [{elapsed:.1f}s]")
     if not opps:
-        print(f"  No opportunity above threshold -- market aligned")
-        print(f"{'='*62}")
+        print(f" No opportunity -- market aligned")
+        print(_line("="))
         return
-    print(f"{'='*62}")
-    print(f"  {'#':<4} {'A':<16} {'dir':<7} {'B':<16} {'dir':<7} {'z':<8} {'net':<10} {'rank'}")
-    print("  " + "-" * 60)
+    print(_line("="))
+    print(f" {'#':<3} {'A':<14} {'B':<14} {'net':<9} {'rank'}")
+    print(f" {_line('-')}")
     for i, o in enumerate(opps[:SHOW_TOP], 1):
-        print(f"  #{i:<3} {o.sym_a:<16} {o.direction_a:<7} {o.sym_b:<16} "
-              f"{o.direction_b:<7} {o.z_score:>+.2f}s  {o.net*100:>+.3f}%  {_rank(o.score)}")
+        print(f" #{i:<2} {o.sym_a:<14} {o.sym_b:<14} "
+              f"{o.net*100:>+.3f}%  {_rank(o.score)}")
 
 
 async def main():
@@ -72,12 +83,11 @@ async def main():
     args = parser.parse_args()
 
     print(f"""
-+====================================================+
-|   Pairs Arbitrage Scanner -- Bitunix Futures       |
-|   top {TOP_SYMBOLS} symbols -> all pairs -> corr + z-score  |
-|   fee: 0.06%x4=0.24%  |  spread: live depth        |
-|   threshold: corr>=0.60  |z|>=1.5s  net>=0.15%     |
-+====================================================+
+{_line('=')}
+ Pairs Arbitrage -- Bitunix Futures
+ top {TOP_SYMBOLS} symbols, corr+z-score
+ fee: 0.06%x4=0.24% | threshold: 0.15%
+{_line('=')}
 """)
 
     ssl_ctx = ssl.create_default_context()
@@ -89,8 +99,8 @@ async def main():
         client = AsyncBitunixClient(API_KEY, SECRET_KEY, session)
 
         async def _one_scan():
-            t0   = time.time()
-            print(f"  [{time.strftime('%H:%M:%S')}] Scanning {TOP_SYMBOLS} symbols ...", flush=True)
+            t0      = time.time()
+            print(f" [{time.strftime('%H:%M:%S')}] Scanning {TOP_SYMBOLS} symbols ...", flush=True)
             opps    = await scan(client)
             elapsed = time.time() - t0
             _summary(opps, elapsed, TOP_SYMBOLS)
@@ -102,16 +112,16 @@ async def main():
             await _one_scan()
             return
 
-        print(f"  Live -- every {args.interval}s  |  Ctrl+C to exit\n")
+        print(f" Live -- every {args.interval}s  |  Ctrl+C to exit\n")
         while True:
             try:
                 opps = await _one_scan()
                 if opps:
                     best = opps[0]
-                    print(f"\n  BEST: {best.sym_a}+{best.sym_b}"
-                          f"  net={best.net*100:+.3f}%  score={best.score:.0f}")
+                    print(f"\n BEST: {best.sym_a}+{best.sym_b}")
+                    print(f"  net={best.net*100:+.3f}%  score={best.score:.0f}")
             except Exception as e:
-                print(f"  ERROR: {e}")
+                print(f" ERROR: {e}")
             await asyncio.sleep(args.interval)
 
 
