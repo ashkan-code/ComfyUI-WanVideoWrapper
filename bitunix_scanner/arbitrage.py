@@ -35,8 +35,10 @@ MIN_CORR         = 0.72              # 100-candle window
 MIN_CORR_RECENT  = 0.65              # 50-candle window (stability)
 Z_THRESHOLD      = 2.0               # stricter entry
 MAX_HALF_LIFE    = 96                # hours — skip slow-reverting pairs
-MAX_FLAT_PCT     = 0.20              # max 20% flat candles — removes sticky coins
-MIN_VOLATILITY   = 0.0003            # min avg hourly move 0.03% — removes dead coins
+MAX_FLAT_PCT     = 0.20              # max 20% flat candles
+MAX_ZERO_PCT     = 0.07              # max 7% exact zero candles (stricter)
+MIN_VOLATILITY   = 0.0003            # min avg hourly move 0.03%
+MIN_VOL_USDT     = 300_000           # min 300K USDT daily volume
 LOOKBACK         = 100
 TOP_SYMBOLS      = 100               # top 100 by volume (normal mode)
 MIN_VOLUME_DEEP  = 50_000            # deep mode: min baseVol to exclude dead coins
@@ -99,12 +101,12 @@ def _is_sticky_3m(klines_3m: list) -> bool:
     if len(closes) < 5:
         return True
     zero = sum(1 for i in range(1, len(closes))
-               if closes[i] == closes[i-1])          # exact same price
+               if closes[i] == closes[i-1])
     near_zero = sum(1 for i in range(1, len(closes))
                     if closes[i-1] > 0 and
                     abs(closes[i] - closes[i-1]) / closes[i-1] < 0.0001)
     total = len(closes) - 1
-    return (zero / total) > 0.15 or (near_zero / total) > MAX_FLAT_PCT
+    return (zero / total) > MAX_ZERO_PCT or (near_zero / total) > MAX_FLAT_PCT
 
 
 def _corr(a: List[float], b: List[float]) -> float:
@@ -226,8 +228,15 @@ async def scan(client: AsyncBitunixClient,
     else:
         top = sorted(tickers, key=lambda t: t["_vol"], reverse=True)[:TOP_SYMBOLS]
 
-    price_map = {t["symbol"]: float(t["lastPrice"])
-                 for t in top if t.get("lastPrice") and float(t.get("lastPrice", 0)) > 0}
+    price_map = {}
+    for t in top:
+        try:
+            p    = float(t.get("lastPrice") or 0)
+            qvol = float(t.get("quoteVol") or t.get("turnover") or 0)
+            if p > 0 and qvol >= MIN_VOL_USDT:
+                price_map[t["symbol"]] = p
+        except Exception:
+            pass
     symbols = list(price_map.keys())
 
     # step 2a: fetch 3m klines — liquidity filter (30 candles = 90 min)
