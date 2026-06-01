@@ -35,8 +35,10 @@ MIN_CORR         = 0.72              # 100-candle window
 MIN_CORR_RECENT  = 0.65              # 50-candle window (stability)
 Z_THRESHOLD      = 2.0               # stricter entry
 MAX_HALF_LIFE    = 96                # hours — skip slow-reverting pairs
+MAX_FLAT_PCT     = 0.20              # max 20% flat candles — removes sticky coins
+MIN_VOLATILITY   = 0.0003            # min avg hourly move 0.03% — removes dead coins
 LOOKBACK         = 100
-TOP_SYMBOLS      = 50                # most liquid only
+TOP_SYMBOLS      = 100               # top 100 by volume
 TOP_CANDS        = 20                # spread fetch for top candidates
 
 
@@ -70,6 +72,20 @@ class ArbOpp:
 
 def _closes(klines: list) -> List[float]:
     return [float(k["close"]) for k in klines if k.get("close")]
+
+
+def _is_sticky(closes: List[float]) -> bool:
+    """True if coin price barely moves — too many flat candles."""
+    if len(closes) < 10:
+        return True
+    moves = [abs(closes[i] - closes[i-1]) / closes[i-1]
+             for i in range(1, len(closes)) if closes[i-1] > 0]
+    if not moves:
+        return True
+    flat     = sum(1 for m in moves if m < 0.0001)   # < 0.01% move per candle
+    flat_pct = flat / len(moves)
+    avg_move = sum(moves) / len(moves)
+    return flat_pct > MAX_FLAT_PCT or avg_move < MIN_VOLATILITY
 
 
 def _corr(a: List[float], b: List[float]) -> float:
@@ -187,7 +203,8 @@ async def scan(client: AsyncBitunixClient) -> List[ArbOpp]:
     klines  = {sym: r for sym, r in zip(tasks.keys(), results)
                if isinstance(r, list) and len(r) >= 30}
     closes  = {sym: _closes(klines[sym]) for sym in klines}
-    valid   = list(closes.keys())
+    # remove sticky / dead coins
+    valid   = [sym for sym, cl in closes.items() if not _is_sticky(cl)]
 
     # step 3: all pairs — filter by corr + z + half-life
     candidates = []
