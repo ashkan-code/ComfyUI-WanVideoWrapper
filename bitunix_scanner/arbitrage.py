@@ -36,7 +36,7 @@ MIN_CORR_RECENT  = 0.65              # 50-candle window (stability)
 Z_THRESHOLD      = 2.0               # stricter entry
 MAX_HALF_LIFE    = 96                # hours — skip slow-reverting pairs
 MAX_FLAT_PCT     = 0.20              # max 20% flat candles
-MAX_ZERO_PCT     = 0.07              # max 7% exact zero candles (stricter)
+MAX_ZERO_PCT     = 0.0               # zero tolerance — any zero candle = remove
 MIN_VOLATILITY   = 0.0003            # min avg hourly move 0.03%
 MIN_VOL_USDT     = 300_000           # min 300K USDT daily volume
 LOOKBACK         = 100
@@ -106,7 +106,10 @@ def _is_sticky_3m(klines_3m: list) -> bool:
                     if closes[i-1] > 0 and
                     abs(closes[i] - closes[i-1]) / closes[i-1] < 0.0001)
     total = len(closes) - 1
-    return (zero / total) > MAX_ZERO_PCT or (near_zero / total) > MAX_FLAT_PCT
+    # zero tolerance: even 1 exact zero candle = sticky
+    if zero > 0:
+        return True
+    return (near_zero / total) > MAX_FLAT_PCT
 
 
 def _corr(a: List[float], b: List[float]) -> float:
