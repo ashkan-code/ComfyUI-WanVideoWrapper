@@ -74,18 +74,35 @@ def _closes(klines: list) -> List[float]:
     return [float(k["close"]) for k in klines if k.get("close")]
 
 
-def _is_sticky(closes: List[float]) -> bool:
-    """True if coin price barely moves — too many flat candles."""
+def _is_sticky_1h(closes: List[float]) -> bool:
+    """Quick check on 1h closes — catches obviously dead coins."""
     if len(closes) < 10:
         return True
     moves = [abs(closes[i] - closes[i-1]) / closes[i-1]
              for i in range(1, len(closes)) if closes[i-1] > 0]
     if not moves:
         return True
-    flat     = sum(1 for m in moves if m < 0.0001)   # < 0.01% move per candle
-    flat_pct = flat / len(moves)
     avg_move = sum(moves) / len(moves)
-    return flat_pct > MAX_FLAT_PCT or avg_move < MIN_VOLATILITY
+    return avg_move < MIN_VOLATILITY
+
+
+def _is_sticky_3m(klines_3m: list) -> bool:
+    """
+    Check 3m candles for zero-movement candles.
+    A coin with >25% zero candles in last 90 min is illiquid — skip it.
+    """
+    if not klines_3m or len(klines_3m) < 5:
+        return True
+    closes = [float(k["close"]) for k in klines_3m if k.get("close")]
+    if len(closes) < 5:
+        return True
+    zero = sum(1 for i in range(1, len(closes))
+               if closes[i] == closes[i-1])          # exact same price
+    near_zero = sum(1 for i in range(1, len(closes))
+                    if closes[i-1] > 0 and
+                    abs(closes[i] - closes[i-1]) / closes[i-1] < 0.0001)
+    total = len(closes) - 1
+    return (zero / total) > 0.15 or (near_zero / total) > MAX_FLAT_PCT
 
 
 def _corr(a: List[float], b: List[float]) -> float:
@@ -197,14 +214,23 @@ async def scan(client: AsyncBitunixClient) -> List[ArbOpp]:
                  for t in top if t.get("lastPrice") and float(t.get("lastPrice", 0)) > 0}
     symbols = list(price_map.keys())
 
-    # step 2: fetch 1h klines for all
-    tasks   = {sym: client.get_klines(sym, "1h", LOOKBACK) for sym in symbols}
+    # step 2a: fetch 3m klines — liquidity filter (30 candles = 90 min)
+    tasks_3m   = {sym: client.get_klines(sym, "3m", 30) for sym in symbols}
+    results_3m = await asyncio.gather(*tasks_3m.values(), return_exceptions=True)
+    klines_3m  = {sym: r for sym, r in zip(tasks_3m.keys(), results_3m)
+                  if isinstance(r, list)}
+    # remove coins with too many zero-movement 3m candles
+    liquid = [sym for sym in symbols
+              if not _is_sticky_3m(klines_3m.get(sym, []))]
+
+    # step 2b: fetch 1h klines for liquid symbols only
+    tasks   = {sym: client.get_klines(sym, "1h", LOOKBACK) for sym in liquid}
     results = await asyncio.gather(*tasks.values(), return_exceptions=True)
     klines  = {sym: r for sym, r in zip(tasks.keys(), results)
                if isinstance(r, list) and len(r) >= 30}
     closes  = {sym: _closes(klines[sym]) for sym in klines}
-    # remove sticky / dead coins
-    valid   = [sym for sym, cl in closes.items() if not _is_sticky(cl)]
+    # secondary check on 1h avg volatility
+    valid   = [sym for sym, cl in closes.items() if not _is_sticky_1h(cl)]
 
     # step 3: all pairs — filter by corr + z + half-life
     candidates = []
