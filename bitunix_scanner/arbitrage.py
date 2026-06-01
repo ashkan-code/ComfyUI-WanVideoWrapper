@@ -38,8 +38,10 @@ MAX_HALF_LIFE    = 96                # hours — skip slow-reverting pairs
 MAX_FLAT_PCT     = 0.20              # max 20% flat candles — removes sticky coins
 MIN_VOLATILITY   = 0.0003            # min avg hourly move 0.03% — removes dead coins
 LOOKBACK         = 100
-TOP_SYMBOLS      = 100               # top 100 by volume
+TOP_SYMBOLS      = 100               # top 100 by volume (normal mode)
+MIN_VOLUME_DEEP  = 50_000            # deep mode: min baseVol to exclude dead coins
 TOP_CANDS        = 20                # spread fetch for top candidates
+MIN_NET_DEEP     = 0.030             # deep mode: 3% net minimum
 
 
 # ── dataclasses ───────────────────────────────────────────────────────────────
@@ -201,15 +203,29 @@ def _bar(s: float) -> str:
 
 # ── main scanner ──────────────────────────────────────────────────────────────
 
-async def scan(client: AsyncBitunixClient) -> List[ArbOpp]:
+async def scan(client: AsyncBitunixClient,
+               deep: bool = False) -> List[ArbOpp]:
+    """
+    deep=False : top 100 symbols, net >= 0.18%
+    deep=True  : ALL symbols (min volume filter), net >= 3.0%
+                 sticky 3m filter still applied
+    """
+    min_net = MIN_NET_DEEP if deep else MIN_NET_PROFIT
 
-    # step 1: top symbols by volume
+    # step 1: symbols
     tickers = await client.get_all_tickers()
     for t in tickers:
         try:    t["_vol"] = float(t.get("baseVol") or 0)
         except: t["_vol"] = 0.0
 
-    top = sorted(tickers, key=lambda t: t["_vol"], reverse=True)[:TOP_SYMBOLS]
+    if deep:
+        # all symbols with minimum volume — removes truly dead coins
+        top = [t for t in tickers if t["_vol"] >= MIN_VOLUME_DEEP]
+        print(f" Deep mode: {len(top)} symbols (vol>={MIN_VOLUME_DEEP:,})",
+              flush=True)
+    else:
+        top = sorted(tickers, key=lambda t: t["_vol"], reverse=True)[:TOP_SYMBOLS]
+
     price_map = {t["symbol"]: float(t["lastPrice"])
                  for t in top if t.get("lastPrice") and float(t.get("lastPrice", 0)) > 0}
     symbols = list(price_map.keys())
@@ -291,7 +307,7 @@ async def scan(client: AsyncBitunixClient) -> List[ArbOpp]:
         gross = diverge_pct * 0.5
         net   = gross - ROUND_TRIP_FEES - spread_cost
 
-        if net < MIN_NET_PROFIT:
+        if net < min_net:
             continue
 
         pa, pb = price_map.get(a, 0), price_map.get(b, 0)

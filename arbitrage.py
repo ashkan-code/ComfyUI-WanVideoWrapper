@@ -209,12 +209,15 @@ async def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--live",     action="store_true",
                         help="entry+exit monitor mode")
+    parser.add_argument("--deep",     action="store_true",
+                        help="scan ALL symbols, net>=3%% only")
     parser.add_argument("--interval", type=int, default=SCAN_INTERVAL)
     args = parser.parse_args()
 
+    mode_tag = "DEEP (all symbols, net>=3%)" if args.deep else "TOP100"
     print(f"""
 {_line('=')}
- Sniper Pairs Arb -- Bitunix
+ Sniper Pairs Arb -- Bitunix [{mode_tag}]
  ENTRY : corr>=0.72 | z>=2.0 | hl<=96h
  EXIT  : z<{Z_EXIT} OR after {TIMEOUT_HOURS}h
  NO orders placed -- display only
@@ -233,7 +236,7 @@ async def main():
             t0      = time.time()
             print(f" [{time.strftime('%H:%M:%S')}] Scanning {TOP_SYMBOLS} symbols ...",
                   flush=True)
-            opps    = await scan(client)
+            opps    = await scan(client, deep=args.deep)
             elapsed = time.time() - t0
             _summary(opps, elapsed)
 
