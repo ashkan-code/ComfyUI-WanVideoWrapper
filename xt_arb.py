@@ -39,7 +39,9 @@ class XTClient:
     def __init__(self, key="", secret=""):
         self.key = key
         self.secret = secret
-        self.http = httpx.Client(timeout=10)
+        self.http = httpx.Client(
+            timeout=httpx.Timeout(connect=10.0, read=20.0, write=10.0, pool=5.0)
+        )
 
     def _sign(self, path, qs="", body=""):
         ts = str(int(time.time() * 1000))
@@ -87,9 +89,15 @@ class XTClient:
         r.raise_for_status()
         return self._parse(r)
 
-    def tickers(self):
-        raw = self.get("/v4/public/ticker/book")
-        return raw if isinstance(raw, list) else raw.get("tickers", []) if isinstance(raw, dict) else []
+    def tickers(self, retries=3):
+        for i in range(retries):
+            try:
+                raw = self.get("/v4/public/ticker/book")
+                return raw if isinstance(raw, list) else raw.get("tickers", []) if isinstance(raw, dict) else []
+            except Exception as e:
+                if i == retries - 1: raise
+                time.sleep(2 ** i)  # 1s, 2s, 4s
+        return []
 
     def orderbook(self, sym, limit=10):
         return self.get("/v4/public/depth", {"symbol": sym, "limit": limit})
@@ -333,9 +341,15 @@ if __name__ == "__main__":
     p.add_argument("--interval",   type=float, default=SCAN_INTERVAL,  help="ثانیه بین اسکن‌ها")
     args = p.parse_args()
 
+    # خاموش کردن لاگ‌های اضافی httpx و httpcore
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+
     if args.check:
         run_check()
     else:
         logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(message)s", datefmt="%H:%M:%S")
+        logging.getLogger("httpx").setLevel(logging.WARNING)
+        logging.getLogger("httpcore").setLevel(logging.WARNING)
         run_bot(dry_run=not args.live, min_pct=args.min_profit,
                 amount=args.amount, interval=args.interval)
