@@ -274,8 +274,86 @@ class ArbitrageBot:
 # Entry point
 # ──────────────────────────────────────────────────────────────────────────────
 
+def cmd_check():
+    """Diagnostic: fetch live data and show what the API actually returns."""
+    setup_logging(False)
+    log.info("=== DIAGNOSTIC CHECK ===")
+
+    cfg = Config(api_key=os.getenv("XT_API_KEY", ""), api_secret=os.getenv("XT_API_SECRET", ""))
+    client = XTClient(cfg.api_key, cfg.api_secret)
+
+    # 1. Test public ticker endpoint
+    log.info("Fetching book tickers from sapi.xt.com ...")
+    try:
+        raw = client.get("/v4/public/ticker/book")
+        tickers = raw if isinstance(raw, list) else raw.get("tickers", raw)
+        log.info(f"Got {len(tickers)} tickers. First 3 raw records:")
+        for t in tickers[:3]:
+            log.info(f"  {t}")
+
+        # Show detected fields
+        if tickers:
+            sample = tickers[0]
+            sym  = sample.get("s") or sample.get("symbol") or "NOT FOUND"
+            bid  = sample.get("bp") or sample.get("bidPrice") or sample.get("bid") or "NOT FOUND"
+            ask  = sample.get("ap") or sample.get("askPrice") or sample.get("ask") or "NOT FOUND"
+            log.info(f"Detected → symbol={sym}  bid={bid}  ask={ask}")
+            if "NOT FOUND" in (sym, str(bid), str(ask)):
+                log.warning("Some fields not recognized! Raw keys: " + str(list(sample.keys())))
+                log.warning("Edit scanner.py find_opportunities() to match the actual field names above.")
+            else:
+                log.info("✓ Field names OK")
+    except Exception as e:
+        log.error(f"Ticker fetch failed: {e}")
+        return
+
+    # 2. Test scanner with live data
+    log.info("")
+    log.info("Running scanner on live data (threshold=0.0% to see ALL paths)...")
+    cfg.min_profit_pct = -99.0  # show everything including losses
+    cfg.trade_amount_usdt = 100.0
+    from scanner import find_opportunities
+    opps = find_opportunities(tickers, cfg)
+
+    # Show best 5 paths regardless of profit
+    log.info(f"Top 5 paths found (positive = profit, negative = loss):")
+    for o in opps[:5]:
+        log.info(f"  {o}")
+
+    if opps:
+        best = opps[0]
+        log.info("")
+        log.info(f"Best available: {best.net_profit_pct:+.4f}% net after fees")
+        breakeven = (1 - (1 - cfg.trading_fee) ** 3) * 100
+        log.info(f"Breakeven (3 × {cfg.trading_fee*100:.2f}% fee): {breakeven:.3f}%")
+        if best.net_profit_pct > 0:
+            log.info("✓ Live profitable opportunity exists RIGHT NOW!")
+        else:
+            log.info("  No profit above breakeven — market is efficient at this moment.")
+            log.info("  This is normal. Opportunities appear during news/volatility.")
+
+    # 3. Test auth (account balance) if credentials provided
+    if cfg.api_key and cfg.api_secret:
+        log.info("")
+        log.info("Testing API authentication (fetching balance)...")
+        try:
+            bal = client.get_balances()
+            usdt = next((b for b in (bal or []) if b.get("currency", "").lower() == "usdt"), None)
+            if usdt:
+                log.info(f"✓ Auth OK — USDT balance: {usdt.get('availableAmount', usdt.get('free', '?'))}")
+            else:
+                log.info(f"✓ Auth OK — got {len(bal or [])} balance records")
+        except Exception as e:
+            log.error(f"Auth failed: {e}")
+
+    client.close()
+    log.info("=== CHECK COMPLETE ===")
+
+
 def main():
     parser = argparse.ArgumentParser(description="XT.com Triangular Arbitrage Bot")
+    parser.add_argument("--check", action="store_true",
+                        help="Diagnostic: verify API connection + field names + live opportunities")
     parser.add_argument("--live", action="store_true", help="Enable live trading (default: dry run)")
     parser.add_argument("--min-profit", type=float, default=None, help="Min profit %% (default: 0.10)")
     parser.add_argument("--amount", type=float, default=None, help="Trade amount in USDT (default: 100)")
@@ -283,6 +361,10 @@ def main():
     parser.add_argument("--interval", type=float, default=None, help="Scan interval in seconds (default: 1.0)")
     parser.add_argument("--verbose", action="store_true", help="Debug logging")
     args = parser.parse_args()
+
+    if args.check:
+        cmd_check()
+        return
 
     setup_logging(args.verbose)
 
