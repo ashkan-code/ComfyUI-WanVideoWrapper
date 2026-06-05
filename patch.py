@@ -5,7 +5,7 @@ Run this once to fix wyckoff_pro.py:
 Then:
   python wyckoff_pro.py
 """
-import os, sys
+import os
 
 CONTENT = r'''#!/usr/bin/env python3
 """
@@ -284,22 +284,24 @@ def _sig_rtm(klines, direction):
 
 def _sig_brooks(klines, direction):
     sigs = []; atr_v = _atr(klines); n = len(klines)
-    for i in range(8, n-1):
+    for i in range(6, n-1):
         a = atr_v[i]
         if not a: continue
-        ts = i-6
-        if ts < 1: continue
-        tc = klines[ts:i]
-        th = max(c["high"] for c in tc); tl = min(c["low"] for c in tc)
-        rng = th-tl
-        if rng > a*2.0 or rng < a*0.3: continue
-        c = klines[i]
-        if direction == "bullish":
-            if c["close"] <= th: continue
-            sigs.append((i, c["close"], tl*(1-SL_BUFFER*0.5), c["close"]+rng*1.5))
-        else:
-            if c["close"] >= tl: continue
-            sigs.append((i, c["close"], th*(1+SL_BUFFER*0.5), c["close"]-rng*1.5))
+        bar = klines[i]
+        for w in (4, 5, 6, 7, 8):
+            ts = i - w
+            if ts < 1: continue
+            tc = klines[ts:i]
+            th = max(x["high"] for x in tc); tl = min(x["low"] for x in tc)
+            rng = th - tl
+            if rng > a * 4.0 or rng < a * 0.1: continue
+            if direction == "bullish":
+                if bar["close"] <= th: continue
+                sigs.append((i, bar["close"], tl*(1-SL_BUFFER*0.5), bar["close"]+rng*1.5))
+            else:
+                if bar["close"] >= tl: continue
+                sigs.append((i, bar["close"], th*(1+SL_BUFFER*0.5), bar["close"]-rng*1.5))
+            break
     return sigs
 
 
@@ -314,9 +316,9 @@ def _sig_adv_pa(klines, direction):
         if rng == 0: continue
         if direction == "bullish":
             lw = min(c["open"],c["close"]) - c["low"]
-            if lw < body*2.0 or lw < a*0.5: continue
-            if c["close"] < c["low"]+rng*0.6: continue
-            near = any(abs(klines[j]["low"]-c["low"])/c["low"]<0.008
+            if lw < body*1.5 or lw < a*0.3: continue
+            if c["close"] < c["low"]+rng*0.5: continue
+            near = any(abs(klines[j]["low"]-c["low"])/c["low"]<0.025
                        for j in sl_i if j < i-2)
             if not near: continue
             sl = c["low"]*(1-SL_BUFFER)
@@ -325,9 +327,9 @@ def _sig_adv_pa(klines, direction):
             sigs.append((i, c["close"], sl, tp))
         else:
             uw = c["high"] - max(c["open"],c["close"])
-            if uw < body*2.0 or uw < a*0.5: continue
-            if c["close"] > c["low"]+rng*0.4: continue
-            near = any(abs(klines[j]["high"]-c["high"])/c["high"]<0.008
+            if uw < body*1.5 or uw < a*0.3: continue
+            if c["close"] > c["low"]+rng*0.45: continue
+            near = any(abs(klines[j]["high"]-c["high"])/c["high"]<0.025
                        for j in sh_i if j < i-2)
             if not near: continue
             sl = c["high"]*(1+SL_BUFFER)
@@ -615,6 +617,7 @@ with open(target, "w", encoding="utf-8") as f:
     f.write(CONTENT)
 
 print(f"[OK] wyckoff_pro.py fixed -> {target}")
-print("[OK] Standalone version -- no bitunix_scanner imports")
+print("[OK] Standalone -- no bitunix_scanner imports")
+print("[OK] Brooks + Adv PA signal generation fixed")
 print("")
 print("Now run:  python wyckoff_pro.py")
