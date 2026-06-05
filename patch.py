@@ -283,43 +283,50 @@ def _sig_rtm(klines, direction):
 
 
 def _sig_brooks(klines, direction):
+    """TR breakout: close outside tight consolidation range."""
     sigs = []; atr_v = _atr(klines); n = len(klines)
-    for i in range(6, n-1):
+    for i in range(5, n-1):
         a = atr_v[i]
         if not a: continue
         bar = klines[i]
-        for w in (4, 5, 6, 7, 8):
+        for w in (3, 4, 5, 6, 7):
             ts = i - w
-            if ts < 1: continue
+            if ts < 0: continue
             tc = klines[ts:i]
-            th = max(x["high"] for x in tc); tl = min(x["low"] for x in tc)
+            th = max(x["high"] for x in tc)
+            tl = min(x["low"] for x in tc)
             rng = th - tl
-            if rng > a * 4.0 or rng < a * 0.1: continue
+            if rng <= 0 or rng > a * 3.5: continue
             if direction == "bullish":
                 if bar["close"] <= th: continue
+                if bar["close"] - th < a * 0.05: continue
                 sigs.append((i, bar["close"], tl*(1-SL_BUFFER*0.5), bar["close"]+rng*1.5))
             else:
                 if bar["close"] >= tl: continue
+                if tl - bar["close"] < a * 0.05: continue
                 sigs.append((i, bar["close"], th*(1+SL_BUFFER*0.5), bar["close"]-rng*1.5))
             break
     return sigs
 
 
 def _sig_adv_pa(klines, direction):
+    """Pin bar at key level -- ATR-based zone, not fixed percentage."""
     sigs = []; atr_v = _atr(klines); n = len(klines)
     sh_i = _sh(klines, 3); sl_i = _sl(klines, 3)
     for i in range(10, n-1):
         a = atr_v[i]
         if not a: continue
         c = klines[i]
-        body = abs(c["close"]-c["open"]); rng = c["high"]-c["low"]
-        if rng == 0: continue
+        body = abs(c["close"]-c["open"])
+        rng = c["high"]-c["low"]
+        if rng < a * 0.3: continue
         if direction == "bullish":
             lw = min(c["open"],c["close"]) - c["low"]
             if lw < body*1.5 or lw < a*0.3: continue
             if c["close"] < c["low"]+rng*0.5: continue
-            near = any(abs(klines[j]["low"]-c["low"])/c["low"]<0.025
-                       for j in sl_i if j < i-2)
+            # key level: any swing low within 1.5x ATR of this candle's low
+            near = any(abs(klines[j]["low"]-c["low"]) < a*1.5
+                       for j in sl_i if j < i-1)
             if not near: continue
             sl = c["low"]*(1-SL_BUFFER)
             cands = [klines[j]["high"] for j in sh_i if j<i and klines[j]["high"]>c["close"]*1.005]
@@ -329,8 +336,8 @@ def _sig_adv_pa(klines, direction):
             uw = c["high"] - max(c["open"],c["close"])
             if uw < body*1.5 or uw < a*0.3: continue
             if c["close"] > c["low"]+rng*0.45: continue
-            near = any(abs(klines[j]["high"]-c["high"])/c["high"]<0.025
-                       for j in sh_i if j < i-2)
+            near = any(abs(klines[j]["high"]-c["high"]) < a*1.5
+                       for j in sh_i if j < i-1)
             if not near: continue
             sl = c["high"]*(1+SL_BUFFER)
             cands = [klines[j]["low"] for j in sl_i if j<i and klines[j]["low"]<c["close"]*0.995]
@@ -340,6 +347,7 @@ def _sig_adv_pa(klines, direction):
 
 
 def _sig_ict(klines, direction):
+    """ICT OB + impulse -- entry at market close, SL below OB."""
     sigs = []; atr_v = _atr(klines); n = len(klines)
     sh_i = _sh(klines, 3); sl_i = _sl(klines, 3)
     for i in range(6, n-1):
@@ -353,11 +361,13 @@ def _sig_ict(klines, direction):
                 if ob["close"] >= ob["open"]: continue
                 if c["close"] < ob["high"]*1.005: continue
                 if c["close"]-ob["close"] < a*0.8: continue
-                ob_lo = min(ob["open"],ob["close"]); ob_hi = max(ob["open"],ob["close"])
-                entry = (ob_lo+ob_hi)/2; sl = ob_lo*(1-SL_BUFFER)
+                ob_lo = min(ob["open"],ob["close"])
+                entry = c["close"]
+                sl = ob_lo*(1-SL_BUFFER)
+                if sl >= entry: break
                 cands = [klines[j]["high"] for j in sh_i if j<i and klines[j]["high"]>entry*1.005]
                 tp = min(cands) if cands else entry*1.04
-                if entry>0 and sl>0 and tp>entry: sigs.append((i,entry,sl,tp))
+                if tp > entry: sigs.append((i,entry,sl,tp))
                 break
         else:
             for oi in (i-1, i-2):
@@ -366,11 +376,13 @@ def _sig_ict(klines, direction):
                 if ob["close"] <= ob["open"]: continue
                 if c["close"] > ob["low"]*0.995: continue
                 if ob["close"]-c["close"] < a*0.8: continue
-                ob_lo = min(ob["open"],ob["close"]); ob_hi = max(ob["open"],ob["close"])
-                entry = (ob_lo+ob_hi)/2; sl = ob_hi*(1+SL_BUFFER)
+                ob_hi = max(ob["open"],ob["close"])
+                entry = c["close"]
+                sl = ob_hi*(1+SL_BUFFER)
+                if sl <= entry: break
                 cands = [klines[j]["low"] for j in sl_i if j<i and klines[j]["low"]<entry*0.995]
                 tp = max(cands) if cands else entry*0.96
-                if entry>0 and sl>0 and tp<entry: sigs.append((i,entry,sl,tp))
+                if tp < entry: sigs.append((i,entry,sl,tp))
                 break
     return sigs
 
@@ -617,7 +629,8 @@ with open(target, "w", encoding="utf-8") as f:
     f.write(CONTENT)
 
 print(f"[OK] wyckoff_pro.py fixed -> {target}")
-print("[OK] Standalone -- no bitunix_scanner imports")
-print("[OK] Brooks + Adv PA signal generation fixed")
+print("[OK] ICT 100% bug fixed -- entry now at close price, not OB midpoint")
+print("[OK] Brooks -- windows 3-7, range 3.5x ATR, min breakout 0.05x ATR")
+print("[OK] Adv PA -- key level tolerance 1.5x ATR (adapts to price level)")
 print("")
 print("Now run:  python wyckoff_pro.py")
