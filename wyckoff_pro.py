@@ -237,8 +237,28 @@ def _backtest(klines, signals, direction):
 #  5 METHODS
 # ══════════════════════════════════════════════════════════════════════════════
 
+MIN_RR = 2.0   # every signal must have TP at least 2x risk away
+
+def _tp_long(klines, sh_i, entry, sl, bar_idx):
+    """Nearest swing high that gives RR >= MIN_RR; fallback 3:1."""
+    risk = entry - sl
+    if risk <= 0: return entry * 1.06
+    floor = entry + risk * MIN_RR
+    cands = [klines[j]["high"] for j in sh_i if j < bar_idx and klines[j]["high"] >= floor]
+    return min(cands) if cands else entry + risk * 3.0
+
+def _tp_short(klines, sl_i, entry, sl, bar_idx):
+    """Nearest swing low that gives RR >= MIN_RR; fallback 3:1."""
+    risk = sl - entry
+    if risk <= 0: return entry * 0.94
+    ceil = entry - risk * MIN_RR
+    cands = [klines[j]["low"] for j in sl_i if j < bar_idx and klines[j]["low"] <= ceil]
+    return max(cands) if cands else entry - risk * 3.0
+
+
 def _sig_rtm(klines, direction):
     sigs = []; atr_v = _atr(klines); n = len(klines)
+    sh_i = _sh(klines, 3); sl_i = _sl(klines, 3)
     for i in range(10, n-1):
         a = atr_v[i]
         if not a: continue
@@ -255,9 +275,8 @@ def _sig_rtm(klines, direction):
             if not prior: continue
             origin = min(p["low"] for p in prior)
             sl = origin*(1-SL_BUFFER)
-            sh_i = _sh(klines[:i], 3)
-            cands = [klines[j]["high"] for j in sh_i if klines[j]["high"] > c["close"]*1.005]
-            tp = min(cands) if cands else c["close"]*1.04
+            if sl >= c["close"]: continue
+            tp = _tp_long(klines, sh_i, c["close"], sl, i)
             sigs.append((i, c["close"], sl, tp))
         else:
             if c["close"] >= bl: continue
@@ -266,9 +285,8 @@ def _sig_rtm(klines, direction):
             if not prior: continue
             origin = max(p["high"] for p in prior)
             sl = origin*(1+SL_BUFFER)
-            sl_i = _sl(klines[:i], 3)
-            cands = [klines[j]["low"] for j in sl_i if klines[j]["low"] < c["close"]*0.995]
-            tp = max(cands) if cands else c["close"]*0.96
+            if sl <= c["close"]: continue
+            tp = _tp_short(klines, sl_i, c["close"], sl, i)
             sigs.append((i, c["close"], sl, tp))
     return sigs
 
@@ -276,6 +294,7 @@ def _sig_rtm(klines, direction):
 def _sig_brooks(klines, direction):
     """TR breakout: close outside tight consolidation range."""
     sigs = []; atr_v = _atr(klines); n = len(klines)
+    sh_i = _sh(klines, 3); sl_i = _sl(klines, 3)
     for i in range(5, n-1):
         a = atr_v[i]
         if not a: continue
@@ -291,11 +310,15 @@ def _sig_brooks(klines, direction):
             if direction == "bullish":
                 if bar["close"] <= th: continue
                 if bar["close"] - th < a * 0.05: continue
-                sigs.append((i, bar["close"], tl*(1-SL_BUFFER*0.5), bar["close"]+rng*1.5))
+                sl = tl*(1-SL_BUFFER*0.5)
+                tp = _tp_long(klines, sh_i, bar["close"], sl, i)
+                sigs.append((i, bar["close"], sl, tp))
             else:
                 if bar["close"] >= tl: continue
                 if tl - bar["close"] < a * 0.05: continue
-                sigs.append((i, bar["close"], th*(1+SL_BUFFER*0.5), bar["close"]-rng*1.5))
+                sl = th*(1+SL_BUFFER*0.5)
+                tp = _tp_short(klines, sl_i, bar["close"], sl, i)
+                sigs.append((i, bar["close"], sl, tp))
             break
     return sigs
 
@@ -320,8 +343,7 @@ def _sig_adv_pa(klines, direction):
                        for j in sl_i if j < i-1)
             if not near: continue
             sl = c["low"]*(1-SL_BUFFER)
-            cands = [klines[j]["high"] for j in sh_i if j<i and klines[j]["high"]>c["close"]*1.005]
-            tp = min(cands) if cands else c["close"]*1.04
+            tp = _tp_long(klines, sh_i, c["close"], sl, i)
             sigs.append((i, c["close"], sl, tp))
         else:
             uw = c["high"] - max(c["open"],c["close"])
@@ -331,8 +353,7 @@ def _sig_adv_pa(klines, direction):
                        for j in sh_i if j < i-1)
             if not near: continue
             sl = c["high"]*(1+SL_BUFFER)
-            cands = [klines[j]["low"] for j in sl_i if j<i and klines[j]["low"]<c["close"]*0.995]
-            tp = max(cands) if cands else c["close"]*0.96
+            tp = _tp_short(klines, sl_i, c["close"], sl, i)
             sigs.append((i, c["close"], sl, tp))
     return sigs
 
@@ -358,9 +379,8 @@ def _sig_ict(klines, direction):
                 entry = c["close"]
                 sl = ob_lo*(1-SL_BUFFER)
                 if sl >= entry: break
-                cands = [klines[j]["high"] for j in sh_i if j<i and klines[j]["high"]>entry*1.005]
-                tp = min(cands) if cands else entry*1.04
-                if tp > entry: sigs.append((i,entry,sl,tp))
+                tp = _tp_long(klines, sh_i, entry, sl, i)
+                sigs.append((i,entry,sl,tp))
                 break
         else:
             for oi in (i-1, i-2):
@@ -373,9 +393,8 @@ def _sig_ict(klines, direction):
                 entry = c["close"]
                 sl = ob_hi*(1+SL_BUFFER)
                 if sl <= entry: break
-                cands = [klines[j]["low"] for j in sl_i if j<i and klines[j]["low"]<entry*0.995]
-                tp = max(cands) if cands else entry*0.96
-                if tp < entry: sigs.append((i,entry,sl,tp))
+                tp = _tp_short(klines, sl_i, entry, sl, i)
+                sigs.append((i,entry,sl,tp))
                 break
     return sigs
 
@@ -398,9 +417,9 @@ def _sig_smc(klines, direction):
             ob = klines[ob_idx]
             entry = max(ob["open"],ob["close"])
             sl = c["low"]*(1-SL_BUFFER)
-            cands = [klines[j]["high"] for j in sh_i if j<i and klines[j]["high"]>entry*1.008]
-            tp = min(cands) if cands else entry*1.05
-            if entry>0 and sl>0 and tp>entry: sigs.append((i,entry,sl,tp))
+            if entry <= 0 or sl >= entry: continue
+            tp = _tp_long(klines, sh_i, entry, sl, i)
+            sigs.append((i,entry,sl,tp))
         else:
             rh = [klines[j]["high"] for j in sh_i if j<i-2 and j>=i-30]
             if len(rh) < 2: continue
@@ -412,9 +431,9 @@ def _sig_smc(klines, direction):
             ob = klines[ob_idx]
             entry = min(ob["open"],ob["close"])
             sl = c["high"]*(1+SL_BUFFER)
-            cands = [klines[j]["low"] for j in sl_i if j<i and klines[j]["low"]<entry*0.992]
-            tp = max(cands) if cands else entry*0.95
-            if entry>0 and sl>0 and tp<entry: sigs.append((i,entry,sl,tp))
+            if entry <= 0 or sl <= entry: continue
+            tp = _tp_short(klines, sl_i, entry, sl, i)
+            sigs.append((i,entry,sl,tp))
     return sigs
 
 
