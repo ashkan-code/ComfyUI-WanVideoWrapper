@@ -46,15 +46,15 @@ BATCH_SIZE    = 20
 SHOW_TOP      = 10
 OB_TOL        = 0.003      # 0.3% zone overlap tolerance
 
-# Distance: price must be OUTSIDE the zone, within this % of zone edge
-MAX_DIST_PCT  = 2.0        # show if price is within 2% of zone
-MIN_DIST_PCT  = 0.0        # 0% = allow "at zone edge" too
+# Distance: price must be OUTSIDE zone (any distance -- RSI projection is the real filter)
+MAX_DIST_PCT  = 10.0       # max 10% away (beyond this projection is unreliable)
 
-# RSI 15M thresholds
-RSI_BULL_ENTER  = 35.0     # oversold  -> confirms bullish OB approach
-RSI_BEAR_ENTER  = 65.0     # overbought -> confirms bearish OB approach
-RSI_BULL_STRONG = 25.0     # extreme oversold  -> bonus
-RSI_BEAR_STRONG = 75.0     # extreme overbought -> bonus
+# RSI 15M projection thresholds
+RSI_NOW_MIN   = 30.0       # current RSI must be >= 30 (not already oversold for LONG)
+RSI_NOW_MAX   = 70.0       # current RSI must be <= 70 (not already overbought for SHORT)
+RSI_PROJ_LONG = 30.0       # projected RSI at zone must be < 30 for LONG
+RSI_PROJ_SHORT= 70.0       # projected RSI at zone must be > 70 for SHORT
+RSI_PROJ_BARS = 40         # max candles to project (40 × 15m = 10h)
 
 
 # =============================================================================
@@ -164,6 +164,69 @@ def _rsi(klines: list, period: int = 14) -> float:
     if al == 0:
         return 100.0
     return 100.0 - (100.0 / (1.0 + ag / al))
+
+
+def _rsi_series(klines: list, period: int = 14, last_n: int = 8) -> List[float]:
+    """Returns the last `last_n` RSI values using Wilder smoothing."""
+    closes = [k["close"] for k in klines]
+    if len(closes) < period + last_n + 2:
+        return []
+    gains, losses = [], []
+    for i in range(1, len(closes)):
+        d = closes[i] - closes[i - 1]
+        gains.append(max(d, 0.0))
+        losses.append(max(-d, 0.0))
+    ag = sum(gains[:period]) / period
+    al = sum(losses[:period]) / period
+    result = []
+    start  = len(gains) - last_n
+    for i in range(period, len(gains)):
+        ag = (ag * (period - 1) + gains[i]) / period
+        al = (al * (period - 1) + losses[i]) / period
+        if i >= start:
+            rsi = 100.0 - (100.0 / (1.0 + ag / al)) if al > 0 else 100.0
+            result.append(rsi)
+    return result
+
+
+def _project_rsi(klines_15m: list, dist_pct: float) -> Tuple[float, float, float, int]:
+    """
+    Project RSI value when price reaches OB zone.
+    Uses linear slope of last 5 RSI bars + ATR-based candle estimate.
+    Returns: (rsi_now, slope_per_bar, rsi_at_zone, candles_to_zone)
+    """
+    klines = _parse_klines(klines_15m)
+    if len(klines) < 30:
+        return 50.0, 0.0, 50.0, 0
+
+    series = _rsi_series(klines, period=14, last_n=8)
+    if len(series) < 3:
+        return 50.0, 0.0, 50.0, 0
+
+    rsi_now = series[-1]
+
+    # Linear slope over last 5 RSI values
+    vals  = series[-5:]
+    n     = len(vals)
+    x_bar = (n - 1) / 2.0
+    y_bar = sum(vals) / n
+    num   = sum((i - x_bar) * (vals[i] - y_bar) for i in range(n))
+    den   = sum((i - x_bar) ** 2 for i in range(n))
+    slope = num / den if den > 0 else 0.0
+
+    # Candles to zone = dist_pct / ATR%
+    atr_list = _atr_vals(klines[-20:])
+    atr  = next((v for v in reversed(atr_list) if v is not None), None)
+    last_close = klines[-1]["close"]
+    if atr and last_close > 0:
+        atr_pct    = atr / last_close * 100
+        candles    = max(1, round(dist_pct / atr_pct)) if atr_pct > 0 else 5
+    else:
+        candles = 5
+    candles = min(candles, RSI_PROJ_BARS)
+
+    rsi_proj = max(0.0, min(100.0, rsi_now + slope * candles))
+    return rsi_now, slope, rsi_proj, candles
 
 
 def market_structure(raw: list, lookback: int = 50) -> str:
@@ -561,25 +624,28 @@ def _find_tp(klines_15m: list, klines_5m: list, klines_1h: list,
 
 @dataclass
 class OBSignal:
-    symbol:    str
-    direction: str
-    zone_high: float
-    zone_low:  float
-    entry:     float
-    sl:        float
-    tp:        float
-    rr:        float
-    leverage:  int
-    loss_pct:  float
-    score:     float
-    tfs:       List[str]
-    tf_count:  int
-    sl_tf:     str
-    dist_pct:  float
-    rsi_15m:   float
-    tp_reason: str
-    btc_bias:  str
-    group:     List[dict] = field(default_factory=list)
+    symbol:         str
+    direction:      str
+    zone_high:      float
+    zone_low:       float
+    entry:          float
+    sl:             float
+    tp:             float
+    rr:             float
+    leverage:       int
+    loss_pct:       float
+    score:          float
+    tfs:            List[str]
+    tf_count:       int
+    sl_tf:          str
+    dist_pct:       float
+    rsi_now:        float
+    rsi_slope:      float
+    rsi_proj:       float
+    candles_to_zone: int
+    tp_reason:      str
+    btc_bias:       str
+    group:          List[dict] = field(default_factory=list)
 
 
 async def _scan_one(client: AsyncBitunixClient,
@@ -591,15 +657,13 @@ async def _scan_one(client: AsyncBitunixClient,
     for tf in SCAN_TFS:
         kdata[tf] = await client.get_klines(symbol, tf, TF_LIMITS[tf])
 
-    # RSI 15M -- must pass first (cheap filter)
+    # Quick RSI check on 15M (cheap pre-filter)
+    # Current RSI must be in neutral zone (30-70) -- not already at extreme
     kl15 = _parse_klines(kdata.get("15m", []))
     if not kl15:
         return None
-    rsi = _rsi(kl15[-50:] if len(kl15) >= 50 else kl15)
-
-    rsi_ok = ((ict_dir == "bullish" and rsi <= RSI_BULL_ENTER) or
-              (ict_dir == "bearish" and rsi >= RSI_BEAR_ENTER))
-    if not rsi_ok:
+    rsi_now = _rsi(kl15[-50:] if len(kl15) >= 50 else kl15)
+    if not (RSI_NOW_MIN <= rsi_now <= RSI_NOW_MAX):
         return None
 
     # Detect OBs per TF
@@ -618,6 +682,22 @@ async def _scan_one(client: AsyncBitunixClient,
     sl       = best["sl"]
     loss_pct = best["loss_pct"]
 
+    # RSI projection: will RSI reach extreme when price hits zone?
+    rsi_now, rsi_slope, rsi_proj, candles_to_zone = _project_rsi(
+        kdata.get("15m", []), best["dist_pct"]
+    )
+
+    if ict_dir == "bullish" and rsi_proj >= RSI_PROJ_LONG:
+        return None   # RSI won't reach oversold at zone
+    if ict_dir == "bearish" and rsi_proj <= RSI_PROJ_SHORT:
+        return None   # RSI won't reach overbought at zone
+
+    # Slope must be moving toward the extreme (directional check)
+    if ict_dir == "bullish" and rsi_slope >= 0:
+        return None   # RSI rising -- won't oversell by zone
+    if ict_dir == "bearish" and rsi_slope <= 0:
+        return None   # RSI falling -- won't overbuy by zone
+
     tp, tp_reason = _find_tp(
         kdata.get("15m", []), kdata.get("5m", []), kdata.get("1h", []),
         entry, ict_dir, sl,
@@ -629,24 +709,28 @@ async def _scan_one(client: AsyncBitunixClient,
 
     leverage = max(1, min(10, math.floor(15 / loss_pct)))
 
-    # Score: TF confluence (max 100) + impulse (max 15) + RR (max 10) + RSI (max 15)
-    imp_pts = min(best["best_imp"] * 5, 15)
-    rr_pts  = 10 if rr >= 5 else (8 if rr >= 4 else (5 if rr >= MIN_RR else 0))
+    # Score: TF confluence + impulse + RR + RSI projection quality
+    imp_pts  = min(best["best_imp"] * 5, 15)
+    rr_pts   = 10 if rr >= 5 else (8 if rr >= 4 else (5 if rr >= MIN_RR else 0))
     if ict_dir == "bullish":
-        rsi_pts = 15 if rsi <= RSI_BULL_STRONG else (10 if rsi <= RSI_BULL_ENTER else 0)
+        rsi_pts = 15 if rsi_proj <= 20 else (10 if rsi_proj <= 25 else 5)
     else:
-        rsi_pts = 15 if rsi >= RSI_BEAR_STRONG else (10 if rsi >= RSI_BEAR_ENTER else 0)
+        rsi_pts = 15 if rsi_proj >= 80 else (10 if rsi_proj >= 75 else 5)
     score = min(best["score_base"] + imp_pts + rr_pts + rsi_pts, 100.0)
 
     return OBSignal(
-        symbol    = symbol, direction = direction,
-        zone_high = best["zone_high"], zone_low = best["zone_low"],
-        entry     = entry, sl = sl, tp = tp, rr = rr,
-        leverage  = leverage, loss_pct = loss_pct, score = score,
-        tfs       = best["tfs"], tf_count = best["tf_count"],
-        sl_tf     = best["sl_tf"], dist_pct = best["dist_pct"],
-        rsi_15m   = rsi, tp_reason = tp_reason, btc_bias = btc_bias,
-        group     = best["group"],
+        symbol          = symbol,     direction       = direction,
+        zone_high       = best["zone_high"], zone_low = best["zone_low"],
+        entry           = entry,      sl              = sl,
+        tp              = tp,         rr              = rr,
+        leverage        = leverage,   loss_pct        = loss_pct,
+        score           = score,      tfs             = best["tfs"],
+        tf_count        = best["tf_count"], sl_tf     = best["sl_tf"],
+        dist_pct        = best["dist_pct"],
+        rsi_now         = rsi_now,    rsi_slope       = rsi_slope,
+        rsi_proj        = rsi_proj,   candles_to_zone = candles_to_zone,
+        tp_reason       = tp_reason,  btc_bias        = btc_bias,
+        group           = best["group"],
     )
 
 
@@ -672,13 +756,24 @@ def _rank_label(s: float) -> str:
     return "WEAK"
 
 
-def _rsi_label(rsi: float, direction: str) -> str:
-    if direction == "LONG":
-        if rsi <= RSI_BULL_STRONG: return f"RSI {rsi:.1f}  [*** EXTREME OVERSOLD ***]"
-        return f"RSI {rsi:.1f}  [oversold -- confirmed]"
+def _rsi_proj_label(sig: OBSignal) -> str:
+    arrow = "↓" if sig.rsi_slope < 0 else "↑"
+    if sig.direction == "LONG":
+        urgency = "*** DEEP OVERSOLD ***" if sig.rsi_proj <= 20 else "oversold"
+        return (
+            f"RSI 15M now : {sig.rsi_now:.1f}  (slope {sig.rsi_slope:+.1f}/bar {arrow})\n"
+            f"  RSI @ zone : {sig.rsi_proj:.1f}  [{urgency}]  "
+            f"~{sig.candles_to_zone} candles away\n"
+            f"  TRIGGER    : Enter when price hits OB + RSI < {RSI_PROJ_LONG:.0f}"
+        )
     else:
-        if rsi >= RSI_BEAR_STRONG: return f"RSI {rsi:.1f}  [*** EXTREME OVERBOUGHT ***]"
-        return f"RSI {rsi:.1f}  [overbought -- confirmed]"
+        urgency = "*** DEEP OVERBOUGHT ***" if sig.rsi_proj >= 80 else "overbought"
+        return (
+            f"RSI 15M now : {sig.rsi_now:.1f}  (slope {sig.rsi_slope:+.1f}/bar {arrow})\n"
+            f"  RSI @ zone : {sig.rsi_proj:.1f}  [{urgency}]  "
+            f"~{sig.candles_to_zone} candles away\n"
+            f"  TRIGGER    : Enter when price hits OB + RSI > {RSI_PROJ_SHORT:.0f}"
+        )
 
 
 def _format_ob(rank: int, sig: OBSignal) -> str:
@@ -706,12 +801,12 @@ def _format_ob(rank: int, sig: OBSignal) -> str:
         f"|  #{rank:<2}  {icon}  {sig.symbol:<16}  [{tfs_str}]     |\n"
         f"|  score: {sig.score:>5.1f}/100  {_bar(sig.score)}  {rl}             |\n"
         f"+{'='*64}+\n"
-        f"  Price      : {_fmt(sig.entry)}  "
-        f"({sig.dist_pct:.2f}% from zone edge -- approaching)\n"
+        f"  Price now  : {_fmt(sig.entry)}  ({sig.dist_pct:.2f}% above/below zone)\n"
         f"  OB Zone    : {_fmt(sig.zone_low)} -- {_fmt(sig.zone_high)}\n"
-        f"  {_rsi_label(sig.rsi_15m, sig.direction)}\n"
         f"  {'─'*58}\n"
-        f"  Entry      : {_fmt(sig.entry)}\n"
+        f"  {_rsi_proj_label(sig)}\n"
+        f"  {'─'*58}\n"
+        f"  Entry      : {_fmt(sig.entry)}  (market when zone + RSI trigger)\n"
         f"  Stop Loss  : {_fmt(sig.sl)}  ({sl_sign}{sig.loss_pct:.2f}%)"
         f"  <- {sig.sl_tf.upper()} wick\n"
         f"  TP         : {_fmt(sig.tp)}  ({tp_sign}{tp_pct:.2f}%)"
@@ -732,10 +827,10 @@ def _format_ob(rank: int, sig: OBSignal) -> str:
 async def main():
     print("""
 +========================================================+
-|  ICT OB + RSI Confluence Scanner                      |
+|  ICT OB + RSI Projection Scanner                      |
 |  OB: 4H + 1H + 15M + 5M  --  strict BOS + displacement|
-|  Filter: price within 2% of zone + RSI 15M at extreme |
-|  DISPLAY ONLY -- no orders placed                     |
+|  Filter: RSI projected < 30 (LONG) / > 70 (SHORT)    |
+|  at zone  --  DISPLAY ONLY -- no orders placed        |
 +========================================================+
 """)
 
@@ -766,10 +861,8 @@ async def main():
                      if t.get("lastPrice") and float(t.get("lastPrice", 0)) > 0}
         symbols   = list(price_map.keys())
         print(f"  {len(symbols)} symbols  |  TF: {' + '.join(SCAN_TFS)}\n"
-              f"  Filters: OB confluence + RSI15 "
-              f"({'< '+str(RSI_BULL_ENTER) if 'bullish' in [d[1] for d in dirs] else ''}"
-              f"{'> '+str(RSI_BEAR_ENTER) if 'bearish' in [d[1] for d in dirs] else ''})"
-              f" + price within {MAX_DIST_PCT}% of zone\n",
+              f"  Filter: RSI 15M now 30-70 + projected at zone"
+              f" <{RSI_PROJ_LONG:.0f} (LONG) / >{RSI_PROJ_SHORT:.0f} (SHORT)\n",
               flush=True)
 
         t0    = time.time()
@@ -805,14 +898,15 @@ async def main():
         print(f"  ICT OB + RSI SIGNALS  ({len(found)} total)")
         print(f"{'='*74}")
         print(f"  {'#':<4} {'symbol':<16} {'dir':<6} {'TFs':<18} {'score':<10}"
-              f" {'RSI15':<8} {'dist%':<8} {'RRR'}")
-        print("  " + "-" * 72)
+              f" {'RSInow':<8} {'RSI@zone':<10} {'dist%':<8} {'RRR'}")
+        print("  " + "-" * 78)
         for i, s in enumerate(found, 1):
             tfs_str  = "+".join(t.upper() for t in s.tfs)
-            rsi_flag = "**" if ((s.direction == "LONG" and s.rsi_15m <= RSI_BULL_STRONG) or
-                                (s.direction == "SHORT" and s.rsi_15m >= RSI_BEAR_STRONG)) else ""
+            proj_flag = "**" if ((s.direction == "LONG" and s.rsi_proj <= 20) or
+                                 (s.direction == "SHORT" and s.rsi_proj >= 80)) else ""
             print(f"  #{i:<3} {s.symbol:<16} {s.direction:<6} {tfs_str:<18}"
-                  f" {s.score:>5.1f}/100  {s.rsi_15m:>5.1f}{rsi_flag:<3}"
+                  f" {s.score:>5.1f}/100  {s.rsi_now:>5.1f}   "
+                  f" {s.rsi_proj:>5.1f}{proj_flag:<3}"
                   f" {s.dist_pct:.2f}%   1:{s.rr:.1f}")
 
         print(f"\n{'='*74}")
