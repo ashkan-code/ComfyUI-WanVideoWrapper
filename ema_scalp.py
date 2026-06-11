@@ -1,19 +1,20 @@
 #!/usr/bin/env python3
 """
-EMA Pullback Scalp Scanner  --  standalone
-High win-rate (80%+) trend continuation scalp:
+EMA Pullback Scalp Scanner v2  --  standalone
+4H trend  +  1H EMA21 zone  +  15M approaching alert  +  5M confirm
 
-  Flow:
-    1. BTC ICT bias (4H + 1H + Daily)  ->  direction
-    2. 1H : EMA9 > EMA21 > EMA50 aligned + slope in direction
-    3. 15M: price pulled back to EMA21 in last 4 candles, bounced
-    4. 5M : bull/bear candle + volume spike + RSI momentum
-    5. Score 0-100, display top 10
+  APPROACHING : price 1-4 candles (15-60 min) from 1H EMA21
+                → set limit order at EMA21, wait for fill
+  CONFIRMED   : price at 1H EMA21 + 5M candle confirm
+                → enter now
 
-  Entry  : close of 5M confirmation candle
-  SL     : below/above 5M wick  + 0.2%
-  TP     : nearest 15M swing giving RR >= 1.5
-  DISPLAY ONLY -- no orders placed.
+  4H: EMA9 > EMA21 > EMA50  (strong trend filter)
+  1H: EMA21 = key pullback zone
+  15M: detects approach timing + RSI direction
+  5M: entry candle pattern + volume  (only when at zone)
+
+DISPLAY ONLY -- no orders placed.
+Run:  python ema_scalp.py
 """
 
 import asyncio
@@ -32,22 +33,25 @@ BASE_URL   = "https://fapi.bitunix.com"
 _SEM: Optional[asyncio.Semaphore] = None
 
 # ── Config ─────────────────────────────────────────────────────────────────────
-EMA_FAST      = 9
-EMA_MID       = 21
-EMA_SLOW      = 50
-RSI_PERIOD    = 14
-VOL_MA        = 20
-VOL_MULT      = 1.3      # current vol must be >= 1.3x average
-PULLBACK_TOL  = 0.006    # 0.6% tolerance for EMA21 touch detection
-PROXIMITY_MAX = 0.020    # price must be within 2% of EMA21 (not stale)
-MIN_RR        = 1.5
-MAX_SL_PCT    = 0.015    # 1.5% max SL for tight scalp
-SL_BUFFER     = 0.002    # 0.2% beyond wick
-BATCH_SIZE    = 20
-SHOW_TOP      = 10
+EMA_FAST     = 9
+EMA_MID      = 21
+EMA_SLOW     = 50
+
+ZONE_TOL     = 0.005    # 0.5%  → "at zone" when price within 0.5% of 1H EMA21
+APPROACH_MAX = 4        # max 4 × 15M candles = 60 min warning window
+VOL_MA       = 20
+VOL_MULT     = 1.3      # current vol must be >= 1.3x average (5M confirm only)
+MIN_RR       = 1.5
+MAX_SL_PCT   = 0.020    # 2% max SL (1H zone is wider than 5M wick)
+SL_BUFFER    = 0.002    # 0.2% beyond wick
+BATCH_SIZE   = 20
+SHOW_TOP     = 10
+
+APPROACHING = "APPROACHING"
+CONFIRMED   = "CONFIRMED"
 
 
-# ── Bitunix client ─────────────────────────────────────────────────────────────
+# ── Client ─────────────────────────────────────────────────────────────────────
 
 def _sem() -> asyncio.Semaphore:
     global _SEM
@@ -108,7 +112,6 @@ def _parse(raw: list) -> list:
 
 
 def _ema_vals(closes: List[float], period: int) -> List[Optional[float]]:
-    """Full EMA series seeded with SMA."""
     res: List[Optional[float]] = [None] * len(closes)
     if len(closes) < period:
         return res
@@ -119,66 +122,64 @@ def _ema_vals(closes: List[float], period: int) -> List[Optional[float]]:
     return res
 
 
-def _last(series: List[Optional[float]]) -> Optional[float]:
-    return next((v for v in reversed(series) if v is not None), None)
+def _last(s: List[Optional[float]]) -> Optional[float]:
+    return next((v for v in reversed(s) if v is not None), None)
 
 
-def _prev_last(series: List[Optional[float]]) -> Tuple[Optional[float], Optional[float]]:
-    vals = [v for v in series if v is not None]
-    if len(vals) < 2:
-        return None, vals[-1] if vals else None
-    return vals[-2], vals[-1]
+def _prev_last(s: List[Optional[float]]) -> Tuple[Optional[float], Optional[float]]:
+    v = [x for x in s if x is not None]
+    if len(v) < 2: return None, (v[-1] if v else None)
+    return v[-2], v[-1]
+
+
+def _atr14(klines: list) -> Optional[float]:
+    if len(klines) < 15: return None
+    trs = [max(klines[i]["high"] - klines[i]["low"],
+               abs(klines[i]["high"] - klines[i-1]["close"]),
+               abs(klines[i]["low"]  - klines[i-1]["close"]))
+           for i in range(1, len(klines))]
+    return sum(trs[-14:]) / 14 if len(trs) >= 14 else None
 
 
 def _rsi_last(klines: list) -> float:
-    """Wilder RSI of last bar."""
     closes = [k["close"] for k in klines]
-    if len(closes) < RSI_PERIOD + 2:
-        return 50.0
+    if len(closes) < 16: return 50.0
     gs, ls = [], []
     for i in range(1, len(closes)):
-        d = closes[i] - closes[i - 1]
+        d = closes[i] - closes[i-1]
         gs.append(max(d, 0.0)); ls.append(max(-d, 0.0))
-    ag = sum(gs[:RSI_PERIOD]) / RSI_PERIOD
-    al = sum(ls[:RSI_PERIOD]) / RSI_PERIOD
-    for i in range(RSI_PERIOD, len(gs)):
-        ag = (ag * (RSI_PERIOD - 1) + gs[i]) / RSI_PERIOD
-        al = (al * (RSI_PERIOD - 1) + ls[i]) / RSI_PERIOD
+    ag = sum(gs[:14]) / 14; al = sum(ls[:14]) / 14
+    for i in range(14, len(gs)):
+        ag = (ag * 13 + gs[i]) / 14
+        al = (al * 13 + ls[i]) / 14
     return 100.0 - 100.0 / (1.0 + ag / al) if al > 0 else 100.0
 
 
 def _rsi_last2(klines: list) -> Tuple[float, float]:
-    """Returns (rsi_prev, rsi_curr) for momentum direction."""
     closes = [k["close"] for k in klines]
-    if len(closes) < RSI_PERIOD + 3:
-        return 50.0, 50.0
+    if len(closes) < 17: return 50.0, 50.0
     gs, ls = [], []
     for i in range(1, len(closes)):
-        d = closes[i] - closes[i - 1]
+        d = closes[i] - closes[i-1]
         gs.append(max(d, 0.0)); ls.append(max(-d, 0.0))
-    ag = sum(gs[:RSI_PERIOD]) / RSI_PERIOD
-    al = sum(ls[:RSI_PERIOD]) / RSI_PERIOD
+    ag = sum(gs[:14]) / 14; al = sum(ls[:14]) / 14
     vals: List[float] = []
     cut = len(gs) - 2
-    for i in range(RSI_PERIOD, len(gs)):
-        ag = (ag * (RSI_PERIOD - 1) + gs[i]) / RSI_PERIOD
-        al = (al * (RSI_PERIOD - 1) + ls[i]) / RSI_PERIOD
+    for i in range(14, len(gs)):
+        ag = (ag * 13 + gs[i]) / 14
+        al = (al * 13 + ls[i]) / 14
         if i >= cut:
             vals.append(100.0 - 100.0 / (1.0 + ag / al) if al > 0 else 100.0)
     if len(vals) < 2:
-        v = vals[-1] if vals else 50.0
-        return 50.0, v
+        return 50.0, (vals[-1] if vals else 50.0)
     return vals[-2], vals[-1]
 
 
 def _vol_ratio(klines: list) -> float:
-    """Current vol / MA(VOL_MA). Returns VOL_MULT if no volume data (bypass)."""
     vols = [k["vol"] for k in klines]
-    if len(vols) < VOL_MA + 1:
-        return VOL_MULT
+    if len(vols) < VOL_MA + 1: return VOL_MULT
     ma = sum(vols[-(VOL_MA + 1):-1]) / VOL_MA
-    if ma <= 0:
-        return VOL_MULT  # no volume data on this exchange endpoint -> bypass
+    if ma <= 0: return VOL_MULT
     return vols[-1] / ma
 
 
@@ -200,9 +201,9 @@ def _is_hammer(k: dict) -> bool:
     if rng == 0: return False
     body = abs(c - o)
     if body == 0: return False
-    lower = min(o, c) - l
-    upper = h - max(o, c)
-    return lower >= 2.0 * body and upper <= body * 1.5 and (c - l) / rng >= 0.5
+    return (min(o, c) - l >= 2.0 * body and
+            h - max(o, c) <= body * 1.5 and
+            (c - l) / rng >= 0.5)
 
 
 def _is_shoot_star(k: dict) -> bool:
@@ -211,9 +212,9 @@ def _is_shoot_star(k: dict) -> bool:
     if rng == 0: return False
     body = abs(c - o)
     if body == 0: return False
-    upper = h - max(o, c)
-    lower = min(o, c) - l
-    return upper >= 2.0 * body and lower <= body * 1.5 and (h - c) / rng >= 0.5
+    return (h - max(o, c) >= 2.0 * body and
+            min(o, c) - l <= body * 1.5 and
+            (h - c) / rng >= 0.5)
 
 
 def _is_bull_engulf(kp: dict, kc: dict) -> bool:
@@ -251,190 +252,190 @@ def btc_ict_bias(tf_raw: dict) -> Tuple[str, str]:
         sc[ms] = sc.get(ms, 0) + w
         sh = _swing_highs(kl, 3); sl2 = _swing_lows(kl, 3)
         lc = kl[-1]["close"] if kl else 0
-        if len(sh) >= 2 and lc > kl[sh[-2]]["high"]: sc["bullish"] += 2; det.append(f"{tf.upper()}:BOS+")
-        if len(sl2) >= 2 and lc < kl[sl2[-2]]["low"]: sc["bearish"] += 2; det.append(f"{tf.upper()}:BOS-")
+        if len(sh) >= 2 and lc > kl[sh[-2]]["high"]:
+            sc["bullish"] += 2; det.append(f"{tf.upper()}:BOS+")
+        if len(sl2) >= 2 and lc < kl[sl2[-2]]["low"]:
+            sc["bearish"] += 2; det.append(f"{tf.upper()}:BOS-")
     tot = sc["bullish"] + sc["bearish"]
     if tot == 0: return "neutral", " | ".join(det)
-    bp = sc["bullish"] / tot * 100
-    dp = sc["bearish"] / tot * 100
+    bp = sc["bullish"] / tot * 100; dp = sc["bearish"] / tot * 100
     if bp >= 60: return "bullish", " | ".join(det) + f" [{bp:.0f}%+]"
     if dp >= 60: return "bearish", " | ".join(det) + f" [{dp:.0f}%-]"
     return "neutral", " | ".join(det)
 
 
-# ── Strategy: 1H trend check ───────────────────────────────────────────────────
+# ── Step 1: 4H trend ───────────────────────────────────────────────────────────
 
-def _check_1h(raw: list, direction: str
+def _check_4h(raw: list, direction: str
               ) -> Tuple[bool, float, float, float, str]:
-    """EMA9 > EMA21 > EMA50 aligned, EMA9 sloping in direction.
-    Returns (ok, e9, e21, e50, detail)."""
+    """EMA9 > EMA21 > EMA50 on 4H + slope in direction."""
     kl = _parse(raw)
     if len(kl) < EMA_SLOW + 5:
-        return False, 0.0, 0.0, 0.0, "insufficient 1H data"
+        return False, 0.0, 0.0, 0.0, "insufficient 4H data"
     closes = [k["close"] for k in kl]
-    e9s  = _ema_vals(closes, EMA_FAST)
-    e21s = _ema_vals(closes, EMA_MID)
-    e50s = _ema_vals(closes, EMA_SLOW)
-    e9p, e9   = _prev_last(e9s)
-    _,   e21  = _prev_last(e21s)
-    _,   e50  = _prev_last(e50s)
+    e9p, e9  = _prev_last(_ema_vals(closes, EMA_FAST))
+    _,   e21 = _prev_last(_ema_vals(closes, EMA_MID))
+    _,   e50 = _prev_last(_ema_vals(closes, EMA_SLOW))
     if None in (e9, e9p, e21, e50):
         return False, 0.0, 0.0, 0.0, "EMA calc failed"
     if direction == "bullish":
-        aligned  = e9 > e21 > e50
-        slope_ok = e9 > e9p
+        ok = e9 > e21 > e50 and e9 > e9p
     else:
-        aligned  = e9 < e21 < e50
-        slope_ok = e9 < e9p
-    ok  = aligned and slope_ok
+        ok = e9 < e21 < e50 and e9 < e9p
     tag = "[OK]" if ok else "[NO]"
-    det = f"1H EMA9={_fmt(e9)} / EMA21={_fmt(e21)} / EMA50={_fmt(e50)} {tag}"
-    return ok, e9, e21, e50, det
+    return ok, e9, e21, e50, f"4H EMA9={_fmt(e9)}/EMA21={_fmt(e21)}/EMA50={_fmt(e50)} {tag}"
 
 
-# ── Strategy: 15M pullback check ──────────────────────────────────────────────
+# ── Step 2: 1H EMA21 zone ─────────────────────────────────────────────────────
 
-def _check_15m(raw: list, direction: str
-               ) -> Tuple[bool, float, float, str]:
-    """Price pulled back to EMA21 in last 4 candles and bounced.
-    Returns (ok, ema21, rsi, detail)."""
+def _get_1h_zone(raw: list, direction: str
+                 ) -> Tuple[bool, float, str]:
+    """Get 1H EMA21 as key pullback zone. EMA9 must still be aligned."""
     kl = _parse(raw)
-    if len(kl) < EMA_MID + 10:
-        return False, 0.0, 50.0, "insufficient 15M data"
+    if len(kl) < EMA_MID + 5:
+        return False, 0.0, "insufficient 1H data"
     closes = [k["close"] for k in kl]
-    e9s  = _ema_vals(closes, EMA_FAST)
-    e21s = _ema_vals(closes, EMA_MID)
-    e9  = _last(e9s)
-    e21 = _last(e21s)
-    if e9 is None or e21 is None or e21 == 0:
-        return False, 0.0, 50.0, "EMA21 calc failed"
+    e9  = _last(_ema_vals(closes, EMA_FAST))
+    e21 = _last(_ema_vals(closes, EMA_MID))
+    if e9 is None or e21 is None:
+        return False, 0.0, "EMA21 1H calc failed"
+    # EMA9 must still respect direction on 1H
+    if direction == "bullish" and e9 < e21 * 0.997:
+        return False, e21, f"1H EMA9({_fmt(e9)}) < EMA21 -- 1H broken"
+    if direction == "bearish" and e9 > e21 * 1.003:
+        return False, e21, f"1H EMA9({_fmt(e9)}) > EMA21 -- 1H broken"
+    return True, e21, f"1H EMA21={_fmt(e21)}  EMA9={_fmt(e9)}"
 
-    # Short-term EMA alignment must hold on 15M
-    if direction == "bullish" and e9 < e21:
-        return False, e21, 50.0, f"15M EMA9 < EMA21 -- trend broken"
-    if direction == "bearish" and e9 > e21:
-        return False, e21, 50.0, f"15M EMA9 > EMA21 -- trend broken"
 
-    # Current price must be within 2% of EMA21 (setup not stale)
-    cur = kl[-1]["close"]
-    prox = abs(cur - e21) / e21
-    if prox > PROXIMITY_MAX:
-        return False, e21, 50.0, f"Price {prox*100:.1f}% from EMA21 -- stale"
+# ── Step 3: 15M approach / at-zone detection ──────────────────────────────────
 
-    # Pullback touch: last 4 candles
-    tol = e21 * PULLBACK_TOL
-    touched = None
-    for i in range(-1, -5, -1):
-        if abs(i) > len(kl): break
-        k = kl[i]
-        if direction == "bullish":
-            # Low pierced EMA21 zone AND closed above (bounce)
-            if k["low"] <= e21 + tol and k["close"] > e21 * 0.998:
-                touched = abs(i); break
-        else:
-            # High pierced EMA21 zone AND closed below (rejection)
-            if k["high"] >= e21 - tol and k["close"] < e21 * 1.002:
-                touched = abs(i); break
-    if touched is None:
-        return False, e21, 50.0, f"No EMA21({_fmt(e21)}) touch in last 4 candles"
+def _check_15m(raw: list, direction: str, ema21_1h: float
+               ) -> Tuple[Optional[str], int, int, float, str]:
+    """
+    Detects whether price is approaching or at 1H EMA21.
+    Returns (status, candles_away, time_min, rsi, detail)
+      status = APPROACHING | CONFIRMED | None
+    """
+    kl = _parse(raw)
+    if len(kl) < 20 or ema21_1h <= 0:
+        return None, 0, 0, 50.0, "insufficient 15M data"
 
-    # RSI 15M: must be in pullback cooling-off range
+    cur     = kl[-1]["close"]
+    atr     = _atr14(kl)
+    if atr is None or atr == 0:
+        return None, 0, 0, 50.0, "ATR failed"
+
+    dist    = abs(cur - ema21_1h)
+    dist_pct = dist / ema21_1h
+
+    # Already at zone?
+    if dist_pct <= ZONE_TOL:
+        rsi = _rsi_last(kl[-50:] if len(kl) >= 50 else kl)
+        return CONFIRMED, 0, 0, rsi, (
+            f"AT ZONE  EMA21={_fmt(ema21_1h)}  dist={dist_pct*100:.2f}%  RSI={rsi:.1f}")
+
+    # Price must be heading toward zone
+    recent = [k["close"] for k in kl[-4:]]
+    if len(recent) < 3:
+        return None, 0, 0, 50.0, "not enough candles"
+    slope = recent[-1] - recent[-3]   # 2-candle momentum
+
+    if direction == "bullish":
+        heading = cur > ema21_1h and slope < 0   # above EMA21, falling toward it
+    else:
+        heading = cur < ema21_1h and slope > 0   # below EMA21, rising toward it
+
+    if not heading:
+        return None, 0, 0, 50.0, "price not heading toward EMA21"
+
+    candles  = max(1, round(dist / atr))
+    time_min = candles * 15
+
+    if candles > APPROACH_MAX:
+        return None, candles, time_min, 50.0, f"too far: {candles}c away ({time_min}min)"
+
     rsi = _rsi_last(kl[-50:] if len(kl) >= 50 else kl)
-    if direction == "bullish" and not (28 <= rsi <= 65):
-        return False, e21, rsi, f"RSI15={rsi:.1f} outside pullback range 28-65"
-    if direction == "bearish" and not (35 <= rsi <= 72):
-        return False, e21, rsi, f"RSI15={rsi:.1f} outside pullback range 35-72"
 
-    det = (f"15M EMA21={_fmt(e21)} touched {touched}c ago"
-           f"  RSI={rsi:.1f}  dist={prox*100:.2f}%")
-    return True, e21, rsi, det
+    # RSI must be moving in right direction (not already at extreme)
+    if direction == "bullish" and rsi > 72:
+        return None, candles, time_min, rsi, f"RSI={rsi:.1f} too high for LONG approach"
+    if direction == "bearish" and rsi < 28:
+        return None, candles, time_min, rsi, f"RSI={rsi:.1f} too low for SHORT approach"
+
+    motion = "falling" if direction == "bullish" else "rising"
+    return APPROACHING, candles, time_min, rsi, (
+        f"~{candles}c ({time_min}min) to EMA21={_fmt(ema21_1h)}  "
+        f"RSI={rsi:.1f} {motion}")
 
 
-# ── Strategy: 5M confirmation ─────────────────────────────────────────────────
+# ── Step 4: 5M confirmation (only when CONFIRMED) ─────────────────────────────
 
-def _check_5m(raw: list, direction: str, ema21_15m: float
+def _check_5m(raw: list, direction: str, ema21_1h: float
               ) -> Tuple[bool, float, float, float, str, str]:
-    """Bullish/bearish candle at EMA21 with volume and RSI momentum.
-    Returns (ok, entry, sl, vol_ratio, pattern, detail)."""
+    """Bull/bear candle at 1H EMA21 with volume. Returns (ok,entry,sl,vr,pat,det)."""
     kl = _parse(raw)
     if len(kl) < 30:
         return False, 0.0, 0.0, 1.0, "", "insufficient 5M data"
-
     kc, kp = kl[-1], kl[-2]
     vr = _vol_ratio(kl)
     if vr < VOL_MULT:
         return False, 0.0, 0.0, vr, "", f"vol {vr:.1f}x < {VOL_MULT}x"
-
     rsi_p, rsi_c = _rsi_last2(kl)
 
     if direction == "bullish":
-        # RSI must not be in freefall (allow flat or rising)
         if rsi_c < rsi_p - 6:
             return False, 0.0, 0.0, vr, "", f"RSI5m falling ({rsi_p:.0f}->{rsi_c:.0f})"
-        # Candle must be at or just above EMA21 (15M)
-        near = kc["low"] <= ema21_15m * 1.015
-        if not near:
-            return False, 0.0, 0.0, vr, "", f"5M not near EMA21({_fmt(ema21_15m)})"
-
-        if _is_bull_engulf(kp, kc):   pat = "Bull Engulfing"
-        elif _is_hammer(kc):          pat = "Hammer"
-        elif kc["close"] > kc["open"]: pat = "Bull Candle"
-        else:
-            return False, 0.0, 0.0, vr, "", "no bullish 5M pattern"
-
+        if kc["low"] > ema21_1h * 1.015:
+            return False, 0.0, 0.0, vr, "", f"5M not at EMA21 zone ({_fmt(ema21_1h)})"
+        if   _is_bull_engulf(kp, kc):   pat = "Bull Engulfing"
+        elif _is_hammer(kc):            pat = "Hammer"
+        elif kc["close"] > kc["open"]:  pat = "Bull Candle"
+        else: return False, 0.0, 0.0, vr, "", "no bull pattern"
         entry = kc["close"]
         sl    = kc["low"] * (1 - SL_BUFFER)
-
-    else:  # bearish
+    else:
         if rsi_c > rsi_p + 6:
             return False, 0.0, 0.0, vr, "", f"RSI5m rising ({rsi_p:.0f}->{rsi_c:.0f})"
-        near = kc["high"] >= ema21_15m * 0.985
-        if not near:
-            return False, 0.0, 0.0, vr, "", f"5M not near EMA21({_fmt(ema21_15m)})"
-
-        if _is_bear_engulf(kp, kc):    pat = "Bear Engulfing"
-        elif _is_shoot_star(kc):       pat = "Shooting Star"
-        elif kc["close"] < kc["open"]: pat = "Bear Candle"
-        else:
-            return False, 0.0, 0.0, vr, "", "no bearish 5M pattern"
-
+        if kc["high"] < ema21_1h * 0.985:
+            return False, 0.0, 0.0, vr, "", f"5M not at EMA21 zone ({_fmt(ema21_1h)})"
+        if   _is_bear_engulf(kp, kc):    pat = "Bear Engulfing"
+        elif _is_shoot_star(kc):         pat = "Shooting Star"
+        elif kc["close"] < kc["open"]:   pat = "Bear Candle"
+        else: return False, 0.0, 0.0, vr, "", "no bear pattern"
         entry = kc["close"]
         sl    = kc["high"] * (1 + SL_BUFFER)
 
-    det = f"5M {pat}  RSI={rsi_c:.1f}({rsi_p:.0f}->{rsi_c:.0f})  vol={vr:.1f}x"
-    return True, entry, sl, vr, pat, det
+    return True, entry, sl, vr, pat, f"5M {pat}  RSI={rsi_c:.1f}  vol={vr:.1f}x"
 
 
-# ── TP finder ─────────────────────────────────────────────────────────────────
+# ── TP on 1H swings ────────────────────────────────────────────────────────────
 
-def _find_tp(raw_15m: list, entry: float, sl: float,
+def _find_tp(raw_1h: list, entry: float, sl: float,
              direction: str) -> Tuple[float, str]:
-    kl   = _parse(raw_15m)
-    risk = abs(entry - sl) or entry * 0.005
+    kl   = _parse(raw_1h)
+    risk = abs(entry - sl) or entry * 0.01
     md   = risk * MIN_RR
 
     if direction == "bullish":
         cands: List[Tuple[float, str]] = []
         for i in _swing_highs(kl, 2):
-            p = kl[i]["high"]
-            if p > entry + md: cands.append((p, "SH 15M"))
-        highs = [k["high"] for k in kl[-80:]]
-        seen: List[float] = []
+            if kl[i]["high"] > entry + md:
+                cands.append((kl[i]["high"], "SH 1H"))
+        highs = [k["high"] for k in kl[-60:]]; seen: List[float] = []
         for p in highs:
             if any(abs(p - s) / s < 0.003 for s in seen) and p > entry + md:
-                cands.append((p, "EQH 15M"))
+                cands.append((p, "EQH 1H"))
             seen.append(p)
         if cands: return min(cands, key=lambda x: x[0])
     else:
         cands = []
         for i in _swing_lows(kl, 2):
-            p = kl[i]["low"]
-            if p < entry - md: cands.append((p, "SL 15M"))
-        lows = [k["low"] for k in kl[-80:]]
-        seen_l: List[float] = []
+            if kl[i]["low"] < entry - md:
+                cands.append((kl[i]["low"], "SL 1H"))
+        lows = [k["low"] for k in kl[-60:]]; seen_l: List[float] = []
         for p in lows:
             if any(abs(p - s) / s < 0.003 for s in seen_l) and p < entry - md:
-                cands.append((p, "EQL 15M"))
+                cands.append((p, "EQL 1H"))
             seen_l.append(p)
         if cands: return max(cands, key=lambda x: x[0])
 
@@ -442,87 +443,121 @@ def _find_tp(raw_15m: list, entry: float, sl: float,
     return tp, f"{MIN_RR}:1 fallback"
 
 
-# ── Signal + scoring ───────────────────────────────────────────────────────────
+# ── Signal dataclass ───────────────────────────────────────────────────────────
 
 @dataclass
 class EMASignal:
     symbol:    str
     direction: str
-    entry:     float
+    status:    str       # APPROACHING | CONFIRMED
+    entry:     float     # APPROACHING: EMA21 limit level | CONFIRMED: 5M close
     sl:        float
     tp:        float
     rr:        float
     leverage:  int
     loss_pct:  float
     score:     float
-    e9_1h:     float
-    e21_1h:    float
-    e50_1h:    float
-    e21_15m:   float
+    e9_4h:     float
+    e21_4h:    float
+    e50_4h:    float
+    ema21_1h:  float
+    candles:   int       # 0 = confirmed
+    time_min:  int
     rsi_15m:   float
     vol_ratio: float
     pattern:   str
-    t_det:     str
-    pb_det:    str
-    c_det:     str
+    det_4h:    str
+    det_1h:    str
+    det_15m:   str
+    det_5m:    str
     tp_rsn:    str
     btc:       str
 
 
 def _score(sig: EMASignal) -> float:
     s = 0.0
-    # Trend strength: EMA9-EMA50 gap as % of price (25 pts)
-    gap = abs(sig.e9_1h - sig.e50_1h) / sig.e50_1h * 100 if sig.e50_1h else 0
-    s += min(15.0 + gap * 2.0, 25.0)
-    # Pullback RSI quality: ideal ~45 LONG / ~55 SHORT (20 pts)
+    # 4H trend gap strength (30 pts)
+    gap = abs(sig.e9_4h - sig.e50_4h) / sig.e50_4h * 100 if sig.e50_4h else 0
+    s += min(18.0 + gap, 30.0)
+    # Approach timing / at-zone (20 pts)
+    if sig.status == CONFIRMED:      s += 20.0
+    elif sig.candles <= 2:           s += 15.0
+    else:                            s += 8.0
+    # RSI quality (20 pts): ideal ~45 LONG / ~55 SHORT
     ideal = 45.0 if sig.direction == "LONG" else 55.0
     s += max(0.0, 20.0 - abs(sig.rsi_15m - ideal) * 0.7)
-    # Volume (20 pts)
-    s += min(sig.vol_ratio / 3.0, 1.0) * 20.0
-    # Candle pattern quality (20 pts)
-    if "Engulfing" in sig.pattern:  s += 20.0
-    elif "Hammer" in sig.pattern or "Star" in sig.pattern: s += 15.0
-    else: s += 8.0
-    # RR quality (15 pts)
-    s += min(sig.rr / (MIN_RR * 2.0), 1.0) * 15.0
+    # Volume (15 pts — only meaningful for CONFIRMED)
+    if sig.status == CONFIRMED:
+        s += min(sig.vol_ratio / 3.0, 1.0) * 15.0
+    else:
+        s += 7.0
+    # Pattern (15 pts — only for CONFIRMED)
+    if sig.status == CONFIRMED:
+        if "Engulfing" in sig.pattern:  s += 15.0
+        elif "Hammer" in sig.pattern or "Star" in sig.pattern: s += 12.0
+        else:                            s += 7.0
+    else:
+        s += 7.0
     return min(s, 100.0)
 
+
+# ── Main scan coroutine ────────────────────────────────────────────────────────
 
 async def _scan_one(client: BitunixClient, sym: str, price: float,
                     bias: str, direction: str, ict_dir: str
                     ) -> Optional[EMASignal]:
-    r1h, r15m, r5m = await asyncio.gather(
-        client.klines(sym, "1h",  100),
-        client.klines(sym, "15m",  80),
-        client.klines(sym, "5m",  100),
+
+    # Always need 4H, 1H, 15M
+    r4h, r1h, r15m = await asyncio.gather(
+        client.klines(sym, "4h", 120),
+        client.klines(sym, "1h", 100),
+        client.klines(sym, "15m", 80),
     )
 
-    ok1, e9, e21_1h, e50, t_det = _check_1h(r1h, ict_dir)
+    ok4, e9_4, e21_4, e50_4, det_4h = _check_4h(r4h, ict_dir)
+    if not ok4: return None
+
+    ok1, ema21_1h, det_1h = _get_1h_zone(r1h, ict_dir)
     if not ok1: return None
 
-    ok2, e21_15m, rsi_15m, pb_det = _check_15m(r15m, ict_dir)
-    if not ok2: return None
+    status, candles, time_min, rsi_15m, det_15m = _check_15m(r15m, ict_dir, ema21_1h)
+    if status is None: return None
 
-    ok3, entry, sl, vr, pat, c_det = _check_5m(r5m, ict_dir, e21_15m)
-    if not ok3: return None
+    # Build entry/SL depending on status
+    if status == APPROACHING:
+        # Limit order at EMA21; estimate SL from 1H ATR
+        kl1h = _parse(r1h)
+        atr1h = _atr14(kl1h) or price * 0.008
+        entry = ema21_1h
+        sl    = (ema21_1h - atr1h * 1.2) if ict_dir == "bullish" else (ema21_1h + atr1h * 1.2)
+        vr    = 1.0
+        pat   = ""
+        det_5m = f"Set LIMIT at {_fmt(ema21_1h)} -- wait for price to arrive"
+
+    else:  # CONFIRMED — need 5M
+        r5m = await client.klines(sym, "5m", 100)
+        ok5, entry, sl, vr, pat, det_5m = _check_5m(r5m, ict_dir, ema21_1h)
+        if not ok5: return None
 
     loss_pct = abs(entry - sl) / entry * 100
     if not (0 < loss_pct <= MAX_SL_PCT * 100): return None
 
-    tp, tp_rsn = _find_tp(r15m, entry, sl, ict_dir)
+    tp, tp_rsn = _find_tp(r1h, entry, sl, ict_dir)
     rr = abs(tp - entry) / abs(sl - entry) if sl != entry else 0
     if rr < MIN_RR: return None
 
     lev = max(1, min(10, math.floor(15 / loss_pct)))
+
     sig = EMASignal(
-        symbol=sym, direction=direction,
-        entry=entry, sl=sl, tp=tp, rr=rr,
-        leverage=lev, loss_pct=loss_pct, score=0.0,
-        e9_1h=e9, e21_1h=e21_1h, e50_1h=e50,
-        e21_15m=e21_15m, rsi_15m=rsi_15m,
-        vol_ratio=vr, pattern=pat,
-        t_det=t_det, pb_det=pb_det, c_det=c_det,
-        tp_rsn=tp_rsn, btc=bias,
+        symbol=sym,     direction=direction,  status=status,
+        entry=entry,    sl=sl,                tp=tp,
+        rr=rr,          leverage=lev,         loss_pct=loss_pct,
+        score=0.0,      e9_4h=e9_4,           e21_4h=e21_4,
+        e50_4h=e50_4,   ema21_1h=ema21_1h,    candles=candles,
+        time_min=time_min, rsi_15m=rsi_15m,   vol_ratio=vr,
+        pattern=pat,    det_4h=det_4h,         det_1h=det_1h,
+        det_15m=det_15m, det_5m=det_5m,        tp_rsn=tp_rsn,
+        btc=bias,
     )
     sig.score = _score(sig)
     return sig
@@ -542,26 +577,37 @@ def _format(rank: int, sig: EMASignal) -> str:
     tp_p = abs(sig.tp - sig.entry) / sig.entry * 100
     tp_s = "+" if sig.direction == "LONG" else "-"
     gr   = _grade(sig.score)
+    icon = "LONG " if sig.direction == "LONG" else "SHORT"
+
+    if sig.status == APPROACHING:
+        banner     = f"  >>>  APPROACHING  --  ~{sig.time_min}min to EMA21  <<<"
+        entry_line = f"  Limit Order : {_fmt(sig.entry)}  [set now at 1H EMA21]"
+    else:
+        banner     = f"  >>>  AT ZONE -- 5M confirmed -- enter NOW  <<<"
+        entry_line = f"  Entry       : {_fmt(sig.entry)}  [{sig.pattern}]"
+
     return (
-        f"\n+{'='*62}+\n"
-        f"|  #{rank:<2}  {'LONG ' if sig.direction=='LONG' else 'SHORT'}"
-        f"  {sig.symbol:<20}  Grade: {gr}         |\n"
-        f"|  Score: {sig.score:>5.1f}/100  {_bar(sig.score)}                       |\n"
-        f"+{'='*62}+\n"
-        f"  BTC bias  : {sig.btc.upper()}\n"
-        f"  1H Trend  : {sig.t_det}\n"
-        f"  Pullback  : {sig.pb_det}\n"
-        f"  5M Signal : {sig.c_det}\n"
-        f"  {'─'*58}\n"
-        f"  Entry     : {_fmt(sig.entry)}  [{sig.pattern}]\n"
-        f"  Stop Loss : {_fmt(sig.sl)}  ({sl_s}{sig.loss_pct:.2f}%)  <- 5M wick\n"
-        f"  TP        : {_fmt(sig.tp)}  ({tp_s}{tp_p:.2f}%)  <- {sig.tp_rsn}\n"
-        f"  RRR       : 1:{sig.rr:.1f}  |  Leverage: {sig.leverage}x\n"
-        f"  {'─'*58}\n"
-        f"  EMA 1H    : 9={_fmt(sig.e9_1h)} / 21={_fmt(sig.e21_1h)} / 50={_fmt(sig.e50_1h)}\n"
-        f"  EMA21 15M : {_fmt(sig.e21_15m)}  RSI 15M: {sig.rsi_15m:.1f}"
-        f"  Vol: {sig.vol_ratio:.1f}x\n"
-        f"+{'='*62}+"
+        f"\n+{'='*64}+\n"
+        f"|  #{rank:<2}  {icon}  {sig.symbol:<18}  [{sig.status}]  Grade:{gr} |\n"
+        f"|  Score: {sig.score:>5.1f}/100  {_bar(sig.score)}                         |\n"
+        f"+{'='*64}+\n"
+        f"{banner}\n"
+        f"  {'─'*60}\n"
+        f"  BTC bias   : {sig.btc.upper()}\n"
+        f"  4H Trend   : {sig.det_4h}\n"
+        f"  1H Zone    : {sig.det_1h}\n"
+        f"  15M Status : {sig.det_15m}\n"
+        f"  5M         : {sig.det_5m}\n"
+        f"  {'─'*60}\n"
+        f"{entry_line}\n"
+        f"  Stop Loss  : {_fmt(sig.sl)}  ({sl_s}{sig.loss_pct:.2f}%)\n"
+        f"  TP         : {_fmt(sig.tp)}  ({tp_s}{tp_p:.2f}%)  <- {sig.tp_rsn}\n"
+        f"  RRR        : 1:{sig.rr:.1f}  |  Leverage: {sig.leverage}x\n"
+        f"  {'─'*60}\n"
+        f"  4H EMAs    : 9={_fmt(sig.e9_4h)} / 21={_fmt(sig.e21_4h)} / 50={_fmt(sig.e50_4h)}\n"
+        f"  1H EMA21   : {_fmt(sig.ema21_1h)}  RSI 15M: {sig.rsi_15m:.1f}"
+        f"{'  Vol: '+str(round(sig.vol_ratio,1))+'x' if sig.status==CONFIRMED else ''}\n"
+        f"+{'='*64}+"
     )
 
 
@@ -569,16 +615,15 @@ def _format(rank: int, sig: EMASignal) -> str:
 
 async def main() -> None:
     print("""
-+============================================================+
-|  EMA Pullback Scalp Scanner  (target win rate 80%+)       |
-|  1H: EMA9>21>50 trend  |  15M: pullback to EMA21         |
-|  5M: candle + volume + RSI  |  Min RR: 1.5               |
-|  DISPLAY ONLY -- no orders placed                         |
-+============================================================+
++==============================================================+
+|  EMA Pullback Scalp v2  --  4H trend + 1H zone + 15M alert |
+|  APPROACHING : ~15-60 min warning -> set limit at EMA21     |
+|  CONFIRMED   : at zone + 5M candle -> enter now             |
+|  DISPLAY ONLY -- no orders placed                           |
++==============================================================+
 """)
     ctx = ssl.create_default_context()
-    ctx.check_hostname = False
-    ctx.verify_mode    = ssl.CERT_NONE
+    ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE
     conn = aiohttp.TCPConnector(ssl=ctx)
 
     async with aiohttp.ClientSession(connector=conn) as sess:
@@ -593,18 +638,19 @@ async def main() -> None:
 
         if bias == "neutral":
             dirs = [("LONG", "bullish"), ("SHORT", "bearish")]
-            print("  BTC neutral -- scanning both directions\n")
         else:
-            dirs = [("LONG" if bias == "bullish" else "SHORT", bias)]
+            dirs = [("LONG" if bias=="bullish" else "SHORT", bias)]
 
         ticks     = await client.tickers()
         price_map = {t["symbol"]: float(t["lastPrice"])
                      for t in ticks
                      if t.get("lastPrice") and float(t.get("lastPrice", 0)) > 0}
         symbols   = list(price_map.keys())
-        print(f"  {len(symbols)} symbols  |  EMA {EMA_FAST}/{EMA_MID}/{EMA_SLOW}"
-              f"  |  vol >={VOL_MULT}x  |  SL <={MAX_SL_PCT*100:.1f}%"
-              f"  |  RR >={MIN_RR}\n", flush=True)
+
+        print(f"  {len(symbols)} symbols"
+              f"  |  4H EMA {EMA_FAST}/{EMA_MID}/{EMA_SLOW}"
+              f"  |  1H EMA21 zone"
+              f"  |  approach window: {APPROACH_MAX*15}min\n", flush=True)
 
         t0    = time.time()
         found: List[EMASignal] = []
@@ -622,24 +668,29 @@ async def main() -> None:
                 print(f"  {done}/{len(symbols)}  found: {len(found)}"
                       f"  [{time.time()-t0:.0f}s]", flush=True)
 
-        elapsed = time.time() - t0
-        print(f"\n{'='*58}")
-        print(f"  EMA Scalp scan done  --  {len(found)} signals  [{elapsed:.0f}s]")
-        print(f"{'='*58}\n")
+        elapsed     = time.time() - t0
+        approaching = [s for s in found if s.status == APPROACHING]
+        confirmed   = [s for s in found if s.status == CONFIRMED]
+
+        print(f"\n{'='*60}")
+        print(f"  Done -- {len(found)} signals  [{elapsed:.0f}s]")
+        print(f"  APPROACHING: {len(approaching)}  |  CONFIRMED: {len(confirmed)}")
+        print(f"{'='*60}\n")
 
         if not found:
-            print("  No setups. Market not at EMA21 pullback. Try again in 5-15 min.\n")
+            print("  No setups. Try again in 5-15 minutes.\n")
             return
 
-        found.sort(key=lambda s: s.score, reverse=True)
+        # CONFIRMED first (urgent), then APPROACHING by score
+        found.sort(key=lambda s: (s.status == CONFIRMED, s.score), reverse=True)
 
-        print(f"  {'#':<4} {'symbol':<16} {'dir':<6} {'grade':<6}"
-              f" {'score':<10} {'RSI15':<8} {'vol':<8} {'RRR'}")
-        print("  " + "-" * 68)
+        print(f"  {'#':<4} {'symbol':<16} {'dir':<6} {'status':<14}"
+              f" {'grade':<5} {'score':<10} {'~min':<8} {'RRR'}")
+        print("  " + "-" * 72)
         for idx, s in enumerate(found, 1):
-            print(f"  #{idx:<3} {s.symbol:<16} {s.direction:<6} {_grade(s.score):<6}"
-                  f" {s.score:>5.1f}/100  {s.rsi_15m:>5.1f}   {s.vol_ratio:.1f}x"
-                  f"    1:{s.rr:.1f}")
+            tm = f"~{s.time_min}m" if s.status == APPROACHING else "NOW"
+            print(f"  #{idx:<3} {s.symbol:<16} {s.direction:<6} {s.status:<14}"
+                  f" {_grade(s.score):<5} {s.score:>5.1f}/100  {tm:<8} 1:{s.rr:.1f}")
 
         print(f"\n  Full detail -- top {min(SHOW_TOP, len(found))}:\n")
         for rank, sig in enumerate(found[:SHOW_TOP], 1):
