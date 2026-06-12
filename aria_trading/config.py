@@ -25,12 +25,9 @@ CONFIG = {
     "gem_score_min": 70,
     "gem_score_high": 85,
 
-    # ── Symbols (XT.com format: lowercase + underscore) ─────
-    "symbols": [
-        "btc_usdt", "eth_usdt", "sol_usdt", "bnb_usdt", "avax_usdt",
-        "arb_usdt", "op_usdt", "inj_usdt", "sui_usdt", "apt_usdt",
-        "link_usdt", "aave_usdt", "uni_usdt", "ldo_usdt", "stx_usdt",
-    ],
+    # ── Symbols ─────────────────────────────────────────────
+    "symbols_count": 100,          # تعداد ارزهای برتر برای اسکن
+    "symbols": [],                  # خودکار از XT.com پر میشه
 
     # ── Timeframes ──────────────────────────────────────────
     "htf": ["1d", "4h"],

@@ -17,12 +17,15 @@ import sys
 
 from config import CONFIG
 from orchestrator import Orchestrator
+import xt_client as xt
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="ARIA AI Trading System")
     parser.add_argument("--balance", type=float, default=1000.0,
                         help="Starting account balance in USDT (default: 1000)")
+    parser.add_argument("--top", type=int, default=None,
+                        help=f"Number of top coins to scan (default: {CONFIG['symbols_count']})")
     parser.add_argument("--live", action="store_true",
                         help="Enable live order execution (default: paper mode)")
     parser.add_argument("--debug", action="store_true",
@@ -83,6 +86,14 @@ async def main() -> None:
         if confirm.strip() != "YES":
             print("Aborted.")
             return
+
+    # ── Fetch top symbols from XT.com ──────────────────────
+    if args.top:
+        CONFIG["symbols_count"] = args.top
+    print(f"\n🔍  Fetching top {CONFIG['symbols_count']} symbols from XT.com …")
+    symbols = await xt.fetch_top_symbols(CONFIG["symbols_count"])
+    CONFIG["symbols"] = symbols
+    print(f"✅  {len(symbols)} symbols loaded: {', '.join(s.upper() for s in symbols[:5])} …\n")
 
     orchestrator = Orchestrator(account_balance=args.balance)
 

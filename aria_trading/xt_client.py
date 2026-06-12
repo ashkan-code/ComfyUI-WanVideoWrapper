@@ -30,6 +30,56 @@ async def _get(url: str, params: dict = None) -> dict | list | None:
 
 
 # ──────────────────────────────────────────────────────────
+# Symbol discovery
+# ──────────────────────────────────────────────────────────
+
+async def fetch_top_symbols(n: int = 100) -> list[str]:
+    """
+    Fetch top N USDT symbols by 24h quote volume from XT.com futures.
+    Falls back to spot if futures unavailable.
+
+    Returns:
+        List of symbols in XT format e.g. ["btc_usdt", "eth_usdt", ...]
+    """
+    # Try futures ticker first
+    data = await _get(f"{FUTURES}/future/market/v2/public/q/ticker")
+    symbols = []
+
+    if data:
+        try:
+            items = data.get("result", data if isinstance(data, list) else [])
+            if isinstance(items, list):
+                usdt = [i for i in items if str(i.get("symbol","")).endswith("_usdt")]
+                usdt.sort(key=lambda x: float(x.get("quoteVolume", x.get("qv", 0)) or 0), reverse=True)
+                symbols = [i["symbol"] for i in usdt[:n]]
+        except Exception as exc:
+            logger.warning("Futures ticker parse error: %s", exc)
+
+    # Fallback to spot
+    if not symbols:
+        data = await _get(f"{SPOT}/v4/public/ticker", {"symbols": "ALL"})
+        if data:
+            try:
+                items = data.get("result", [])
+                usdt = [i for i in items if str(i.get("s","")).endswith("_usdt")]
+                usdt.sort(key=lambda x: float(x.get("qv", 0) or 0), reverse=True)
+                symbols = [i["s"] for i in usdt[:n]]
+            except Exception as exc:
+                logger.warning("Spot ticker parse error: %s", exc)
+
+    if not symbols:
+        # Hardcoded fallback
+        symbols = [
+            "btc_usdt","eth_usdt","sol_usdt","bnb_usdt","xrp_usdt",
+            "doge_usdt","avax_usdt","link_usdt","arb_usdt","op_usdt",
+            "inj_usdt","sui_usdt","apt_usdt","aave_usdt","uni_usdt",
+        ]
+
+    logger.info("Fetched %d symbols for scanning", len(symbols))
+    return symbols
+
+
+# ──────────────────────────────────────────────────────────
 # Candles  (XT futures)
 # ──────────────────────────────────────────────────────────
 
