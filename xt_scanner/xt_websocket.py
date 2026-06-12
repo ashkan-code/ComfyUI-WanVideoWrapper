@@ -180,6 +180,7 @@ async def run_websocket(symbols: List[str], stop_event: asyncio.Event) -> None:
                         await asyncio.sleep(0.05)
 
                 # receive loop
+                _debug_count = 0
                 async for raw in ws:
                     if stop_event.is_set():
                         break
@@ -188,12 +189,26 @@ async def run_websocket(symbols: List[str], stop_event: asyncio.Event) -> None:
                     except json.JSONDecodeError:
                         continue
 
-                    topic = msg.get("topic", "")
-                    data = msg.get("data", {})
+                    # log first 10 raw messages to identify XT.com format
+                    if _debug_count < 10:
+                        logger.info("RAW MSG #%d: %s", _debug_count, str(msg)[:300])
+                        _debug_count += 1
+
+                    # XT.com may use "topic" or "event" as the channel key
+                    topic = (
+                        msg.get("topic")
+                        or msg.get("event")
+                        or msg.get("e")
+                        or msg.get("channel")
+                        or ""
+                    )
+                    data = msg.get("data") or msg.get("d") or {}
+
+                    if not topic:
+                        continue
 
                     if topic.startswith("trade@"):
                         symbol = topic.split("@", 1)[1]
-                        # data may be a list of trades or a single trade dict
                         if isinstance(data, list):
                             for trade in data:
                                 _handle_trade(symbol, trade)
