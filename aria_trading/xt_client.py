@@ -33,50 +33,88 @@ async def _get(url: str, params: dict = None) -> dict | list | None:
 # Symbol discovery
 # ──────────────────────────────────────────────────────────
 
-async def fetch_top_symbols(n: int = 100) -> list[str]:
+async def fetch_all_usdt_symbols() -> list[str]:
     """
-    Fetch top N USDT symbols by 24h quote volume from XT.com futures.
-    Falls back to spot if futures unavailable.
+    Fetch ALL active USDT trading pairs from XT.com.
+    Combines futures contracts + spot pairs, sorted by volume.
 
     Returns:
-        List of symbols in XT format e.g. ["btc_usdt", "eth_usdt", ...]
+        Full list of symbols e.g. ["btc_usdt", "eth_usdt", ...]
     """
-    # Try futures ticker first
-    data = await _get(f"{FUTURES}/future/market/v2/public/q/ticker")
-    symbols = []
+    symbols_with_vol: list[tuple[str, float]] = []
+    seen: set[str] = set()
 
+    # 1. Futures tickers (includes volume data)
+    data = await _get(f"{FUTURES}/future/market/v2/public/q/ticker")
     if data:
         try:
             items = data.get("result", data if isinstance(data, list) else [])
             if isinstance(items, list):
-                usdt = [i for i in items if str(i.get("symbol","")).endswith("_usdt")]
-                usdt.sort(key=lambda x: float(x.get("quoteVolume", x.get("qv", 0)) or 0), reverse=True)
-                symbols = [i["symbol"] for i in usdt[:n]]
+                for i in items:
+                    sym = str(i.get("symbol", ""))
+                    if sym.endswith("_usdt") and sym not in seen:
+                        vol = float(i.get("quoteVolume", i.get("qv", 0)) or 0)
+                        symbols_with_vol.append((sym, vol))
+                        seen.add(sym)
         except Exception as exc:
-            logger.warning("Futures ticker parse error: %s", exc)
+            logger.warning("Futures ticker all-symbols error: %s", exc)
 
-    # Fallback to spot
-    if not symbols:
-        data = await _get(f"{SPOT}/v4/public/ticker", {"symbols": "ALL"})
+    # 2. Spot tickers — adds pairs not listed on futures
+    data = await _get(f"{SPOT}/v4/public/ticker", {"symbols": "ALL"})
+    if data:
+        try:
+            items = data.get("result", [])
+            if isinstance(items, list):
+                for i in items:
+                    sym = str(i.get("s", ""))
+                    if sym.endswith("_usdt") and sym not in seen:
+                        vol = float(i.get("qv", 0) or 0)
+                        symbols_with_vol.append((sym, vol))
+                        seen.add(sym)
+        except Exception as exc:
+            logger.warning("Spot ticker all-symbols error: %s", exc)
+
+    # 3. Spot symbols list — picks up any pair with no recent volume
+    if len(seen) < 50:
+        data = await _get(f"{SPOT}/v4/public/symbol")
         if data:
             try:
-                items = data.get("result", [])
-                usdt = [i for i in items if str(i.get("s","")).endswith("_usdt")]
-                usdt.sort(key=lambda x: float(x.get("qv", 0) or 0), reverse=True)
-                symbols = [i["s"] for i in usdt[:n]]
+                result = data.get("result", {})
+                items = result.get("items", result if isinstance(result, list) else [])
+                for i in items:
+                    sym = str(i.get("symbol", ""))
+                    state = str(i.get("state", "ONLINE"))
+                    if sym.endswith("_usdt") and state == "ONLINE" and sym not in seen:
+                        symbols_with_vol.append((sym, 0.0))
+                        seen.add(sym)
             except Exception as exc:
-                logger.warning("Spot ticker parse error: %s", exc)
+                logger.warning("Spot symbol list error: %s", exc)
+
+    # Sort by volume descending
+    symbols_with_vol.sort(key=lambda x: x[1], reverse=True)
+    symbols = [s for s, _ in symbols_with_vol]
 
     if not symbols:
-        # Hardcoded fallback
         symbols = [
             "btc_usdt","eth_usdt","sol_usdt","bnb_usdt","xrp_usdt",
             "doge_usdt","avax_usdt","link_usdt","arb_usdt","op_usdt",
             "inj_usdt","sui_usdt","apt_usdt","aave_usdt","uni_usdt",
         ]
 
-    logger.info("Fetched %d symbols for scanning", len(symbols))
+    logger.info("Fetched %d total USDT symbols from XT.com", len(symbols))
     return symbols
+
+
+async def fetch_top_symbols(n: int = 9999) -> list[str]:
+    """
+    Fetch USDT symbols from XT.com sorted by 24h quote volume.
+    n=9999 (default) returns ALL available symbols.
+
+    Returns:
+        List of symbols in XT format e.g. ["btc_usdt", "eth_usdt", ...]
+    """
+    all_syms = await fetch_all_usdt_symbols()
+    return all_syms if n >= 9999 else all_syms[:n]
 
 
 # ──────────────────────────────────────────────────────────

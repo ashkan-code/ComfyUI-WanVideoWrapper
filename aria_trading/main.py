@@ -87,13 +87,14 @@ async def main() -> None:
             print("Aborted.")
             return
 
-    # ── Fetch top symbols from XT.com ──────────────────────
+    # ── Fetch symbols from XT.com ──────────────────────────
     if args.top:
         CONFIG["symbols_count"] = args.top
-    print(f"\n🔍  Fetching top {CONFIG['symbols_count']} symbols from XT.com …")
+    scan_label = str(CONFIG["symbols_count"]) if CONFIG["symbols_count"] < 9999 else "همه"
+    print(f"\n🔍  در حال دریافت {scan_label} نماد از XT.com …")
     symbols = await xt.fetch_top_symbols(CONFIG["symbols_count"])
     CONFIG["symbols"] = symbols
-    print(f"✅  {len(symbols)} symbols loaded: {', '.join(s.upper() for s in symbols[:5])} …\n")
+    print(f"✅  {len(symbols)} نماد بارگذاری شد: {', '.join(s.upper() for s in symbols[:5])} …\n")
 
     orchestrator = Orchestrator(account_balance=args.balance)
 
