@@ -64,14 +64,12 @@ def build_table(results: List[SignalResult], elapsed: float) -> Table:
         expand=True,
     )
 
-    table.add_column("Rank", justify="right", style="dim", width=5)
-    table.add_column("Symbol", style="bold white", min_width=14)
-    table.add_column("Price (USDT)", justify="right", min_width=14)
-    table.add_column("CVD", justify="right", min_width=14)
-    table.add_column("OBI Ratio", justify="right", width=10)
-    table.add_column("Sweep", justify="center", width=8)
-    table.add_column("Score", justify="right", width=8)
-    table.add_column("Direction", justify="center", width=10)
+    table.add_column("#", justify="right", style="dim", width=3)
+    table.add_column("Symbol", style="bold white", width=12, no_wrap=True)
+    table.add_column("Price", justify="right", width=11)
+    table.add_column("OBI", justify="right", width=6)
+    table.add_column("Score", justify="right", width=7)
+    table.add_column("Dir", justify="center", width=8)
 
     for rank, r in enumerate(results, 1):
         # Format price with appropriate precision
@@ -95,11 +93,9 @@ def build_table(results: List[SignalResult], elapsed: float) -> Table:
 
         table.add_row(
             str(rank),
-            r.symbol.upper(),
+            r.symbol.upper().replace("_USDT", ""),
             price_str,
-            _cvd_arrow(r.cvd),
             obi_text,
-            sweep_icon,
             score_text,
             dir_text,
             style=row_style,

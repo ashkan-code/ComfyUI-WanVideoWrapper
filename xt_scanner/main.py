@@ -97,6 +97,25 @@ async def main() -> None:
         if answer not in ("y", "yes"):
             sys.exit(0)
 
+    # ── Telegram test ──────────────────────────────────────
+    if config.TELEGRAM_BOT_TOKEN and config.TELEGRAM_CHAT_ID:
+        import aiohttp as _aio
+        test_url = f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}/sendMessage"
+        try:
+            async with _aio.ClientSession() as s:
+                async with s.post(test_url, json={
+                    "chat_id": config.TELEGRAM_CHAT_ID,
+                    "text": "✅ XT Scanner started — alerts are active!"
+                }, timeout=_aio.ClientTimeout(total=8)) as r:
+                    body = await r.json()
+                    if r.status == 200:
+                        print("✅  Telegram OK — test message sent!\n")
+                    else:
+                        print(f"⚠️  Telegram error: {body.get('description')}")
+                        print("   → توی تلگرام ربات رو پیدا کن و /start بزن\n")
+        except Exception as e:
+            print(f"⚠️  Telegram unreachable: {e}\n")
+
     # ── Symbol discovery ────────────────────────────────────
     print("\n🔍  Fetching top symbols from XT.com …")
     symbols = await ws.fetch_top_symbols_by_volume(args.top)
