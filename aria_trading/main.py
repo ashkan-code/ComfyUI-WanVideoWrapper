@@ -50,8 +50,8 @@ def check_config() -> list[str]:
         warnings.append("telegram_bot_token")
     if not CONFIG["telegram_chat_id"]:
         warnings.append("telegram_chat_id")
-    if not CONFIG["bitunix_api_key"]:
-        warnings.append("bitunix_api_key (needed for live data)")
+    if not CONFIG["xt_api_key"]:
+        warnings.append("xt_api_key (needed for live trading)")
     return warnings
 
 
