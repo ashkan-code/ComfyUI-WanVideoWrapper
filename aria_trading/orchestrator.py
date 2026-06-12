@@ -68,7 +68,7 @@ class Orchestrator:
         Initialise database, send startup notification, and launch all agents.
         """
         await init_db()
-        await tg.send("🤖 <b>ARIA Trading System ONLINE</b>\nScanning markets…")
+        await tg.system_online()
         logger.info("ARIA Orchestrator starting all agents")
 
         tasks = [
@@ -90,7 +90,7 @@ class Orchestrator:
             await asyncio.gather(*tasks)
         except Exception as exc:
             logger.critical("Orchestrator fatal error: %s", exc)
-            await tg.send(f"🚨 ARIA FATAL ERROR: {exc}")
+            await tg.system_offline(str(exc))
         finally:
             self._stop.set()
             for task in tasks:
@@ -113,7 +113,11 @@ class Orchestrator:
                 data = event.get("data", {})
 
                 if event_type == "trade_setup":
+                    await tg.setup_qualified(data)
                     await self._handle_setup(data)
+
+                elif event_type == "gem_candidate":
+                    await tg.gem_found(data)
 
                 elif event_type == "market_analysis":
                     logger.debug("Market update: %s %s",
@@ -123,6 +127,7 @@ class Orchestrator:
                     ws = data.get("whale_signal", "NEUTRAL")
                     if ws in ("BULLISH_STRONG", "BEARISH_STRONG"):
                         logger.info("Whale signal %s: %s", data.get("symbol"), ws)
+                        await tg.whale_alert(data["symbol"], ws, data.get("summary", ""))
 
             except asyncio.TimeoutError:
                 pass
@@ -192,18 +197,38 @@ class Orchestrator:
         """Apply an exit decision to the corresponding trade."""
         trade_id = decision.trade_id
         symbol = decision.symbol
+        current_price = self.exit_manager._prices.get(symbol, 0)
+
+        open_trade = await self._get_open_trade(trade_id)
+        entry_price = (open_trade or {}).get("entry_price", 0)
+        direction = (open_trade or {}).get("direction", "long")
 
         if decision.action == "full_exit":
-            # Find trade and log exit
-            open_trades = await self._get_open_trade(trade_id)
-            if open_trades:
-                entry_price = open_trades.get("entry_price", 0)
-                direction = open_trades.get("direction", "long")
-                current_price = self.exit_manager._prices.get(symbol, entry_price)
+            pnl_pct = (
+                (current_price - entry_price) / entry_price * 100
+                if direction == "long" and entry_price
+                else (entry_price - current_price) / entry_price * 100
+                if entry_price else 0
+            )
+            if "SL" in decision.reason or "SL hit" in decision.reason:
+                await tg.sl_hit(symbol, current_price, pnl_pct)
+            elif "TP3" in decision.reason:
+                await tg.tp3_hit(symbol, current_price, pnl_pct)
+
+            if open_trade:
                 await self.journal.log_exit(trade_id, current_price, decision.reason,
                                             entry_price, direction)
-                self.exit_manager.remove_trade(trade_id)
-                self.risk_manager.remove_open_trade(trade_id)
+            self.exit_manager.remove_trade(trade_id)
+            self.risk_manager.remove_open_trade(trade_id)
+
+        elif decision.action == "partial_exit":
+            if "TP1" in decision.reason:
+                await tg.tp1_hit(symbol, current_price, decision.new_sl or entry_price)
+            elif "TP2" in decision.reason:
+                await tg.tp2_hit(symbol, current_price, decision.new_sl or entry_price)
+            else:
+                await tg.partial_exit(symbol, decision.exit_pct,
+                                      decision.reason, decision.new_sl)
 
         elif decision.action == "trail_sl" and decision.new_sl:
             logger.info("SL trailed for %s → %.4f", symbol, decision.new_sl)

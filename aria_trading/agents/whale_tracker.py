@@ -8,8 +8,7 @@ import asyncio
 import logging
 import time
 
-import aiohttp
-
+import xt_client as xt
 from config import CONFIG
 
 logger = logging.getLogger(__name__)
@@ -25,7 +24,6 @@ class WhaleTrackerAgent:
         self.signal_queue = signal_queue
         self.interval = CONFIG["whale_check_interval"]
         self.glassnode_key = CONFIG["glassnode_api_key"]
-        self.rest_url = CONFIG["bitunix_rest_url"]
         self._cache: dict[str, dict] = {}
 
     # ──────────────────────────────────────────────────────────
@@ -91,79 +89,18 @@ class WhaleTrackerAgent:
     # ──────────────────────────────────────────────────────────
 
     async def get_funding_rate(self, symbol: str) -> float:
-        """
-        Fetch current perpetual funding rate.
-
-        Returns:
-            Funding rate as float (e.g. 0.0001 = 0.01%)
-        """
-        url = f"{self.rest_url}/fapi/v1/fundingRate"
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    url,
-                    params={"symbol": symbol, "limit": 1},
-                    timeout=aiohttp.ClientTimeout(total=8),
-                ) as resp:
-                    if resp.status != 200:
-                        return 0.0
-                    data = await resp.json()
-                    if data:
-                        return float(data[-1].get("fundingRate", 0))
-        except Exception as exc:
-            logger.debug("Funding rate fetch failed %s: %s", symbol, exc)
-        return 0.0
+        """Fetch current perpetual funding rate from XT.com."""
+        return await xt.get_funding_rate(symbol)
 
     async def get_open_interest(self, symbol: str) -> dict:
-        """
-        Fetch open interest and 24h change.
-
-        Returns:
-            Dict with current OI and 24h change %
-        """
-        url = f"{self.rest_url}/fapi/v1/openInterest"
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    url,
-                    params={"symbol": symbol},
-                    timeout=aiohttp.ClientTimeout(total=8),
-                ) as resp:
-                    if resp.status != 200:
-                        return {"current": 0.0, "24h_change_pct": 0.0, "signal": "unknown"}
-                    data = await resp.json()
-                    oi = float(data.get("openInterest", 0))
-                    return {"current": oi, "24h_change_pct": 0.0, "signal": "neutral"}
-        except Exception as exc:
-            logger.debug("OI fetch failed %s: %s", symbol, exc)
-        return {"current": 0.0, "24h_change_pct": 0.0, "signal": "unknown"}
+        """Fetch open interest from XT.com."""
+        return await xt.get_open_interest(symbol)
 
     async def get_liquidation_clusters(self, symbol: str) -> dict:
-        """
-        Estimate nearest liquidation clusters from order book depth.
-        Falls back to approximate calculation if API unavailable.
-
-        Returns:
-            Dict with nearest_above and nearest_below cluster info
-        """
-        # Approximate from current price ± common leverage levels
-        try:
-            url = f"{self.rest_url}/fapi/v1/ticker/price"
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    url,
-                    params={"symbol": symbol},
-                    timeout=aiohttp.ClientTimeout(total=8),
-                ) as resp:
-                    price_data = await resp.json()
-                    price = float(price_data.get("price", 0))
-        except Exception:
-            price = 0.0
-
+        """Estimate liquidation clusters based on current price."""
+        price = await xt.get_price(symbol)
         if price == 0:
             return {"nearest_above": {}, "nearest_below": {}}
-
-        # 10x leveraged long liq ≈ price * 0.9, short ≈ price * 1.1
         return {
             "nearest_above": {"price": round(price * 1.10, 2), "size_usd": 0},
             "nearest_below": {"price": round(price * 0.90, 2), "size_usd": 0},
@@ -177,7 +114,7 @@ class WhaleTrackerAgent:
         Returns:
             Dict with 24h_netflow and trend classification
         """
-        if not self.glassnode_key or symbol not in ("BTCUSDT", "ETHUSDT"):
+        if not self.glassnode_key or symbol not in ("btc_usdt", "eth_usdt"):
             return {"24h_netflow": 0.0, "trend": "neutral"}
 
         asset = "BTC" if "BTC" in symbol else "ETH"

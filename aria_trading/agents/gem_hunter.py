@@ -8,8 +8,7 @@ import asyncio
 import logging
 import time
 
-import aiohttp
-
+import xt_client as xt
 from config import CONFIG
 
 logger = logging.getLogger(__name__)
@@ -38,7 +37,6 @@ class GemHunterAgent:
         self.market_analyst = market_analyst
         self.whale_tracker = whale_tracker
         self.interval = CONFIG["gem_scan_interval"]
-        self.rest_url = CONFIG["bitunix_rest_url"]
         self._volume_baseline: dict[str, float] = {}
 
     # ──────────────────────────────────────────────────────────
@@ -306,24 +304,5 @@ class GemHunterAgent:
     # ──────────────────────────────────────────────────────────
 
     async def _fetch_candles(self, symbol: str, tf: str, limit: int) -> list[dict]:
-        tf_map = {"4H": "4h", "1H": "1h", "1D": "1d", "15m": "15m"}
-        interval = tf_map.get(tf, "1h")
-        url = f"{self.rest_url}/fapi/v1/klines"
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    url,
-                    params={"symbol": symbol, "interval": interval, "limit": limit},
-                    timeout=aiohttp.ClientTimeout(total=10),
-                ) as resp:
-                    if resp.status != 200:
-                        return []
-                    data = await resp.json()
-            return [
-                {"timestamp": r[0], "open": float(r[1]), "high": float(r[2]),
-                 "low": float(r[3]), "close": float(r[4]), "volume": float(r[5])}
-                for r in data
-            ]
-        except Exception as exc:
-            logger.debug("Candle fetch %s/%s: %s", symbol, tf, exc)
-            return []
+        """Fetch OHLCV candles from XT.com."""
+        return await xt.get_klines(symbol, tf, limit)

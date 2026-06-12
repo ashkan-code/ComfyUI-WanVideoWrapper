@@ -9,8 +9,7 @@ import logging
 import time
 from typing import Any
 
-import aiohttp
-
+import xt_client as xt
 from config import CONFIG
 
 logger = logging.getLogger(__name__)
@@ -26,7 +25,6 @@ class MarketAnalystAgent:
         self.signal_queue = signal_queue
         self.symbols = CONFIG["symbols"]
         self.interval = CONFIG["market_analysis_interval"]
-        self.rest_url = CONFIG["bitunix_rest_url"]
         self._cache: dict[str, dict] = {}
 
     # ──────────────────────────────────────────────────────────
@@ -381,39 +379,5 @@ class MarketAnalystAgent:
     # ──────────────────────────────────────────────────────────
 
     async def _fetch_candles(self, symbol: str, timeframe: str, limit: int = 100) -> list[dict]:
-        """
-        Fetch OHLCV candles from Bitunix REST API.
-
-        Args:
-            symbol: e.g. "BTCUSDT"
-            timeframe: e.g. "4H", "1H", "15m"
-            limit: number of candles
-
-        Returns:
-            List of {"open","high","low","close","volume","timestamp"} dicts
-        """
-        tf_map = {"1D": "1d", "4H": "4h", "1H": "1h", "15m": "15m", "5m": "5m", "1W": "1w"}
-        interval = tf_map.get(timeframe, timeframe.lower())
-        url = f"{self.rest_url}/fapi/v1/klines"
-        params = {"symbol": symbol, "interval": interval, "limit": limit}
-
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=10)) as resp:
-                    if resp.status != 200:
-                        return []
-                    data = await resp.json()
-            return [
-                {
-                    "timestamp": row[0],
-                    "open": float(row[1]),
-                    "high": float(row[2]),
-                    "low": float(row[3]),
-                    "close": float(row[4]),
-                    "volume": float(row[5]),
-                }
-                for row in data
-            ]
-        except Exception as exc:
-            logger.warning("Candle fetch failed %s/%s: %s", symbol, timeframe, exc)
-            return []
+        """Fetch OHLCV candles from XT.com futures API."""
+        return await xt.get_klines(symbol, timeframe, limit)

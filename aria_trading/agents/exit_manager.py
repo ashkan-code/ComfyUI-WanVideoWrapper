@@ -9,8 +9,7 @@ import logging
 import time
 from dataclasses import dataclass
 
-import aiohttp
-
+import xt_client as xt
 from config import CONFIG
 import telegram_notifier as tg
 
@@ -41,7 +40,6 @@ class ExitManagerAgent:
         self._open_trades: list[dict] = []
         self._prices: dict[str, float] = {}
         self.interval = CONFIG["exit_check_interval"]
-        self.rest_url = CONFIG["bitunix_rest_url"]
 
     def add_trade(self, trade: dict) -> None:
         self._open_trades.append(trade)
@@ -154,23 +152,9 @@ class ExitManagerAgent:
     # ──────────────────────────────────────────────────────────
 
     async def _refresh_prices(self) -> None:
-        """Fetch current prices for all open trade symbols."""
+        """Fetch current prices for all open trade symbols from XT.com."""
         symbols = list({t["symbol"] for t in self._open_trades})
         if not symbols:
             return
-        url = f"{self.rest_url}/fapi/v1/ticker/price"
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, timeout=aiohttp.ClientTimeout(total=8)) as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        if isinstance(data, list):
-                            for item in data:
-                                if item.get("symbol") in symbols:
-                                    self._prices[item["symbol"]] = float(item["price"])
-                        elif isinstance(data, dict):
-                            sym = data.get("symbol")
-                            if sym:
-                                self._prices[sym] = float(data.get("price", 0))
-        except Exception as exc:
-            logger.debug("Price refresh error: %s", exc)
+        updated = await xt.get_all_prices(symbols)
+        self._prices.update(updated)
