@@ -1,6 +1,8 @@
 """
 ARIA — XT.com API Client
-Handles all REST calls to XT.com spot and futures endpoints.
+All market data uses the SPOT REST API (sapi.xt.com) which is confirmed
+reachable. Futures endpoints (fapi.xt.com) return 404 and are NOT used.
+Funding rate / OI return neutral defaults — spot API has no equivalents.
 """
 
 import logging
@@ -9,45 +11,41 @@ from config import CONFIG
 
 logger = logging.getLogger(__name__)
 
-SPOT    = CONFIG["xt_rest_spot"]
-FUTURES = CONFIG["xt_rest_futures"]
+SPOT = CONFIG["xt_rest_spot"]   # https://sapi.xt.com
 
 # Interval mapping: internal → XT.com format
-_IV = {"1d":"1d","4h":"4h","1h":"1h","15m":"15m","5m":"5m","1w":"1w","4H":"4h","1H":"1h","1D":"1d"}
+_IV = {"1d":"1d","4h":"4h","1h":"1h","15m":"15m","5m":"5m","1w":"1w",
+       "4H":"4h","1H":"1h","1D":"1d"}
 
 
 async def _get(url: str, params: dict = None) -> dict | list | None:
     try:
         async with aiohttp.ClientSession() as s:
-            async with s.get(url, params=params, timeout=aiohttp.ClientTimeout(total=10)) as r:
+            async with s.get(url, params=params, timeout=aiohttp.ClientTimeout(total=15)) as r:
                 if r.status != 200:
-                    logger.debug("HTTP %d: %s", r.status, url)
+                    logger.warning("HTTP %d: %s params=%s", r.status, url, params)
                     return None
                 return await r.json()
     except Exception as exc:
-        logger.debug("GET error %s: %s", url, exc)
+        logger.warning("GET error %s: %s", url, exc)
         return None
 
 
 # ──────────────────────────────────────────────────────────
-# Symbol discovery
+# Symbol discovery  (spot — confirmed working)
 # ──────────────────────────────────────────────────────────
 
 async def fetch_all_usdt_symbols() -> list[str]:
     """
-    Fetch ALL active USDT trading pairs from XT.com, sorted by 24h volume.
-
-    Strategy (mirrors xt_scanner which is confirmed working):
-      1. GET /v4/public/ticker  → spot 24h tickers with volume, field 's'
-      2. GET /v4/public/symbol  → full symbol list for any pair with zero volume
+    Fetch ALL active USDT trading pairs from XT.com spot, sorted by 24h volume.
 
     Returns:
-        Full list of symbols e.g. ["btc_usdt", "eth_usdt", ...]
+        List of symbols e.g. ["btc_usdt", "eth_usdt", ...]
     """
     symbols_with_vol: list[tuple[str, float]] = []
     seen: set[str] = set()
 
-    # ── Step 1: Spot 24h tickers (confirmed format: result=[{"s":"btc_usdt","qv":"..."}])
+    # Step 1: spot 24h tickers — gives volume data
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(
@@ -56,19 +54,17 @@ async def fetch_all_usdt_symbols() -> list[str]:
             ) as resp:
                 resp.raise_for_status()
                 data = await resp.json()
-        tickers = data.get("result", [])
-        if isinstance(tickers, list):
-            for t in tickers:
-                sym = str(t.get("s", ""))
-                if sym.endswith("_usdt"):
-                    vol = float(t.get("qv", 0) or 0)
-                    symbols_with_vol.append((sym, vol))
-                    seen.add(sym)
-        logger.info("Spot tickers: %d USDT pairs", len(seen))
+        for t in data.get("result", []):
+            sym = str(t.get("s", ""))
+            if sym.endswith("_usdt"):
+                vol = float(t.get("qv", 0) or 0)
+                symbols_with_vol.append((sym, vol))
+                seen.add(sym)
+        logger.info("Spot tickers: %d USDT pairs fetched", len(seen))
     except Exception as exc:
         logger.warning("Spot ticker fetch failed: %s", exc)
 
-    # ── Step 2: Full symbol list for any pair missing from tickers
+    # Step 2: symbol list — catches any pair with zero recent volume
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(
@@ -80,21 +76,20 @@ async def fetch_all_usdt_symbols() -> list[str]:
         before = len(seen)
         for item in data.get("result", {}).get("symbols", []):
             sym = str(item.get("symbol", ""))
-            state = str(item.get("state", ""))
-            quote = str(item.get("quoteCurrency", "")).lower()
-            if sym and sym not in seen and state == "ONLINE" and quote == "usdt":
+            if (sym and sym not in seen
+                    and item.get("state") == "ONLINE"
+                    and str(item.get("quoteCurrency", "")).lower() == "usdt"):
                 symbols_with_vol.append((sym, 0.0))
                 seen.add(sym)
-        logger.info("Symbol list added %d more pairs (total %d)", len(seen) - before, len(seen))
+        logger.info("Symbol list added %d more (total %d)", len(seen) - before, len(seen))
     except Exception as exc:
-        logger.warning("Spot symbol list fetch failed: %s", exc)
+        logger.warning("Symbol list fetch failed: %s", exc)
 
-    # Sort by volume descending
     symbols_with_vol.sort(key=lambda x: x[1], reverse=True)
     symbols = [s for s, _ in symbols_with_vol]
 
     if not symbols:
-        logger.error("All symbol fetches failed — using 15-symbol hardcoded fallback!")
+        logger.error("ALL symbol fetches failed — falling back to 15 hardcoded symbols!")
         symbols = [
             "btc_usdt","eth_usdt","sol_usdt","bnb_usdt","xrp_usdt",
             "doge_usdt","avax_usdt","link_usdt","arb_usdt","op_usdt",
@@ -107,44 +102,47 @@ async def fetch_all_usdt_symbols() -> list[str]:
 
 async def fetch_top_symbols(n: int = 9999) -> list[str]:
     """
-    Fetch USDT symbols from XT.com sorted by 24h quote volume.
-    n=9999 (default) returns ALL available symbols.
-
-    Returns:
-        List of symbols in XT format e.g. ["btc_usdt", "eth_usdt", ...]
+    Return USDT symbols sorted by 24h volume.
+    n=9999 (default) → ALL symbols.
     """
     all_syms = await fetch_all_usdt_symbols()
     return all_syms if n >= 9999 else all_syms[:n]
 
 
 # ──────────────────────────────────────────────────────────
-# Candles  (XT futures)
+# Candles  (spot kline endpoint)
 # ──────────────────────────────────────────────────────────
 
 async def get_klines(symbol: str, interval: str, limit: int = 100) -> list[dict]:
     """
-    Fetch OHLCV klines from XT.com futures.
+    Fetch OHLCV klines from XT.com spot.
 
     Args:
         symbol:   e.g. "btc_usdt"
         interval: e.g. "4h", "1h", "15m"
-        limit:    max candles
+        limit:    max candles (XT spot max is 500)
 
     Returns:
         List of {"timestamp","open","high","low","close","volume"} dicts
     """
     iv = _IV.get(interval, interval)
     data = await _get(
-        f"{FUTURES}/future/market/v2/public/q/kline",
-        {"symbol": symbol, "interval": iv, "limit": limit},
+        f"{SPOT}/v4/public/kline",
+        {"symbol": symbol, "interval": iv, "limit": min(limit, 500)},
     )
     if not data:
         return []
 
-    # XT kline response: {"returnCode":0,"result":{"list":[[ts,o,h,l,c,v,...]]}}
     rows = []
     try:
-        raw = data.get("result", {}).get("list", data if isinstance(data, list) else [])
+        # Spot kline response: {"rc":0,"result":{"list":[[ts,o,h,l,c,v,qv],...]}]
+        result = data.get("result", {})
+        if isinstance(result, dict):
+            raw = result.get("list", [])
+        elif isinstance(result, list):
+            raw = result
+        else:
+            raw = []
         for r in raw:
             rows.append({
                 "timestamp": int(r[0]),
@@ -160,89 +158,63 @@ async def get_klines(symbol: str, interval: str, limit: int = 100) -> list[dict]
 
 
 # ──────────────────────────────────────────────────────────
-# Funding rate
+# Funding rate  (futures-only → return neutral)
 # ──────────────────────────────────────────────────────────
 
 async def get_funding_rate(symbol: str) -> float:
-    """Return current perpetual funding rate (e.g. 0.0001 = 0.01%)."""
-    data = await _get(
-        f"{FUTURES}/future/market/v2/public/q/funding-rate",
-        {"symbol": symbol},
-    )
-    if not data:
-        return 0.0
-    try:
-        result = data.get("result", data)
-        if isinstance(result, list):
-            return float(result[-1].get("fundingRate", 0))
-        return float(result.get("fundingRate", 0))
-    except Exception:
-        return 0.0
+    """
+    Funding rate is futures-only. Spot API has no equivalent.
+    Returns 0.0 (neutral) so funding-rate filters don't block trades.
+    """
+    return 0.0
 
 
 # ──────────────────────────────────────────────────────────
-# Open interest
+# Open interest  (futures-only → return neutral)
 # ──────────────────────────────────────────────────────────
 
 async def get_open_interest(symbol: str) -> dict:
-    """Return open interest dict."""
-    data = await _get(
-        f"{FUTURES}/future/market/v2/public/q/open-interest",
-        {"symbol": symbol},
-    )
-    if not data:
-        return {"current": 0.0, "24h_change_pct": 0.0, "signal": "unknown"}
-    try:
-        result = data.get("result", {})
-        oi = float(result.get("openInterest", 0))
-        return {"current": oi, "24h_change_pct": 0.0, "signal": "neutral"}
-    except Exception:
-        return {"current": 0.0, "24h_change_pct": 0.0, "signal": "unknown"}
+    """
+    Open interest is futures-only. Returns neutral dict so OI checks pass.
+    """
+    return {"current": 0.0, "24h_change_pct": 0.0, "signal": "neutral"}
 
 
 # ──────────────────────────────────────────────────────────
-# Ticker / price
+# Ticker / price  (spot)
 # ──────────────────────────────────────────────────────────
 
 async def get_price(symbol: str) -> float:
-    """Return latest mark/last price for a symbol."""
-    data = await _get(
-        f"{FUTURES}/future/market/v2/public/q/ticker",
-        {"symbol": symbol},
-    )
-    if not data:
-        # Fallback to spot
-        data = await _get(
-            f"{SPOT}/v4/public/ticker/price",
-            {"symbol": symbol},
-        )
+    """Return latest price for a symbol using spot ticker."""
+    data = await _get(f"{SPOT}/v4/public/ticker", {"symbol": symbol})
     if not data:
         return 0.0
     try:
         result = data.get("result", data)
         if isinstance(result, list):
             result = result[0]
-        return float(result.get("lastPrice", result.get("p", 0)))
+        # Spot ticker fields: "c" = last close price, "p" = price
+        return float(result.get("c", result.get("p", result.get("lastPrice", 0))))
     except Exception:
         return 0.0
 
 
 async def get_all_prices(symbols: list[str]) -> dict[str, float]:
-    """Fetch prices for multiple symbols in one call if possible."""
+    """Fetch prices for all symbols in one spot ticker call."""
     prices = {}
-    data = await _get(f"{FUTURES}/future/market/v2/public/q/ticker")
+    data = await _get(f"{SPOT}/v4/public/ticker")
     if data:
         try:
             items = data.get("result", [])
             if isinstance(items, list):
                 for item in items:
-                    s = item.get("symbol", "")
+                    s = item.get("s", "")
                     if s in symbols:
-                        prices[s] = float(item.get("lastPrice", 0))
+                        prices[s] = float(item.get("c", item.get("p", 0)))
         except Exception:
             pass
 
-    # Fill missing with individual calls
+    # Fill any missing with individual calls
     for sym in symbols:
         if sym not in prices:
             prices[sym] = await get_price(sym)
@@ -250,26 +222,24 @@ async def get_all_prices(symbols: list[str]) -> dict[str, float]:
 
 
 # ──────────────────────────────────────────────────────────
-# 24h volume ticker (for GemHunter)
+# 24h volume ticker  (spot)
 # ──────────────────────────────────────────────────────────
 
 async def get_24h_ticker(symbol: str) -> dict:
-    """Return 24h volume and price change for a symbol."""
-    data = await _get(
-        f"{FUTURES}/future/market/v2/public/q/ticker",
-        {"symbol": symbol},
-    )
+    """Return 24h volume and price change from spot ticker."""
+    data = await _get(f"{SPOT}/v4/public/ticker", {"symbol": symbol})
     if not data:
         return {}
     try:
         result = data.get("result", {})
         if isinstance(result, list):
             result = result[0]
+        # Spot ticker: v=base volume, qv=quote volume, r/rc=price change pct, c=last price
         return {
-            "volume": float(result.get("volume", 0)),
-            "quoteVolume": float(result.get("quoteVolume", result.get("qv", 0))),
-            "priceChangePercent": float(result.get("priceChangePercent", result.get("rc", 0))),
-            "lastPrice": float(result.get("lastPrice", 0)),
+            "volume": float(result.get("v", result.get("volume", 0))),
+            "quoteVolume": float(result.get("qv", result.get("quoteVolume", 0))),
+            "priceChangePercent": float(result.get("r", result.get("rc", 0))),
+            "lastPrice": float(result.get("c", result.get("p", result.get("lastPrice", 0)))),
         }
     except Exception:
         return {}
