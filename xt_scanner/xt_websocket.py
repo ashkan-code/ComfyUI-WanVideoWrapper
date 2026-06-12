@@ -156,29 +156,26 @@ MAX_SUBS_PER_CONNECTION = 40   # XT.com allows ~50 topics per WS connection
 
 
 def _parse_message(msg: dict) -> None:
-    """Parse one decoded WebSocket message and update shared state."""
-    topic = (
-        msg.get("topic")
-        or msg.get("event")
-        or msg.get("e")
-        or msg.get("channel")
-        or ""
-    )
-    data = msg.get("data") or msg.get("d") or {}
+    """Parse one decoded WebSocket message and update shared state.
 
-    if not topic:
+    XT.com actual format:
+      {"topic": "trade", "event": "trade@btc_usdt", "data": {"s": "btc_usdt", "p": ..., "q": ..., "b": ...}}
+      {"topic": "depth", "event": "depth@btc_usdt_5",  "data": {"s": "btc_usdt", "b": [...], "a": [...]}}
+    """
+    topic = msg.get("topic", "")
+    data  = msg.get("data", {})
+
+    if not topic or not isinstance(data, dict):
         return
 
-    if topic.startswith("trade@"):
-        symbol = topic.split("@", 1)[1]
-        if isinstance(data, list):
-            for trade in data:
-                _handle_trade(symbol, trade)
-        elif isinstance(data, dict):
-            _handle_trade(symbol, data)
+    # symbol is always in data["s"]
+    symbol = data.get("s", "")
+    if not symbol:
+        return
 
-    elif topic.startswith("depth@"):
-        symbol = topic.split("@", 1)[1].split(",")[0]
+    if topic == "trade":
+        _handle_trade(symbol, data)
+    elif topic == "depth":
         _handle_depth(symbol, data)
 
 
