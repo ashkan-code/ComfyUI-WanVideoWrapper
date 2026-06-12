@@ -152,78 +152,102 @@ def _build_subscriptions(symbols: List[str]) -> List[dict]:
 # Main WebSocket loop
 # ──────────────────────────────────────────────
 
-async def run_websocket(symbols: List[str], stop_event: asyncio.Event) -> None:
-    """
-    Connect to the XT.com public WebSocket, subscribe to trade+depth
-    for all given symbols, and pump messages until stop_event is set.
-    Reconnects automatically on disconnect.
-    """
-    sub_msgs = _build_subscriptions(symbols)
+MAX_SUBS_PER_CONNECTION = 40   # XT.com allows ~50 topics per WS connection
+
+
+def _parse_message(msg: dict) -> None:
+    """Parse one decoded WebSocket message and update shared state."""
+    topic = (
+        msg.get("topic")
+        or msg.get("event")
+        or msg.get("e")
+        or msg.get("channel")
+        or ""
+    )
+    data = msg.get("data") or msg.get("d") or {}
+
+    if not topic:
+        return
+
+    if topic.startswith("trade@"):
+        symbol = topic.split("@", 1)[1]
+        if isinstance(data, list):
+            for trade in data:
+                _handle_trade(symbol, trade)
+        elif isinstance(data, dict):
+            _handle_trade(symbol, data)
+
+    elif topic.startswith("depth@"):
+        symbol = topic.split("@", 1)[1].split(",")[0]
+        _handle_depth(symbol, data)
+
+
+async def _run_single_connection(
+    symbols_chunk: List[str],
+    conn_id: int,
+    stop_event: asyncio.Event,
+) -> None:
+    """Maintain one WebSocket connection for a subset of symbols."""
+    sub_msgs = _build_subscriptions(symbols_chunk)
     backoff = 1
 
     while not stop_event.is_set():
         try:
-            logger.info("Connecting to %s …", config.XT_WS_URL)
+            logger.info("[WS-%d] Connecting (%d symbols) …", conn_id, len(symbols_chunk))
             async with websockets.connect(
                 config.XT_WS_URL,
                 ping_interval=20,
                 ping_timeout=10,
                 close_timeout=5,
             ) as ws:
-                backoff = 1  # reset on successful connect
-                logger.info("Connected. Subscribing to %d channels …", len(sub_msgs))
+                backoff = 1
+                logger.info("[WS-%d] Connected. Sending %d subscriptions …", conn_id, len(sub_msgs))
 
-                # send subscriptions in batches to avoid flooding
-                for i, msg in enumerate(sub_msgs):
+                # send slowly — 150 ms between each to avoid server-side rate limiting
+                for msg in sub_msgs:
                     await ws.send(json.dumps(msg))
-                    if i % 10 == 9:
-                        await asyncio.sleep(0.05)
+                    await asyncio.sleep(0.15)
 
-                # receive loop
-                _debug_count = 0
+                logger.info("[WS-%d] All subscriptions sent. Waiting for data …", conn_id)
+
                 async for raw in ws:
                     if stop_event.is_set():
                         break
                     try:
-                        msg = json.loads(raw)
-                    except json.JSONDecodeError:
+                        _parse_message(json.loads(raw))
+                    except (json.JSONDecodeError, Exception):
                         continue
-
-                    # log first 10 raw messages to identify XT.com format
-                    if _debug_count < 10:
-                        logger.info("RAW MSG #%d: %s", _debug_count, str(msg)[:300])
-                        _debug_count += 1
-
-                    # XT.com may use "topic" or "event" as the channel key
-                    topic = (
-                        msg.get("topic")
-                        or msg.get("event")
-                        or msg.get("e")
-                        or msg.get("channel")
-                        or ""
-                    )
-                    data = msg.get("data") or msg.get("d") or {}
-
-                    if not topic:
-                        continue
-
-                    if topic.startswith("trade@"):
-                        symbol = topic.split("@", 1)[1]
-                        if isinstance(data, list):
-                            for trade in data:
-                                _handle_trade(symbol, trade)
-                        elif isinstance(data, dict):
-                            _handle_trade(symbol, data)
-
-                    elif topic.startswith("depth@"):
-                        symbol = topic.split("@", 1)[1].split(",")[0]
-                        _handle_depth(symbol, data)
 
         except ConnectionClosed as exc:
-            logger.warning("WebSocket closed: %s. Reconnecting in %ds …", exc, backoff)
+            logger.warning("[WS-%d] Closed: %s. Retry in %ds …", conn_id, exc, backoff)
         except Exception as exc:
-            logger.error("WebSocket error: %s. Reconnecting in %ds …", exc, backoff)
+            logger.error("[WS-%d] Error: %s. Retry in %ds …", conn_id, exc, backoff)
 
         if not stop_event.is_set():
             await asyncio.sleep(backoff)
-            backoff = min(backoff * 2, 60)
+            backoff = min(backoff * 2, 30)
+
+
+async def run_websocket(symbols: List[str], stop_event: asyncio.Event) -> None:
+    """
+    Spawn one WebSocket connection per chunk of MAX_SUBS_PER_CONNECTION symbols,
+    all running concurrently.
+    """
+    # split symbols into chunks that fit within per-connection limit
+    chunks = [
+        symbols[i: i + MAX_SUBS_PER_CONNECTION]
+        for i in range(0, len(symbols), MAX_SUBS_PER_CONNECTION)
+    ]
+    logger.info(
+        "Spawning %d WebSocket connections for %d symbols (%d per connection)",
+        len(chunks), len(symbols), MAX_SUBS_PER_CONNECTION,
+    )
+
+    tasks = [
+        asyncio.create_task(
+            _run_single_connection(chunk, idx, stop_event),
+            name=f"ws-{idx}",
+        )
+        for idx, chunk in enumerate(chunks)
+    ]
+    await asyncio.gather(*tasks, return_exceptions=True)
