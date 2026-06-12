@@ -35,8 +35,11 @@ async def _get(url: str, params: dict = None) -> dict | list | None:
 
 async def fetch_all_usdt_symbols() -> list[str]:
     """
-    Fetch ALL active USDT trading pairs from XT.com.
-    Combines futures contracts + spot pairs, sorted by volume.
+    Fetch ALL active USDT trading pairs from XT.com, sorted by 24h volume.
+
+    Strategy (mirrors xt_scanner which is confirmed working):
+      1. GET /v4/public/ticker  → spot 24h tickers with volume, field 's'
+      2. GET /v4/public/symbol  → full symbol list for any pair with zero volume
 
     Returns:
         Full list of symbols e.g. ["btc_usdt", "eth_usdt", ...]
@@ -44,64 +47,61 @@ async def fetch_all_usdt_symbols() -> list[str]:
     symbols_with_vol: list[tuple[str, float]] = []
     seen: set[str] = set()
 
-    # 1. Futures tickers (includes volume data)
-    data = await _get(f"{FUTURES}/future/market/v2/public/q/ticker")
-    if data:
-        try:
-            items = data.get("result", data if isinstance(data, list) else [])
-            if isinstance(items, list):
-                for i in items:
-                    sym = str(i.get("symbol", ""))
-                    if sym.endswith("_usdt") and sym not in seen:
-                        vol = float(i.get("quoteVolume", i.get("qv", 0)) or 0)
-                        symbols_with_vol.append((sym, vol))
-                        seen.add(sym)
-        except Exception as exc:
-            logger.warning("Futures ticker all-symbols error: %s", exc)
+    # ── Step 1: Spot 24h tickers (confirmed format: result=[{"s":"btc_usdt","qv":"..."}])
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                f"{SPOT}/v4/public/ticker",
+                timeout=aiohttp.ClientTimeout(total=20),
+            ) as resp:
+                resp.raise_for_status()
+                data = await resp.json()
+        tickers = data.get("result", [])
+        if isinstance(tickers, list):
+            for t in tickers:
+                sym = str(t.get("s", ""))
+                if sym.endswith("_usdt"):
+                    vol = float(t.get("qv", 0) or 0)
+                    symbols_with_vol.append((sym, vol))
+                    seen.add(sym)
+        logger.info("Spot tickers: %d USDT pairs", len(seen))
+    except Exception as exc:
+        logger.warning("Spot ticker fetch failed: %s", exc)
 
-    # 2. Spot tickers — adds pairs not listed on futures
-    data = await _get(f"{SPOT}/v4/public/ticker", {"symbols": "ALL"})
-    if data:
-        try:
-            items = data.get("result", [])
-            if isinstance(items, list):
-                for i in items:
-                    sym = str(i.get("s", ""))
-                    if sym.endswith("_usdt") and sym not in seen:
-                        vol = float(i.get("qv", 0) or 0)
-                        symbols_with_vol.append((sym, vol))
-                        seen.add(sym)
-        except Exception as exc:
-            logger.warning("Spot ticker all-symbols error: %s", exc)
-
-    # 3. Spot symbols list — picks up any pair with no recent volume
-    if len(seen) < 50:
-        data = await _get(f"{SPOT}/v4/public/symbol")
-        if data:
-            try:
-                result = data.get("result", {})
-                items = result.get("items", result if isinstance(result, list) else [])
-                for i in items:
-                    sym = str(i.get("symbol", ""))
-                    state = str(i.get("state", "ONLINE"))
-                    if sym.endswith("_usdt") and state == "ONLINE" and sym not in seen:
-                        symbols_with_vol.append((sym, 0.0))
-                        seen.add(sym)
-            except Exception as exc:
-                logger.warning("Spot symbol list error: %s", exc)
+    # ── Step 2: Full symbol list for any pair missing from tickers
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                f"{SPOT}/v4/public/symbol",
+                timeout=aiohttp.ClientTimeout(total=20),
+            ) as resp:
+                resp.raise_for_status()
+                data = await resp.json()
+        before = len(seen)
+        for item in data.get("result", {}).get("symbols", []):
+            sym = str(item.get("symbol", ""))
+            state = str(item.get("state", ""))
+            quote = str(item.get("quoteCurrency", "")).lower()
+            if sym and sym not in seen and state == "ONLINE" and quote == "usdt":
+                symbols_with_vol.append((sym, 0.0))
+                seen.add(sym)
+        logger.info("Symbol list added %d more pairs (total %d)", len(seen) - before, len(seen))
+    except Exception as exc:
+        logger.warning("Spot symbol list fetch failed: %s", exc)
 
     # Sort by volume descending
     symbols_with_vol.sort(key=lambda x: x[1], reverse=True)
     symbols = [s for s, _ in symbols_with_vol]
 
     if not symbols:
+        logger.error("All symbol fetches failed — using 15-symbol hardcoded fallback!")
         symbols = [
             "btc_usdt","eth_usdt","sol_usdt","bnb_usdt","xrp_usdt",
             "doge_usdt","avax_usdt","link_usdt","arb_usdt","op_usdt",
             "inj_usdt","sui_usdt","apt_usdt","aave_usdt","uni_usdt",
         ]
 
-    logger.info("Fetched %d total USDT symbols from XT.com", len(symbols))
+    logger.info("Total symbols for scanning: %d", len(symbols))
     return symbols
 
 
