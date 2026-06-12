@@ -18,7 +18,7 @@ ORDER_BOOK_TOP = 10           # top N levels used for OBI calculation
 # Signal thresholds
 OBI_LONG_THRESHOLD = 2.5      # OBI ratio above this → LONG signal
 OBI_SHORT_THRESHOLD = 0.4     # OBI ratio below this → SHORT signal
-SCORE_ALERT_THRESHOLD = 80    # score above this triggers Telegram alert (%)
+SCORE_ALERT_THRESHOLD = 60    # score above this triggers Telegram alert (%)
 
 # Signal weights (must sum to 1.0)
 WEIGHT_CVD = 0.35
