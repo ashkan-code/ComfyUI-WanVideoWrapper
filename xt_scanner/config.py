@@ -8,7 +8,7 @@ XT_SYMBOLS_ENDPOINT = "/v4/public/symbol"
 XT_WS_URL = "wss://stream.xt.com/public"
 
 # Scanner settings
-TOP_COINS_COUNT = 30          # number of top-volume coins to monitor
+TOP_COINS_COUNT = 200          # number of top-volume coins to monitor
 SIGNAL_INTERVAL_SEC = 10      # recalculate signals every N seconds
 DASHBOARD_REFRESH_SEC = 5     # refresh terminal table every N seconds
 TRADE_WINDOW_SEC = 60         # rolling window kept for CVD (seconds)
