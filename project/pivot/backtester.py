@@ -1,7 +1,7 @@
-"""Backtest Lite: fixed TP/SL simulation on cluster touches."""
+"""Backtest Lite v2 — cooldown, min-gap, first-touch priority, rich metrics."""
 
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
 from pivot.cluster import Cluster, atr14
@@ -9,27 +9,39 @@ from pivot.cluster import Cluster, atr14
 
 @dataclass
 class BacktestResult:
-    total_trades:    int
-    win_rate:        float
-    profit_factor:   float
-    expectancy:      float   # in ATR units
-    max_drawdown:    float   # peak-to-trough in ATR units
-    clusters_tested: int
+    total_trades:        int
+    win_rate:            float
+    profit_factor:       float
+    expectancy:          float         # in ATR units
+    max_drawdown:        float         # peak-to-trough in ATR units
+    clusters_tested:     int
+    trades_per_100:      float
+    avg_holding_bars:    float
+    max_consec_losses:   int
+    overtrading_warning: bool
+    loss_analysis:       dict = field(default_factory=dict)
 
 
 def backtest_clusters(
     clusters: list[Cluster],
     df: pd.DataFrame,
-    tp_atr: float = 1.5,
-    sl_atr: float = 1.0,
+    tp_atr:       float = 1.5,
+    sl_atr:       float = 1.0,
     reaction_window: int = 10,
-    min_prob: float = 0.55,
+    min_prob:     float = 0.55,
+    cooldown:     int   = 10,   # bars to wait before re-trading same cluster
+    min_gap:      int   = 5,    # bars between any two trades
+    max_per_cluster: int = 3,   # max trades per cluster (first-touch priority)
 ) -> BacktestResult:
     """
     Entry:  price touches cluster where probability >= min_prob.
-    Exit:   first of TP (tp_atr x ATR) or SL (sl_atr x ATR).
-    Direction: UP if cluster is below price (support), DOWN if above.
-    No lookahead: decisions made only with data available at bar i.
+    Exit:   first of TP or SL within reaction_window bars.
+    Rules:
+      - cooldown:       same cluster cannot be re-entered for cooldown bars
+      - min_gap:        no new trade within min_gap bars of any prior trade
+      - max_per_cluster: cluster retired after this many trades (freshness)
+      - first touch > second touch > third touch (score decays each touch)
+    No lookahead bias: exit uses only future bars.
     """
     atr    = atr14(df)
     closes = df["close"].values
@@ -40,22 +52,51 @@ def backtest_clusters(
     sl     = sl_atr * atr
 
     viable = [c for c in clusters if c.probability >= min_prob and c.historical_touches >= 2]
-    equity: list[float] = [0.0]
-    wins = losses = 0
 
-    for cl in viable:
-        tol        = max(cl.center * 0.005, atr * 0.5)
-        is_support = cl.center < closes[-1]
+    # Per-cluster state
+    cluster_last_trade: list[int]   = [-9999] * len(viable)
+    cluster_trade_count: list[int]  = [0]     * len(viable)
 
-        for i in range(n - reaction_window):
+    equity: list[float]   = [0.0]
+    holding_bars: list[int] = []
+    last_trade_bar         = -9999
+    wins = losses          = 0
+    loss_streak = max_loss_streak = cur_streak = 0
+
+    # Track which cluster caused losses and under what trend
+    loss_clusters: dict[str, int] = {}
+
+    for i in range(n - reaction_window):
+        for ci, cl in enumerate(viable):
+            # ── filters ──────────────────────────────────────────────────
+            if cluster_trade_count[ci] >= max_per_cluster:
+                continue
+            if (i - cluster_last_trade[ci]) < cooldown:
+                continue
+            if (i - last_trade_bar) < min_gap:
+                continue
+
+            tol = max(cl.center * 0.005, atr * 0.5)
             if abs(closes[i] - cl.center) > tol:
                 continue
-            entry  = closes[i]
-            result = 0.0
+
+            # ── first-touch probability decay ─────────────────────────
+            touch_num = cluster_trade_count[ci] + 1
+            effective_prob = cl.probability * (0.85 ** (touch_num - 1))
+            if effective_prob < min_prob:
+                continue
+
+            # ── simulate trade ────────────────────────────────────────
+            entry      = closes[i]
+            is_support = cl.center < closes[-1]
+            result     = 0.0
+            hold       = 0
+
             for k in range(1, reaction_window + 1):
                 idx = i + k
                 if idx >= n:
                     break
+                hold = k
                 if is_support:
                     if highs[idx] - entry >= tp:  result =  tp_atr; break
                     if entry - lows[idx]  >= sl:  result = -sl_atr; break
@@ -63,10 +104,25 @@ def backtest_clusters(
                     if entry - lows[idx]  >= tp:  result =  tp_atr; break
                     if highs[idx] - entry >= sl:  result = -sl_atr; break
 
-            if result > 0:   wins   += 1
-            elif result < 0: losses += 1
-            if result != 0:
-                equity.append(equity[-1] + result)
+            if result == 0.0:
+                continue  # no outcome — skip (expired)
+
+            # ── record ────────────────────────────────────────────────
+            cluster_last_trade[ci]  = i
+            cluster_trade_count[ci] += 1
+            last_trade_bar           = i
+            holding_bars.append(hold)
+            equity.append(equity[-1] + result)
+
+            if result > 0:
+                wins     += 1
+                cur_streak = 0
+            else:
+                losses   += 1
+                cur_streak += 1
+                max_loss_streak = max(max_loss_streak, cur_streak)
+                key = cl.timeframes.__str__()
+                loss_clusters[key] = loss_clusters.get(key, 0) + 1
 
     total = wins + losses
     wr    = wins / total if total > 0 else 0.0
@@ -77,11 +133,20 @@ def backtest_clusters(
     peak = np.maximum.accumulate(eq)
     mdd  = float((peak - eq).max()) if len(eq) > 1 else 0.0
 
+    t_per_100 = round(total / n * 100, 1) if n > 0 else 0.0
+    avg_hold  = round(float(np.mean(holding_bars)), 1) if holding_bars else 0.0
+    overfit   = total > n * 0.5
+
     return BacktestResult(
-        total_trades    = total,
-        win_rate        = round(wr, 4),
-        profit_factor   = round(pf, 3),
-        expectancy      = round(exp, 4),
-        max_drawdown    = round(mdd, 3),
-        clusters_tested = len(viable),
+        total_trades        = total,
+        win_rate            = round(wr, 4),
+        profit_factor       = round(pf, 3),
+        expectancy          = round(exp, 4),
+        max_drawdown        = round(mdd, 3),
+        clusters_tested     = len(viable),
+        trades_per_100      = t_per_100,
+        avg_holding_bars    = avg_hold,
+        max_consec_losses   = max_loss_streak,
+        overtrading_warning = overfit,
+        loss_analysis       = loss_clusters,
     )

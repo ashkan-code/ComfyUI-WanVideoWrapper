@@ -48,6 +48,9 @@ async def analyze_symbol(
     min_touches: int = 4,
     tol_pct: float = 0.5,
     do_backtest: bool = True,
+    cooldown: int = 10,
+    min_gap: int = 5,
+    max_per_cluster: int = 3,
 ) -> dict | None:
     # 1. Fetch 3 timeframes
     dfs = {}
@@ -96,7 +99,10 @@ async def analyze_symbol(
     clusters.sort(key=lambda c: -c.score)
 
     # 7. Backtest Lite
-    bt = backtest_clusters(clusters, df_1h) if do_backtest else None
+    bt = backtest_clusters(clusters, df_1h,
+                           cooldown=cooldown,
+                           min_gap=min_gap,
+                           max_per_cluster=max_per_cluster) if do_backtest else None
 
     return {
         "symbol":   symbol,
@@ -141,11 +147,17 @@ def _print_report(res: dict, top_n: int = 5) -> None:
         print(f"  {center_s}  {dist:>+6.2f}%  {pc:>14}  {cc:>14}  {cl.tf_count:>3}  {cl.historical_touches:>4}  {sc:>12}  {tfs}")
 
     if bt:
-        pf  = f"{bt.profit_factor:.2f}" if bt.profit_factor != float("inf") else "inf"
-        wrc = g(f"{bt.win_rate:.1%}") if bt.win_rate>=0.55 else (y(f"{bt.win_rate:.1%}") if bt.win_rate>=0.45 else r(f"{bt.win_rate:.1%}"))
-        exc = g(f"{bt.expectancy:+.3f}") if bt.expectancy>0 else r(f"{bt.expectancy:+.3f}")
+        pf    = f"{bt.profit_factor:.2f}" if bt.profit_factor != float("inf") else "inf"
+        wrc   = g(f"{bt.win_rate:.1%}") if bt.win_rate>=0.55 else (y(f"{bt.win_rate:.1%}") if bt.win_rate>=0.45 else r(f"{bt.win_rate:.1%}"))
+        exc   = g(f"{bt.expectancy:+.3f}") if bt.expectancy>0 else r(f"{bt.expectancy:+.3f}")
         mdd_s = r(f"{bt.max_drawdown:.2f}")
-        print(f"\n  {b('BACKTEST')}  trades:{bt.total_trades}  WR:{wrc}  PF:{pf}  Exp:{exc}ATR  MDD:{mdd_s}ATR")
+        pf_c  = g(pf) if bt.profit_factor >= 1.3 else (y(pf) if bt.profit_factor >= 1.0 else r(pf))
+        print(f"\n  {b('BACKTEST RESULTS:')}")
+        print(f"  trades:{bt.total_trades}  per100:{bt.trades_per_100}  avg_hold:{bt.avg_holding_bars}bars")
+        print(f"  WR:{wrc}  PF:{pf_c}  Exp:{exc}ATR  MDD:{mdd_s}ATR  MaxLoss:{r(str(bt.max_consec_losses))}")
+        if bt.overtrading_warning:
+            print(f"  {r('WARNING: Possible overtrading / overfitting detected')}")
+            print(f"  {D}  trades({bt.total_trades}) > candles*0.5 — reduce pool or increase cooldown{X}")
     print()
 
 
@@ -157,6 +169,9 @@ async def cmd_single(args) -> None:
         reaction_window=args.react_window,
         min_touches=args.min_touches,
         do_backtest=not args.no_backtest,
+        cooldown=args.cooldown,
+        min_gap=args.min_gap,
+        max_per_cluster=args.max_per_cluster,
     )
     if not res:
         print(r("ERROR: could not fetch or analyze data"))
@@ -231,8 +246,11 @@ def main():
     p.add_argument("--min-prob",     type=float, default=0.55, dest="min_prob")
     p.add_argument("--atr-mult",     type=float, default=1.0,  dest="atr_mult")
     p.add_argument("--react-window", type=int,   default=10,   dest="react_window")
-    p.add_argument("--min-touches",  type=int,   default=4,    dest="min_touches")
-    p.add_argument("--no-backtest",  action="store_true",      dest="no_backtest")
+    p.add_argument("--min-touches",    type=int,   default=4,   dest="min_touches")
+    p.add_argument("--no-backtest",    action="store_true",     dest="no_backtest")
+    p.add_argument("--cooldown",       type=int,   default=10,  help="bars before re-trading same cluster")
+    p.add_argument("--min-gap",        type=int,   default=5,   dest="min_gap",  help="min bars between any trades")
+    p.add_argument("--max-per-cluster",type=int,   default=3,   dest="max_per_cluster", help="max trades per cluster")
     args = p.parse_args()
 
     if args.scan:
