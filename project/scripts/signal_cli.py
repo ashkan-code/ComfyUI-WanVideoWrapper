@@ -1,10 +1,18 @@
-"""CLI سریع برای دریافت سیگنال و اسکن بازار از XT Exchange."""
+"""XT Exchange signal CLI — fully automated, no prompts.
+
+Usage examples:
+  python scripts/signal_cli.py btc_usdt
+  python scripts/signal_cli.py btc_usdt -s ema_cross -i 4h -m spot -n 500
+  python scripts/signal_cli.py --scan -s rsi_reversal -i 1h -m spot --top 30
+  python scripts/signal_cli.py --scan -i 4h --top 50
+"""
 
 from __future__ import annotations
 
+import argparse
 import asyncio
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -13,220 +21,179 @@ from scanner.scanner import MarketScanner
 from xt_mcp.clients.spot import XTSpotClient
 from xt_mcp.clients.futures import XTFuturesClient
 
-
-STRATEGIES = [
-    "rsi_reversal",
-    "ema_cross",
-    "macd_cross",
-    "bb_mean_revert",
-    "combined_momentum",
-]
-
-INTERVALS = ["1m", "5m", "15m", "1h", "4h", "1d"]
+G = "\033[92m"  # green
+R = "\033[91m"  # red
+Y = "\033[93m"  # yellow
+C = "\033[96m"  # cyan
+B = "\033[1m"   # bold
+D = "\033[2m"   # dim
+X = "\033[0m"   # reset
 
 
-def _color(text: str, code: str) -> str:
-    return f"\033[{code}m{text}\033[0m"
+def g(t): return f"{G}{t}{X}"
+def r(t): return f"{R}{t}{X}"
+def y(t): return f"{Y}{t}{X}"
+def c(t): return f"{C}{t}{X}"
+def b(t): return f"{B}{t}{X}"
 
 
-def green(t):  return _color(t, "92")
-def red(t):    return _color(t, "91")
-def yellow(t): return _color(t, "93")
-def bold(t):   return _color(t, "1")
-def cyan(t):   return _color(t, "96")
-def dim(t):    return _color(t, "2")
+# ── single symbol signal ────────────────────────────────────────────────────
 
-
-def _ask(prompt: str, default: str = "") -> str:
-    try:
-        val = input(f"{cyan('▶')} {prompt} [{default}]: ").strip()
-        return val if val else default
-    except (KeyboardInterrupt, EOFError):
-        print("\nخروج...")
-        sys.exit(0)
-
-
-def _choose(prompt: str, options: list[str], default: str) -> str:
-    print(f"\n{bold(prompt)}")
-    for i, o in enumerate(options, 1):
-        marker = green("●") if o == default else " "
-        print(f"  {marker} {i}. {o}")
-    raw = _ask("شماره انتخاب کن", str(options.index(default) + 1))
-    try:
-        idx = int(raw) - 1
-        return options[idx] if 0 <= idx < len(options) else default
-    except ValueError:
-        return default
-
-
-# ─── سیگنال یک نماد ────────────────────────────────────────────────────────
-
-async def _run_signal(symbol: str, strategy: str, interval: str, market: str, lookback: int) -> None:
-    print(f"\n{yellow('⏳ در حال دریافت داده از XT Exchange...')}")
+async def cmd_signal(symbol: str, strategy: str, interval: str, market: str, lookback: int) -> None:
+    print(f"\n{y('...')} Fetching {b(symbol.upper())} | {strategy} | {interval} | {market}")
     engine = SignalEngine()
     try:
         signals, df = await engine.run_with_df(
-            symbol=symbol,
-            interval=interval,
-            strategy_name=strategy,
-            market=market,
-            lookback=lookback,
+            symbol=symbol, interval=interval,
+            strategy_name=strategy, market=market,
+            lookback=min(lookback, 1000),
         )
     except Exception as exc:
-        print(red(f"\n✗ خطا: {exc}"))
-        print(dim("نکته: مطمئن شو نماد درست باشه و بازار spot رو امتحان کن."))
-        return
+        print(f"{r('ERROR:')} {exc}")
+        print(f"{D}Tip: try -m spot if futures fails{X}")
+        sys.exit(1)
 
-    last_close = df["close"].iloc[-1] if not df.empty else 0.0
-    print(f"\n{bold('═' * 46)}")
-    print(f"  {bold('نماد:')}     {cyan(symbol.upper())}")
-    print(f"  {bold('استراتژی:')} {strategy}")
-    print(f"  {bold('تایم‌فریم:')} {interval}  |  بازار: {market}")
-    print(f"  {bold('قیمت فعلی:')} {yellow(f'{last_close:,.6f}')}")
-    print(f"  {bold('کندل‌ها:')}  {len(df)} عدد")
-    print(bold('═' * 46))
+    price = df["close"].iloc[-1] if not df.empty else 0.0
+    print(f"\n{b('=' * 48)}")
+    print(f"  Symbol   : {c(symbol.upper())}")
+    print(f"  Strategy : {strategy}")
+    print(f"  Interval : {interval}   Market: {market}")
+    print(f"  Price    : {y(f'{price:,.6f}')}")
+    print(f"  Candles  : {len(df)}")
+    print(b('=' * 48))
 
     if not signals:
-        print(f"\n  {yellow('⚠ سیگنالی در این بازه یافت نشد')}\n")
+        print(f"\n  {y('No signals found in this range.')}\n")
         return
 
-    print(f"\n  {bold('آخرین سیگنال‌ها')} ({len(signals)} عدد کل):\n")
+    buy_count  = sum(1 for s in signals if "BUY"  in str(s.signal_type))
+    sell_count = sum(1 for s in signals if "SELL" in str(s.signal_type))
+    print(f"\n  Total: {len(signals)}  |  BUY: {g(str(buy_count))}  |  SELL: {r(str(sell_count))}")
+    print(f"\n  {b('Last 10 signals:')}\n")
+
     for sig in signals[-10:]:
-        d = sig.to_dict()
-        sig_type = str(d.get("signal_type", "?"))
-        price    = d.get("price", 0.0)
+        d        = sig.to_dict()
+        stype    = str(d.get("signal_type", "?"))
+        price_s  = d.get("price", 0.0)
         ts       = d.get("timestamp", 0)
-        is_buy   = "BUY" in sig_type
-        color    = green if is_buy else red
-        icon     = "▲" if is_buy else "▼"
-        print(f"  {color(f'{icon} {sig_type:<12}')}  قیمت: {yellow(f'{price:>16,.6f}')}  زمان: {ts}")
+        is_buy   = "BUY" in stype
+        col      = g if is_buy else r
+        icon     = "^" if is_buy else "v"
+        print(f"  {col(f'{icon} {stype:<12}')}  price: {y(f'{price_s:>16,.6f}')}  ts: {ts}")
 
     last_type = str(signals[-1].to_dict().get("signal_type", ""))
     print()
-    if "BUY" in last_type:
-        print(f"  {bold(green('✔ آخرین سیگنال: خرید (BUY)'))}")
-    elif "SELL" in last_type:
-        print(f"  {bold(red('✔ آخرین سیگنال: فروش (SELL)'))}")
+    if "BUY"  in last_type: print(f"  {b(g('>> LATEST: BUY'))}")
+    if "SELL" in last_type: print(f"  {b(r('>> LATEST: SELL'))}")
     print()
 
 
-# ─── اسکن کل بازار ─────────────────────────────────────────────────────────
+# ── market scan ────────────────────────────────────────────────────────────
 
-async def _fetch_symbols(market: str, max_symbols: int) -> list[str]:
-    """لیست نمادهای فعال رو از XT می‌گیره."""
-    print(yellow("⏳ دریافت لیست نمادها..."))
+async def _fetch_symbols(market: str, top: int) -> list[str]:
+    print(f"{y('...')} Fetching symbol list from XT ({market})...")
     try:
-        if market == "spot":
-            client = XTSpotClient()
-            raw = await client.get_symbols()
-            # فقط نمادهایی که با usdt تموم می‌شن
-            symbols = [
-                s.symbol for s in raw
-                if hasattr(s, "symbol") and str(s.symbol).endswith("_usdt")
-            ]
-        else:
-            client = XTFuturesClient()
-            raw = await client.get_symbols()
-            symbols = [
-                s.symbol for s in raw
-                if hasattr(s, "symbol") and str(s.symbol).endswith("_usdt")
-            ]
+        client = XTSpotClient() if market == "spot" else XTFuturesClient()
+        raw    = await client.get_symbols()
+        syms   = [s.symbol for s in raw if str(getattr(s, "symbol", "")).endswith("_usdt")]
     except Exception as exc:
-        print(red(f"✗ نشد نمادها رو بگیریم: {exc}"))
-        # fallback: نمادهای معروف
-        symbols = [
-            "btc_usdt", "eth_usdt", "bnb_usdt", "sol_usdt", "xrp_usdt",
-            "ada_usdt", "doge_usdt", "avax_usdt", "dot_usdt", "matic_usdt",
-            "link_usdt", "ltc_usdt", "uni_usdt", "atom_usdt", "xlm_usdt",
-            "trx_usdt", "etc_usdt", "near_usdt", "apt_usdt", "op_usdt",
+        print(f"{D}Symbol fetch failed ({exc}), using fallback list.{X}")
+        syms = [
+            "btc_usdt","eth_usdt","bnb_usdt","sol_usdt","xrp_usdt",
+            "ada_usdt","doge_usdt","avax_usdt","dot_usdt","matic_usdt",
+            "link_usdt","ltc_usdt","uni_usdt","atom_usdt","xlm_usdt",
+            "trx_usdt","etc_usdt","near_usdt","apt_usdt","op_usdt",
+            "arb_usdt","fil_usdt","ftm_usdt","sand_usdt","mana_usdt",
+            "gala_usdt","axs_usdt","imx_usdt","inj_usdt","sei_usdt",
         ]
-        print(dim(f"از {len(symbols)} نماد پیش‌فرض استفاده می‌شه."))
-
-    return symbols[:max_symbols]
+    return syms[:top]
 
 
-async def _run_scan(strategy: str, interval: str, market: str, max_symbols: int) -> None:
-    symbols = await _fetch_symbols(market, max_symbols)
-    print(f"{yellow(f'⏳ اسکن {len(symbols)} نماد — استراتژی: {strategy} — تایم‌فریم: {interval}')}")
-    print(dim("(ممکنه چند دقیقه طول بکشه...)\n"))
+async def cmd_scan(strategy: str, interval: str, market: str, top: int) -> None:
+    symbols = await _fetch_symbols(market, top)
+    print(f"{y('...')} Scanning {len(symbols)} symbols | {strategy} | {interval} | {market}")
+    print(f"{D}(this may take a minute...){X}\n")
 
     scanner = MarketScanner(concurrency=5, lookback=200)
     try:
-        scan_result = await scanner.scan(
-            symbols=symbols,
-            strategy_name=strategy,
-            interval=interval,
-            market=market,
-        )
+        result = await scanner.scan(symbols=symbols, strategy_name=strategy,
+                                    interval=interval, market=market)
     except Exception as exc:
-        print(red(f"\n✗ خطا در اسکن: {exc}"))
-        return
+        print(f"{r('ERROR:')} {exc}")
+        sys.exit(1)
 
-    active = scan_result.with_signals()
-    buy_results  = [r for r in active if r.buy_signals  > r.sell_signals]
-    sell_results = [r for r in active if r.sell_signals >= r.buy_signals and r.sell_signals > 0]
+    active      = result.with_signals()
+    buy_results = [x for x in active if x.buy_signals  > x.sell_signals]
+    sel_results = [x for x in active if x.sell_signals >= x.buy_signals and x.sell_signals > 0]
 
-    print(f"\n{bold('═' * 50)}")
-    print(f"  {bold('نتایج اسکن بازار')}")
-    print(f"  اسکن شد: {scan_result.scanned}  |  موفق: {scan_result.succeeded}  |  خطا: {scan_result.failed}")
-    print(f"  سیگنال‌دار: {len(active)}  |  خرید: {green(str(len(buy_results)))}  |  فروش: {red(str(len(sell_results)))}")
-    print(f"  زمان: {scan_result.elapsed_ms/1000:.1f} ثانیه")
-    print(bold('═' * 50))
+    print(f"{b('=' * 52)}")
+    print(f"  SCAN RESULTS")
+    print(f"  Scanned: {result.scanned}  OK: {result.succeeded}  Err: {result.failed}")
+    print(f"  Active : {len(active)}  BUY: {g(str(len(buy_results)))}  SELL: {r(str(len(sel_results)))}")
+    print(f"  Time   : {result.elapsed_ms/1000:.1f}s")
+    print(b('=' * 52))
 
     if buy_results:
-        print(f"\n  {bold(green('▲ سیگنال‌های خرید:'))}\n")
-        for r in buy_results[:20]:
-            latest = r.latest_signal.to_dict() if r.latest_signal else {}
-            price  = latest.get("price", 0.0)
-            print(f"  {green('●')} {cyan(r.symbol):<18}  سیگنال: {r.buy_signals}  قیمت: {yellow(f'{price:>14,.6f}')}")
+        print(f"\n  {b(g('BUY signals:'))}\n")
+        for x in buy_results[:20]:
+            d = x.latest_signal.to_dict() if x.latest_signal else {}
+            p = d.get("price", 0.0)
+            print(f"  {g('^')} {c(x.symbol):<18} signals:{g(str(x.buy_signals))}  price:{y(f'{p:>14,.6f}')}")
 
-    if sell_results:
-        print(f"\n  {bold(red('▼ سیگنال‌های فروش:'))}\n")
-        for r in sell_results[:20]:
-            latest = r.latest_signal.to_dict() if r.latest_signal else {}
-            price  = latest.get("price", 0.0)
-            print(f"  {red('●')} {cyan(r.symbol):<18}  سیگنال: {r.sell_signals}  قیمت: {yellow(f'{price:>14,.6f}')}")
+    if sel_results:
+        print(f"\n  {b(r('SELL signals:'))}\n")
+        for x in sel_results[:20]:
+            d = x.latest_signal.to_dict() if x.latest_signal else {}
+            p = d.get("price", 0.0)
+            print(f"  {r('v')} {c(x.symbol):<18} signals:{r(str(x.sell_signals))}  price:{y(f'{p:>14,.6f}')}")
 
     if not active:
-        print(f"\n  {yellow('⚠ هیچ نمادی سیگنال فعال نداشت')}\n")
+        print(f"\n  {y('No symbols with active signals found.')}")
     print()
 
 
-# ─── منوی اصلی ──────────────────────────────────────────────────────────────
+# ── entry point ────────────────────────────────────────────────────────────
 
-def main_menu() -> None:
-    print(f"\n{bold(cyan('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'))}")
-    print(f"  {bold('XT Exchange — سیگنال‌یاب')}")
-    print(f"{bold(cyan('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'))}")
-    print(f"\n  {green('1.')} سیگنال یک نماد")
-    print(f"  {green('2.')} اسکن کل بازار (همه نمادها)")
-    print(f"  {red('0.')} خروج\n")
+def main() -> None:
+    p = argparse.ArgumentParser(
+        prog="signal_cli",
+        description="XT Exchange signal tool",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "Examples:\n"
+            "  python scripts/signal_cli.py btc_usdt\n"
+            "  python scripts/signal_cli.py eth_usdt -s ema_cross -i 4h\n"
+            "  python scripts/signal_cli.py --scan -i 1h --top 30\n"
+            "  python scripts/signal_cli.py --scan -s macd_cross -i 4h -m spot --top 50\n"
+        ),
+    )
+    p.add_argument("symbol",        nargs="?", default=None,
+                   help="symbol e.g. btc_usdt  (omit for --scan)")
+    p.add_argument("-s","--strategy", default="rsi_reversal",
+                   choices=["rsi_reversal","ema_cross","macd_cross","bb_mean_revert","combined_momentum"],
+                   help="signal strategy (default: rsi_reversal)")
+    p.add_argument("-i","--interval", default="1h",
+                   choices=["1m","5m","15m","1h","4h","1d"],
+                   help="candle interval (default: 1h)")
+    p.add_argument("-m","--market",   default="spot",
+                   choices=["spot","futures"],
+                   help="market (default: spot)")
+    p.add_argument("-n","--lookback", default=200, type=int,
+                   help="candles to load for single symbol (default: 200, max: 1000)")
+    p.add_argument("--scan",          action="store_true",
+                   help="scan full market instead of one symbol")
+    p.add_argument("--top",           default=30, type=int,
+                   help="max symbols to scan (default: 30)")
 
-    choice = _ask("انتخاب کن", "1")
+    args = p.parse_args()
 
-    if choice == "1":
-        symbol   = _ask("نماد (مثال: btc_usdt)", "btc_usdt")
-        strategy = _choose("استراتژی", STRATEGIES, "rsi_reversal")
-        interval = _choose("تایم‌فریم", INTERVALS, "1h")
-        market   = _choose("بازار", ["spot", "futures"], "spot")
-        lookback = int(_ask("تعداد کندل (max 1000)", "200"))
-        asyncio.run(_run_signal(symbol, strategy, interval, market, min(lookback, 1000)))
-
-    elif choice == "2":
-        strategy    = _choose("استراتژی", STRATEGIES, "rsi_reversal")
-        interval    = _choose("تایم‌فریم", INTERVALS, "1h")
-        market      = _choose("بازار", ["spot", "futures"], "spot")
-        max_symbols = int(_ask("حداکثر نماد برای اسکن (پیشنهاد: 30)", "30"))
-        asyncio.run(_run_scan(strategy, interval, market, max_symbols))
-
-    elif choice == "0":
-        print("خداحافظ!")
-        sys.exit(0)
-
-    again = _ask("\nدوباره؟ (y/n)", "y")
-    if again.lower() == "y":
-        main_menu()
+    if args.scan:
+        asyncio.run(cmd_scan(args.strategy, args.interval, args.market, args.top))
+    elif args.symbol:
+        asyncio.run(cmd_signal(args.symbol, args.strategy, args.interval, args.market, args.lookback))
+    else:
+        p.print_help()
 
 
 if __name__ == "__main__":
-    main_menu()
+    main()
