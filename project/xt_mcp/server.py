@@ -30,6 +30,7 @@ from xt_mcp.tools.backtest import run_backtest
 from xt_mcp.tools.optimizer import list_optimization_templates, optimize_strategy
 from xt_mcp.tools.scanner import list_scanner_presets, scan_market
 from xt_mcp.tools.signals import list_signal_strategies, run_strategy
+from xt_mcp.tools.walk_forward import walk_forward_validate
 
 configure_logging()
 logger = logging.getLogger(__name__)
@@ -75,6 +76,9 @@ mcp.tool()(list_scanner_presets)
 # Phase 7 — strategy optimizer
 mcp.tool()(optimize_strategy)
 mcp.tool()(list_optimization_templates)
+
+# Phase 8 — walk-forward validation
+mcp.tool()(walk_forward_validate)
 
 if __name__ == "__main__":
     logger.info("Starting XT MCP server v%s (stdio transport)", "0.1.0")
