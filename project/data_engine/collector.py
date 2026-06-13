@@ -73,7 +73,7 @@ class DataCollector:
                     start_time=current_start,
                     end_time=end_ms,
                 )
-                bars = resp.result
+                bars = resp.result or []
                 for bar in bars:
                     candles.append(
                         Candle(
@@ -98,7 +98,7 @@ class DataCollector:
                     start_time=current_start,
                     end_time=end_ms,
                 )
-                bars = resp.result
+                bars = resp.result or []
                 for bar in bars:
                     candles.append(
                         Candle(

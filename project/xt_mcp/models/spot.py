@@ -1,16 +1,25 @@
 """Pydantic models for XT spot market API responses.
 
-XT spot API response format:
+XT spot API response format (success):
   {"rc": "0", "mc": "SUCCESS", "ma": [], "result": <data>}
 
-Field aliases map XT's abbreviated field names to readable Python names.
+XT spot API response format (error):
+  {"rc": 1, "mc": "BIZ_ERROR", "result": null}
+
+Note: rc can be either a string ("0") or an integer (1) depending on the
+error path, so all response models coerce rc to str and allow null result.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+
+def _rc_to_str(v: object) -> str:
+    """Coerce API rc field: accepts both '0' (string) and 0 / 1 (integer)."""
+    return str(v)
 
 
 class SpotSymbol(BaseModel):
@@ -26,9 +35,17 @@ class SpotSymbol(BaseModel):
 
 class SpotSymbolListResponse(BaseModel):
     rc: str = Field(default="0")
-    result: list[SpotSymbol] = Field(default_factory=list)
+    result: list[SpotSymbol] | None = Field(default=None)
 
     model_config = {"populate_by_name": True}
+
+    @field_validator("rc", mode="before")
+    @classmethod
+    def _coerce_rc(cls, v: object) -> str:
+        return _rc_to_str(v)
+
+    def get_result(self) -> list[SpotSymbol]:
+        return self.result or []
 
 
 class SpotTicker(BaseModel):
@@ -51,6 +68,11 @@ class SpotTickerResponse(BaseModel):
 
     model_config = {"populate_by_name": True}
 
+    @field_validator("rc", mode="before")
+    @classmethod
+    def _coerce_rc(cls, v: object) -> str:
+        return _rc_to_str(v)
+
 
 class SpotDepthResult(BaseModel):
     bids: list[list[str]] = Field(default_factory=list)
@@ -65,6 +87,11 @@ class SpotDepthResponse(BaseModel):
     result: SpotDepthResult | None = None
 
     model_config = {"populate_by_name": True}
+
+    @field_validator("rc", mode="before")
+    @classmethod
+    def _coerce_rc(cls, v: object) -> str:
+        return _rc_to_str(v)
 
 
 class SpotKlineBar(BaseModel):
@@ -84,6 +111,14 @@ class SpotKlineBar(BaseModel):
 
 class SpotKlineResponse(BaseModel):
     rc: str = Field(default="0")
-    result: list[SpotKlineBar] = Field(default_factory=list)
+    result: list[SpotKlineBar] | None = Field(default=None)
 
     model_config = {"populate_by_name": True}
+
+    @field_validator("rc", mode="before")
+    @classmethod
+    def _coerce_rc(cls, v: object) -> str:
+        return _rc_to_str(v)
+
+    def get_result(self) -> list[SpotKlineBar]:
+        return self.result or []

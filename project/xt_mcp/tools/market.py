@@ -144,10 +144,10 @@ async def get_market_info(symbol: str, market: str = "spot") -> dict:
     try:
         if market == Market.SPOT:
             resp = await _get_spot().get_symbols()
-            matches = [s for s in resp.result if s.symbol == symbol]
+            matches = [s for s in (resp.result or []) if s.symbol == symbol]
         else:
             resp = await _get_futures().get_symbols()
-            matches = [s for s in resp.result if s.symbol == symbol]
+            matches = [s for s in (resp.result or []) if s.symbol == symbol]
         return {
             "symbol": symbol,
             "market": market,

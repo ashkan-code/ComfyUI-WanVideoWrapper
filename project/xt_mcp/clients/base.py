@@ -52,7 +52,12 @@ class XTBaseClient:
         return self._handle_response(response)
 
     def _handle_response(self, response: httpx.Response) -> dict:
-        """Map HTTP status codes to typed exceptions or return parsed JSON."""
+        """Map HTTP status codes to typed exceptions or return parsed JSON.
+
+        Also detects application-level errors (rc != "0" for spot,
+        returnCode != 0 for futures) and raises XTAPIError so that
+        callers never receive a malformed success payload.
+        """
         if response.status_code == 429:
             raise XTRateLimitError(429, "Rate limit exceeded")
         if response.status_code == 404:
@@ -69,7 +74,20 @@ class XTBaseClient:
                 f"Client error {response.status_code}: {body}",
                 raw=body,
             )
-        return self._safe_json(response)
+        body = self._safe_json(response)
+
+        # Application-level error: spot uses rc, futures uses returnCode
+        if isinstance(body, dict):
+            rc = body.get("rc")
+            if rc is not None and str(rc) != "0":
+                mc = body.get("mc", body.get("msg", "unknown"))
+                raise XTAPIError(200, f"XT API error rc={rc}: {mc}", raw=body)
+            return_code = body.get("returnCode")
+            if return_code is not None and int(return_code) != 0:
+                msg = body.get("msgInfo", body.get("msg", "unknown"))
+                raise XTAPIError(200, f"XT futures error returnCode={return_code}: {msg}", raw=body)
+
+        return body
 
     @staticmethod
     def _safe_json(response: httpx.Response) -> dict:
