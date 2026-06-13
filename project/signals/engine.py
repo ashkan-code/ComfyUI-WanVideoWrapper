@@ -33,17 +33,24 @@ class SignalEngine:
         market: str = "spot",
         lookback: int = 500,
     ) -> list[Signal]:
-        """Fetch *lookback* candles and generate signals with *strategy_name*.
+        signals, _ = await self.run_with_df(
+            symbol=symbol,
+            interval=interval,
+            strategy_name=strategy_name,
+            market=market,
+            lookback=lookback,
+        )
+        return signals
 
-        Args:
-            symbol:        Trading pair e.g. 'btc_usdt'
-            interval:      Candle interval e.g. '1h', '4h', '1d'
-            strategy_name: One of the registered strategy names
-            market:        'spot' or 'futures'
-            lookback:      Number of historical bars to analyse (min 50)
-
-        Returns:
-            List of Signal objects, ordered by timestamp ascending.
+    async def run_with_df(
+        self,
+        symbol: str,
+        interval: str,
+        strategy_name: str,
+        market: str = "spot",
+        lookback: int = 500,
+    ) -> tuple[list[Signal], pd.DataFrame]:
+        """Fetch candles and generate signals; return both signals and the DataFrame.
 
         Raises:
             ValueError: Unknown strategy name or market.
@@ -55,7 +62,8 @@ class SignalEngine:
             "SignalEngine: %d bars for %s/%s/%s strategy=%s",
             len(df), symbol, market, interval, strategy_name,
         )
-        return strategy.generate(df, symbol=symbol, market=market, interval=interval)
+        signals = strategy.generate(df, symbol=symbol, market=market, interval=interval)
+        return signals, df
 
     async def _fetch_df(
         self,

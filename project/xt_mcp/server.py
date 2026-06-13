@@ -26,6 +26,7 @@ from xt_mcp.tools.market import (
     get_symbols,
     get_ticker,
 )
+from xt_mcp.tools.backtest import run_backtest
 from xt_mcp.tools.signals import list_signal_strategies, run_strategy
 
 configure_logging()
@@ -39,6 +40,8 @@ mcp = FastMCP(
         "Technical analysis: RSI, MACD, Bollinger Bands, ATR, Stochastic, OBV, VWAP, SMA, EMA. "
         "Signal generation: BUY/SELL signals from 9 built-in strategies "
         "(rsi_reversal, ema_cross, macd_cross, bb_mean_revert, combined_momentum, …). "
+        "Backtesting: simulate long-only strategies on historical candles with commission, "
+        "equity curve, Sharpe ratio, max drawdown, and trade log. "
         "All trading actions are disabled."
     ),
 )
@@ -59,6 +62,9 @@ mcp.tool()(list_available_indicators)
 # Phase 4 — signal generation
 mcp.tool()(run_strategy)
 mcp.tool()(list_signal_strategies)
+
+# Phase 5 — backtesting
+mcp.tool()(run_backtest)
 
 if __name__ == "__main__":
     logger.info("Starting XT MCP server v%s (stdio transport)", "0.1.0")
