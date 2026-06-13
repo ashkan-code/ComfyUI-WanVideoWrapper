@@ -1,0 +1,23 @@
+# XT Exchange MCP Server — Default configuration
+# All values can be overridden by XT_* environment variables.
+# Do NOT store secrets here — use .env or environment variables.
+
+spot_base_url: "https://sapi.xt.com"
+futures_base_url: "https://fapi.xt.com"
+
+http_timeout_s: 10.0
+http_connect_timeout_s: 5.0
+max_connections: 10
+max_keepalive_connections: 5
+
+spot_rate_limit_rps: 10.0
+futures_rate_limit_rps: 10.0
+
+retry_max_attempts: 3
+retry_min_wait_s: 1.0
+retry_max_wait_s: 30.0
+
+log_level: "INFO"
+log_file: "logs/xt_mcp.log"
+log_max_bytes: 10485760   # 10 MB
+log_backup_count: 3

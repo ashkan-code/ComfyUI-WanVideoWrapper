@@ -1,0 +1,11 @@
+.env
+logs/*.log
+logs/*.log.*
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.coverage
+htmlcov/
+dist/
+*.egg-info/

@@ -1,0 +1,19 @@
+{
+  "returnCode": 0,
+  "msgInfo": "success",
+  "error": null,
+  "result": [
+    {
+      "symbol": "btc_usdt",
+      "fundingRate": "0.0001",
+      "settleTime": 1700000000000,
+      "collectionInternal": 28800
+    },
+    {
+      "symbol": "btc_usdt",
+      "fundingRate": "0.00012",
+      "settleTime": 1699971200000,
+      "collectionInternal": 28800
+    }
+  ]
+}

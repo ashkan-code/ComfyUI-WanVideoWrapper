@@ -1,0 +1,11 @@
+{
+  "returnCode": 0,
+  "msgInfo": "success",
+  "error": null,
+  "result": {
+    "symbol": "btc_usdt",
+    "openInterest": "12345.678",
+    "openInterestUsd": "830000000.00",
+    "time": 1700000000000
+  }
+}

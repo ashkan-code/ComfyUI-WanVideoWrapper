@@ -1,0 +1,15 @@
+{
+  "returnCode": 0,
+  "msgInfo": "success",
+  "error": null,
+  "result": [
+    {
+      "symbol": "btc_usdt",
+      "contractType": "PERPETUAL",
+      "baseCurrency": "btc",
+      "quoteCurrency": "usdt",
+      "pricePrecision": 1,
+      "volumePrecision": 0
+    }
+  ]
+}
