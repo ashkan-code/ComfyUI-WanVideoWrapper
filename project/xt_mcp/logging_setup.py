@@ -10,8 +10,11 @@ import logging.handlers
 import pathlib
 
 
-def configure_logging() -> None:
-    """Set up root logger with rotating file handler and stderr handler."""
+def configure_logging(level: str | None = None) -> None:
+    """Set up root logger with rotating file handler and stderr handler.
+
+    *level* overrides the value in settings (useful for CLI scripts).
+    """
     from xt_mcp.config import settings  # late import to avoid circular init
 
     log_path = pathlib.Path(settings.log_file)
@@ -35,7 +38,8 @@ def configure_logging() -> None:
     stderr_handler.setFormatter(formatter)
     stderr_handler.setLevel(logging.WARNING)
 
+    effective_level = (level or settings.log_level).upper()
     root = logging.getLogger()
-    root.setLevel(getattr(logging, settings.log_level))
+    root.setLevel(getattr(logging, effective_level))
     root.addHandler(file_handler)
     root.addHandler(stderr_handler)
