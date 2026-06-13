@@ -30,7 +30,10 @@ from xt_mcp.tools.backtest import run_backtest
 from xt_mcp.tools.optimizer import list_optimization_templates, optimize_strategy
 from xt_mcp.tools.portfolio import find_pairs, get_correlation_matrix, portfolio_backtest
 from xt_mcp.tools.regime import detect_regime, regime_filtered_signals
+from xt_mcp.tools.mtf import analyze_multi_timeframe
+from xt_mcp.tools.patterns import detect_patterns
 from xt_mcp.tools.risk import calculate_position_size, calculate_risk_report
+from xt_mcp.tools.summary import get_symbol_report
 from xt_mcp.tools.scanner import list_scanner_presets, scan_market
 from xt_mcp.tools.watchlist import (
     add_to_watchlist,
@@ -98,6 +101,15 @@ mcp.tool()(portfolio_backtest)
 # Phase 10 — regime detection
 mcp.tool()(detect_regime)
 mcp.tool()(regime_filtered_signals)
+
+# Phase 13 — multi-timeframe analysis
+mcp.tool()(analyze_multi_timeframe)
+
+# Phase 14 — symbol summary report
+mcp.tool()(get_symbol_report)
+
+# Phase 15 — candlestick pattern detection
+mcp.tool()(detect_patterns)
 
 # Phase 12 — risk management & position sizing
 mcp.tool()(calculate_position_size)
