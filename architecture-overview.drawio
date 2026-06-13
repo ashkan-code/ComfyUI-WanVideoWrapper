@@ -1,0 +1,147 @@
+<mxGraphModel adaptiveColors="auto">
+  <root>
+    <mxCell id="0"/>
+    <mxCell id="1" parent="0"/>
+    <mxCell id="title" value="ComfyUI-WanVideoWrapper Architecture" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=18;fontStyle=1;" vertex="1" parent="1">
+      <mxGeometry x="40" y="10" width="820" height="30" as="geometry"/>
+    </mxCell>
+    <mxCell id="layer-loaders" value="Model Loading" style="swimlane;startSize=25;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;fontSize=11;" vertex="1" parent="1">
+      <mxGeometry x="40" y="60" width="820" height="100" as="geometry"/>
+    </mxCell>
+    <mxCell id="ml-model" value="WanVideoModelLoader&#xa;(Transformer / GGUF)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="layer-loaders">
+      <mxGeometry x="15" y="35" width="175" height="50" as="geometry"/>
+    </mxCell>
+    <mxCell id="ml-vae" value="WanVideoVAELoader&#xa;(Video VAE)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="layer-loaders">
+      <mxGeometry x="210" y="35" width="175" height="50" as="geometry"/>
+    </mxCell>
+    <mxCell id="ml-t5" value="LoadWanVideoT5TextEncoder&#xa;/ ClipTextEncoder" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="layer-loaders">
+      <mxGeometry x="405" y="35" width="175" height="50" as="geometry"/>
+    </mxCell>
+    <mxCell id="ml-lora" value="WanVideoLoraSelect&#xa;(LoRA Stack)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="layer-loaders">
+      <mxGeometry x="600" y="35" width="175" height="50" as="geometry"/>
+    </mxCell>
+    <mxCell id="layer-inputs" value="User Inputs" style="swimlane;startSize=25;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1;fontSize=11;" vertex="1" parent="1">
+      <mxGeometry x="40" y="190" width="600" height="100" as="geometry"/>
+    </mxCell>
+    <mxCell id="in-text" value="Text Prompt&#xa;(positive / negative)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;" vertex="1" parent="layer-inputs">
+      <mxGeometry x="15" y="35" width="175" height="50" as="geometry"/>
+    </mxCell>
+    <mxCell id="in-image" value="Image / Video Input" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;" vertex="1" parent="layer-inputs">
+      <mxGeometry x="210" y="35" width="175" height="50" as="geometry"/>
+    </mxCell>
+    <mxCell id="in-audio" value="Audio Input" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;" vertex="1" parent="layer-inputs">
+      <mxGeometry x="405" y="35" width="175" height="50" as="geometry"/>
+    </mxCell>
+    <mxCell id="layer-enc" value="Encoding" style="swimlane;startSize=25;fillColor=#e1d5e7;strokeColor=#9673a6;fontStyle=1;fontSize=11;" vertex="1" parent="1">
+      <mxGeometry x="40" y="320" width="600" height="100" as="geometry"/>
+    </mxCell>
+    <mxCell id="enc-text" value="WanVideoTextEncode&#xa;(T5 / CLIP)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;" vertex="1" parent="layer-enc">
+      <mxGeometry x="15" y="35" width="175" height="50" as="geometry"/>
+    </mxCell>
+    <mxCell id="enc-vae" value="WanVideoEncode&#xa;(VAE Encoder)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;" vertex="1" parent="layer-enc">
+      <mxGeometry x="210" y="35" width="175" height="50" as="geometry"/>
+    </mxCell>
+    <mxCell id="enc-vis" value="WanVideoClipVisionEncode&#xa;/ ImageToVideoEncode" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;" vertex="1" parent="layer-enc">
+      <mxGeometry x="405" y="35" width="175" height="50" as="geometry"/>
+    </mxCell>
+    <mxCell id="emb-text" value="WANVIDEOTEXTEMBEDS" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;" vertex="1" parent="1">
+      <mxGeometry x="40" y="450" width="175" height="45" as="geometry"/>
+    </mxCell>
+    <mxCell id="emb-lat" value="LATENT" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;" vertex="1" parent="1">
+      <mxGeometry x="253" y="450" width="175" height="45" as="geometry"/>
+    </mxCell>
+    <mxCell id="emb-img" value="WANVIDIMAGE_EMBEDS" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;" vertex="1" parent="1">
+      <mxGeometry x="466" y="450" width="175" height="45" as="geometry"/>
+    </mxCell>
+    <mxCell id="sampler" value="WanVideoSampler" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d79b00;strokeColor=#b46504;fontStyle=1;fontSize=16;fontColor=#ffffff;" vertex="1" parent="1">
+      <mxGeometry x="210" y="540" width="260" height="70" as="geometry"/>
+    </mxCell>
+    <mxCell id="layer-feat" value="Optional Feature Modules" style="swimlane;startSize=25;fillColor=#ffe6cc;strokeColor=#d79b00;fontStyle=1;fontSize=11;" vertex="1" parent="1">
+      <mxGeometry x="680" y="190" width="200" height="420" as="geometry"/>
+    </mxCell>
+    <mxCell id="feat-ctrl" value="ControlNet" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=10;" vertex="1" parent="layer-feat">
+      <mxGeometry x="15" y="35" width="170" height="35" as="geometry"/>
+    </mxCell>
+    <mxCell id="feat-mt" value="MultiTalk (audio-driven)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=10;" vertex="1" parent="layer-feat">
+      <mxGeometry x="15" y="80" width="170" height="35" as="geometry"/>
+    </mxCell>
+    <mxCell id="feat-ft" value="FantasyTalking / Portrait" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=10;" vertex="1" parent="layer-feat">
+      <mxGeometry x="15" y="125" width="170" height="35" as="geometry"/>
+    </mxCell>
+    <mxCell id="feat-ati" value="ATI Tracking" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=10;" vertex="1" parent="layer-feat">
+      <mxGeometry x="15" y="170" width="170" height="35" as="geometry"/>
+    </mxCell>
+    <mxCell id="feat-cache" value="TeaCache / MagCache" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=10;" vertex="1" parent="layer-feat">
+      <mxGeometry x="15" y="215" width="170" height="35" as="geometry"/>
+    </mxCell>
+    <mxCell id="feat-other" value="UniAnimate / HuMo / MTV&#xa;SkyReels / Lynx / S2V&#xa;ReCamMaster / Uni3C" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=10;" vertex="1" parent="layer-feat">
+      <mxGeometry x="15" y="260" width="170" height="55" as="geometry"/>
+    </mxCell>
+    <mxCell id="feat-opt" value="BlockSwap / FP8 / GGUF&#xa;torch.compile / FreeInit" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=10;" vertex="1" parent="layer-feat">
+      <mxGeometry x="15" y="325" width="170" height="45" as="geometry"/>
+    </mxCell>
+    <mxCell id="out-latent" value="Latent Output (LATENT)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" vertex="1" parent="1">
+      <mxGeometry x="210" y="645" width="260" height="45" as="geometry"/>
+    </mxCell>
+    <mxCell id="out-decode" value="WanVideoDecode&#xa;(VAE Decoder + Tiling)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" vertex="1" parent="1">
+      <mxGeometry x="210" y="735" width="260" height="55" as="geometry"/>
+    </mxCell>
+    <mxCell id="out-video" value="Video Frames (IMAGE)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1;fontSize=14;" vertex="1" parent="1">
+      <mxGeometry x="210" y="840" width="260" height="60" as="geometry"/>
+    </mxCell>
+    <mxCell id="e1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" edge="1" source="ml-t5" target="enc-text" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" edge="1" source="ml-vae" target="enc-vae" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" edge="1" source="in-text" target="enc-text" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e4" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" edge="1" source="in-image" target="enc-vae" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e5" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" edge="1" source="in-image" target="enc-vis" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e6" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" edge="1" source="enc-text" target="emb-text" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e7" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" edge="1" source="enc-vae" target="emb-lat" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e8" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" edge="1" source="enc-vis" target="emb-img" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e9" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" edge="1" source="emb-text" target="sampler" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e10" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" edge="1" source="emb-lat" target="sampler" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e11" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" edge="1" source="emb-img" target="sampler" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e12" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" edge="1" source="ml-model" target="sampler" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e13" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" edge="1" source="ml-lora" target="sampler" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e14" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;dashed=1;strokeColor=#d79b00;" edge="1" source="layer-feat" target="sampler" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e15" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" edge="1" source="sampler" target="out-latent" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e16" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" edge="1" source="out-latent" target="out-decode" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e17" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" edge="1" source="ml-vae" target="out-decode" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e18" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" edge="1" source="out-decode" target="out-video" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+  </root>
+</mxGraphModel>
