@@ -44,6 +44,17 @@ from xt_mcp.tools.watchlist import (
 )
 from xt_mcp.tools.signals import list_signal_strategies, run_strategy
 from xt_mcp.tools.walk_forward import walk_forward_validate
+from xt_mcp.tools.volume import (
+    detect_volume_divergence,
+    get_volume_profile,
+    get_vwap_analysis,
+)
+from xt_mcp.tools.volatility import get_volatility_cone, get_volatility_metrics
+from xt_mcp.tools.export_data import (
+    export_backtest_result,
+    export_ohlcv,
+    export_signals,
+)
 
 configure_logging()
 logger = logging.getLogger(__name__)
@@ -114,6 +125,20 @@ mcp.tool()(detect_patterns)
 # Phase 12 — risk management & position sizing
 mcp.tool()(calculate_position_size)
 mcp.tool()(calculate_risk_report)
+
+# Phase 16 — volume profile, VWAP, divergence
+mcp.tool()(get_volume_profile)
+mcp.tool()(get_vwap_analysis)
+mcp.tool()(detect_volume_divergence)
+
+# Phase 17 — volatility analytics
+mcp.tool()(get_volatility_metrics)
+mcp.tool()(get_volatility_cone)
+
+# Phase 18 — data export
+mcp.tool()(export_ohlcv)
+mcp.tool()(export_signals)
+mcp.tool()(export_backtest_result)
 
 # Phase 11 — watchlist & alerts
 mcp.tool()(add_to_watchlist)
