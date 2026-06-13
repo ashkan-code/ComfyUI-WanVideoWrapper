@@ -118,7 +118,8 @@ def _print_report(res: dict, top_n: int = 5) -> None:
 
     tc = g(trend) if trend=="UPTREND" else (r(trend) if trend=="DOWNTREND" else y(trend))
     print(f"\n{b('='*58)}")
-    print(f"  {c(sym.upper())}   price:{y(f'{price:,.6f}')}   trend:{tc}   ATR:{atr:.5f}")
+    price_s = y(f"{price:,.6f}")
+    print(f"  {c(sym.upper())}   price:{price_s}   trend:{tc}   ATR:{atr:.5f}")
     print(b('='*58))
 
     if not cls:
@@ -136,13 +137,15 @@ def _print_report(res: dict, top_n: int = 5) -> None:
         pc    = g(f"{cl.probability:.2f}") if cl.probability>=0.65 else (y(f"{cl.probability:.2f}") if cl.probability>=0.5 else r(f"{cl.probability:.2f}"))
         cc    = g(f"{cl.confidence:.2f}") if cl.confidence>=0.7  else (y(f"{cl.confidence:.2f}") if cl.confidence>=0.4 else r(f"{cl.confidence:.2f}"))
         sc    = g(str(cl.score)) if cl.score>=70 else (y(str(cl.score)) if cl.score>=50 else str(cl.score))
-        print(f"  {y(f'{cl.center:>14,.6f}')}  {dist:>+6.2f}%  {pc:>14}  {cc:>14}  {cl.tf_count:>3}  {cl.historical_touches:>4}  {sc:>12}  {tfs}")
+        center_s = y(f"{cl.center:>14,.6f}")
+        print(f"  {center_s}  {dist:>+6.2f}%  {pc:>14}  {cc:>14}  {cl.tf_count:>3}  {cl.historical_touches:>4}  {sc:>12}  {tfs}")
 
     if bt:
         pf  = f"{bt.profit_factor:.2f}" if bt.profit_factor != float("inf") else "inf"
         wrc = g(f"{bt.win_rate:.1%}") if bt.win_rate>=0.55 else (y(f"{bt.win_rate:.1%}") if bt.win_rate>=0.45 else r(f"{bt.win_rate:.1%}"))
         exc = g(f"{bt.expectancy:+.3f}") if bt.expectancy>0 else r(f"{bt.expectancy:+.3f}")
-        print(f"\n  {b('BACKTEST')}  trades:{bt.total_trades}  WR:{wrc}  PF:{pf}  Exp:{exc}ATR  MDD:{r(f'{bt.max_drawdown:.2f}')}ATR")
+        mdd_s = r(f"{bt.max_drawdown:.2f}")
+        print(f"\n  {b('BACKTEST')}  trades:{bt.total_trades}  WR:{wrc}  PF:{pf}  Exp:{exc}ATR  MDD:{mdd_s}ATR")
     print()
 
 
@@ -200,7 +203,11 @@ async def cmd_scan(args) -> None:
         pc   = g(f"{cl.probability:.2f}") if cl.probability>=0.65 else y(f"{cl.probability:.2f}")
         cc   = g(f"{cl.confidence:.2f}") if cl.confidence>=0.7 else (y(f"{cl.confidence:.2f}") if cl.confidence>=0.4 else r(f"{cl.confidence:.2f}"))
         sc   = g(str(cl.score)) if cl.score>=70 else (y(str(cl.score)) if cl.score>=50 else str(cl.score))
-        print(f"  {g(str(i)):<10} {c(res['symbol']):<17} {y(f'{res[\"price\"]:>12,.4f}')}  {tc:<18}  {pc:>14}  {cc:>14}  {sc:>12}  {y(f'{cl.center:>12,.4f}')}")
+        price_s   = y(f"{res['price']:>12,.4f}")
+        center_s  = y(f"{cl.center:>12,.4f}")
+        sym_s     = c(res["symbol"])
+        num_s     = g(str(i))
+        print(f"  {num_s:<10} {sym_s:<17} {price_s}  {tc:<18}  {pc:>14}  {cc:>14}  {sc:>12}  {center_s}")
     print()
 
 
