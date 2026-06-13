@@ -12,5 +12,6 @@ PyYAML==6.0.1
 typing-extensions==4.15.0
 
 # Phase 2 — Data Collection Engine
-pandas>=2.0.0
-numpy>=1.26.0
+# On Termux/ARM64: install via `pkg install python-numpy python-pandas` instead
+pandas>=2.0.0,<3.0.0
+numpy>=1.26.0,<2.0.0
