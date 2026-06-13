@@ -66,7 +66,7 @@ class Settings(BaseSettings):
     # Data engine (Phase 2)
     data_dir: str = Field(default="data")
     max_history_days: int = Field(default=365)
-    batch_size: int = Field(default=1500)
+    batch_size: int = Field(default=1000)
     sync_concurrency: int = Field(default=3)
     default_timeframes: list[str] = Field(
         default_factory=lambda: ["5m", "15m", "1h", "4h", "1d"]

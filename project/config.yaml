@@ -25,7 +25,7 @@ log_backup_count: 3
 # ── Data Engine (Phase 2) ──────────────────────────────────────────────────
 data_dir: "data"
 max_history_days: 365
-batch_size: 1500          # max candles per API request (XT limit)
+batch_size: 1000          # XT spot API max per request (was 1500, corrected)
 sync_concurrency: 3       # parallel symbol syncs
 default_timeframes:
   - "5m"
