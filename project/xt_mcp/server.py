@@ -31,6 +31,13 @@ from xt_mcp.tools.optimizer import list_optimization_templates, optimize_strateg
 from xt_mcp.tools.portfolio import find_pairs, get_correlation_matrix, portfolio_backtest
 from xt_mcp.tools.regime import detect_regime, regime_filtered_signals
 from xt_mcp.tools.scanner import list_scanner_presets, scan_market
+from xt_mcp.tools.watchlist import (
+    add_to_watchlist,
+    check_watchlist_signals,
+    get_recent_alerts,
+    list_watchlist,
+    remove_from_watchlist,
+)
 from xt_mcp.tools.signals import list_signal_strategies, run_strategy
 from xt_mcp.tools.walk_forward import walk_forward_validate
 
@@ -90,6 +97,13 @@ mcp.tool()(portfolio_backtest)
 # Phase 10 — regime detection
 mcp.tool()(detect_regime)
 mcp.tool()(regime_filtered_signals)
+
+# Phase 11 — watchlist & alerts
+mcp.tool()(add_to_watchlist)
+mcp.tool()(remove_from_watchlist)
+mcp.tool()(list_watchlist)
+mcp.tool()(check_watchlist_signals)
+mcp.tool()(get_recent_alerts)
 
 if __name__ == "__main__":
     logger.info("Starting XT MCP server v%s (stdio transport)", "0.1.0")
