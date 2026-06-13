@@ -244,7 +244,7 @@ def main():
     p.add_argument("--top",          type=int,   default=10)
     p.add_argument("--pool",         type=int,   default=50,   help="symbols to scan")
     p.add_argument("--min-prob",     type=float, default=0.55, dest="min_prob")
-    p.add_argument("--atr-mult",     type=float, default=1.0,  dest="atr_mult")
+    p.add_argument("--atr-mult",     type=float, default=1.5,  dest="atr_mult",  help="reaction ATR multiple (default 1.5)")
     p.add_argument("--react-window", type=int,   default=10,   dest="react_window")
     p.add_argument("--min-touches",    type=int,   default=4,   dest="min_touches")
     p.add_argument("--no-backtest",    action="store_true",     dest="no_backtest")

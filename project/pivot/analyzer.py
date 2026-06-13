@@ -28,19 +28,27 @@ def analyze_reactions(
     n      = len(df)
     move   = reaction_atr_multiple * atr
 
+    last_close = closes[-1]
+
     for cl in clusters:
-        tol     = max(cl.center * 0.005, atr * 0.5)
-        touches = 0
-        hits    = 0
+        tol        = max(cl.center * 0.005, atr * 0.5)
+        is_support = cl.center < last_close   # below price → expect UP reaction
+        touches    = 0
+        hits       = 0
 
         for i in range(n - reaction_window):
             if abs(closes[i] - cl.center) > tol:
                 continue
             touches += 1
-            up   = float(highs[i + 1 : i + 1 + reaction_window].max()) - closes[i]
-            down = closes[i] - float(lows[i + 1 : i + 1 + reaction_window].min())
-            if max(up, down) >= move:
-                hits += 1
+            future_hi = float(highs[i + 1 : i + 1 + reaction_window].max())
+            future_lo = float(lows[i + 1  : i + 1 + reaction_window].min())
+            # Directional: support → UP reaction, resistance → DOWN reaction
+            if is_support:
+                if future_hi - closes[i] >= move:
+                    hits += 1
+            else:
+                if closes[i] - future_lo >= move:
+                    hits += 1
 
         cl.historical_touches = touches
         cl.reaction_rate = hits / touches if touches > 0 else 0.0
