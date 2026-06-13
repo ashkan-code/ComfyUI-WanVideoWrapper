@@ -21,3 +21,18 @@ log_level: "INFO"
 log_file: "logs/xt_mcp.log"
 log_max_bytes: 10485760   # 10 MB
 log_backup_count: 3
+
+# ── Data Engine (Phase 2) ──────────────────────────────────────────────────
+data_dir: "data"
+max_history_days: 365
+batch_size: 1500          # max candles per API request (XT limit)
+sync_concurrency: 3       # parallel symbol syncs
+default_timeframes:
+  - "5m"
+  - "15m"
+  - "1h"
+  - "4h"
+  - "1d"
+default_symbols:
+  - "btc_usdt"
+  - "eth_usdt"

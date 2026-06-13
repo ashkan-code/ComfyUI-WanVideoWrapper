@@ -63,6 +63,18 @@ class Settings(BaseSettings):
     api_key: str = Field(default="")
     api_secret: str = Field(default="")
 
+    # Data engine (Phase 2)
+    data_dir: str = Field(default="data")
+    max_history_days: int = Field(default=365)
+    batch_size: int = Field(default=1500)
+    sync_concurrency: int = Field(default=3)
+    default_timeframes: list[str] = Field(
+        default_factory=lambda: ["5m", "15m", "1h", "4h", "1d"]
+    )
+    default_symbols: list[str] = Field(
+        default_factory=lambda: ["btc_usdt", "eth_usdt"]
+    )
+
     @field_validator("log_level")
     @classmethod
     def _validate_log_level(cls, v: str) -> str:

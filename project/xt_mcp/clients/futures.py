@@ -42,12 +42,24 @@ class XTFuturesClient(XTBaseClient):
         symbol: str,
         interval: str = "1h",
         limit: int = 100,
+        start_time: int | None = None,
+        end_time: int | None = None,
     ) -> FuturesKlineResponse:
-        """Get OHLCV candlestick bars for a futures symbol."""
-        raw = await self._get(
-            "/future/market/v1/public/q/kline",
-            params={"symbol": symbol, "interval": interval, "limit": limit},
-        )
+        """Get OHLCV candlestick bars for a futures symbol.
+
+        Args:
+            symbol: Futures symbol e.g. 'btc_usdt'
+            interval: Candle interval e.g. '1m', '5m', '1h', '1d'
+            limit: Max bars to return (max 1500)
+            start_time: Start of range in Unix milliseconds (inclusive)
+            end_time: End of range in Unix milliseconds (inclusive)
+        """
+        params: dict = {"symbol": symbol, "interval": interval, "limit": limit}
+        if start_time is not None:
+            params["startTime"] = start_time
+        if end_time is not None:
+            params["endTime"] = end_time
+        raw = await self._get("/future/market/v1/public/q/kline", params=params)
         return FuturesKlineResponse.model_validate(raw)
 
     async def get_funding_rate(

@@ -46,10 +46,22 @@ class XTSpotClient(XTBaseClient):
         symbol: str,
         interval: str = "1h",
         limit: int = 100,
+        start_time: int | None = None,
+        end_time: int | None = None,
     ) -> SpotKlineResponse:
-        """Get OHLCV candlestick bars. interval e.g. '1m', '5m', '1h', '1d'."""
-        raw = await self._get(
-            "/v4/public/kline",
-            params={"symbol": symbol, "interval": interval, "limit": limit},
-        )
+        """Get OHLCV candlestick bars.
+
+        Args:
+            symbol: Trading pair e.g. 'btc_usdt'
+            interval: Candle interval e.g. '1m', '5m', '1h', '1d'
+            limit: Max bars to return (max 1500)
+            start_time: Start of range in Unix milliseconds (inclusive)
+            end_time: End of range in Unix milliseconds (inclusive)
+        """
+        params: dict = {"symbol": symbol, "interval": interval, "limit": limit}
+        if start_time is not None:
+            params["startTime"] = start_time
+        if end_time is not None:
+            params["endTime"] = end_time
+        raw = await self._get("/v4/public/kline", params=params)
         return SpotKlineResponse.model_validate(raw)
