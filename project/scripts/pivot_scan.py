@@ -96,6 +96,14 @@ async def analyze_symbol(
     for cl in clusters:
         score_cluster(cl, structure, current_price)
 
+    # Filter: drop clusters within 0.2% of current price (too close = noise)
+    # and clusters with historical_touches < 2
+    clusters = [
+        cl for cl in clusters
+        if abs(cl.center - current_price) / current_price > 0.002
+        and cl.historical_touches >= 2
+    ]
+
     clusters.sort(key=lambda c: -c.score)
 
     # 7. Backtest Lite
