@@ -27,6 +27,7 @@ from xt_mcp.tools.market import (
     get_ticker,
 )
 from xt_mcp.tools.backtest import run_backtest
+from xt_mcp.tools.scanner import list_scanner_presets, scan_market
 from xt_mcp.tools.signals import list_signal_strategies, run_strategy
 
 configure_logging()
@@ -65,6 +66,10 @@ mcp.tool()(list_signal_strategies)
 
 # Phase 5 — backtesting
 mcp.tool()(run_backtest)
+
+# Phase 6 — market scanner
+mcp.tool()(scan_market)
+mcp.tool()(list_scanner_presets)
 
 if __name__ == "__main__":
     logger.info("Starting XT MCP server v%s (stdio transport)", "0.1.0")
