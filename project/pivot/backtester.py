@@ -25,22 +25,24 @@ class BacktestResult:
 def backtest_clusters(
     clusters: list[Cluster],
     df: pd.DataFrame,
-    tp_atr:       float = 1.5,
-    sl_atr:       float = 1.0,
-    reaction_window: int = 10,
-    min_prob:     float = 0.55,
-    cooldown:     int   = 10,   # bars to wait before re-trading same cluster
-    min_gap:      int   = 5,    # bars between any two trades
-    max_per_cluster: int = 3,   # max trades per cluster (first-touch priority)
+    tp_atr:          float        = 1.5,
+    sl_atr:          float        = 1.0,
+    reaction_window: int          = 10,
+    min_prob:        float        = 0.55,
+    cooldown:        int          = 10,
+    min_gap:         int          = 5,
+    max_per_cluster: int          = 3,
+    entry_dist_atr:  float | None = None,
 ) -> BacktestResult:
     """
     Entry:  price touches cluster where probability >= min_prob.
     Exit:   first of TP or SL within reaction_window bars.
     Rules:
-      - cooldown:       same cluster cannot be re-entered for cooldown bars
-      - min_gap:        no new trade within min_gap bars of any prior trade
+      - cooldown:        same cluster cannot be re-entered for cooldown bars
+      - min_gap:         no new trade within min_gap bars of any prior trade
       - max_per_cluster: cluster retired after this many trades (freshness)
-      - first touch > second touch > third touch (score decays each touch)
+      - entry_dist_atr:  price must be within N×ATR of cluster center to enter
+                         (None = legacy formula: max(0.5%price, 0.5×ATR))
     No lookahead bias: exit uses only future bars.
     """
     atr    = atr14(df)
@@ -53,6 +55,12 @@ def backtest_clusters(
 
     viable = [c for c in clusters if c.probability >= min_prob and c.historical_touches >= 2]
 
+    # Precompute entry tolerance per cluster (fixed for all bars)
+    if entry_dist_atr is not None:
+        _tols = [atr * entry_dist_atr] * len(viable)
+    else:
+        _tols = [max(cl.center * 0.005, atr * 0.5) for cl in viable]
+
     # Per-cluster state
     cluster_last_trade: list[int]   = [-9999] * len(viable)
     cluster_trade_count: list[int]  = [0]     * len(viable)
@@ -63,7 +71,6 @@ def backtest_clusters(
     wins = losses          = 0
     loss_streak = max_loss_streak = cur_streak = 0
 
-    # Track which cluster caused losses and under what trend
     loss_clusters: dict[str, int] = {}
 
     for i in range(n - reaction_window):
@@ -76,8 +83,7 @@ def backtest_clusters(
             if (i - last_trade_bar) < min_gap:
                 continue
 
-            tol = max(cl.center * 0.005, atr * 0.5)
-            if abs(closes[i] - cl.center) > tol:
+            if abs(closes[i] - cl.center) > _tols[ci]:
                 continue
 
             # ── first-touch probability decay ─────────────────────────

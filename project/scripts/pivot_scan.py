@@ -22,6 +22,7 @@ from pivot.structure import detect_structure
 from pivot.analyzer  import analyze_reactions
 from pivot.scorer    import score_cluster
 from pivot.backtester import backtest_clusters
+from pivot.optimizer  import run_sweep, opportunity_rank, TOTAL_COMBINATIONS
 
 G="\033[92m";R="\033[91m";Y="\033[93m";C="\033[96m";B="\033[1m";D="\033[2m";X="\033[0m"
 def g(t): return f"{G}{t}{X}"
@@ -51,6 +52,8 @@ async def analyze_symbol(
     cooldown: int = 10,
     min_gap: int = 5,
     max_per_cluster: int = 3,
+    min_conf: float = 0.0,
+    dist_atr: float | None = None,
 ) -> dict | None:
     # 1. Fetch 3 timeframes
     dfs = {}
@@ -96,21 +99,22 @@ async def analyze_symbol(
     for cl in clusters:
         score_cluster(cl, structure, current_price)
 
-    # Filter: drop clusters within 0.2% of current price (too close = noise)
-    # and clusters with historical_touches < 2
+    # Filter: too close to current price (noise), insufficient touches, low confidence
     clusters = [
         cl for cl in clusters
         if abs(cl.center - current_price) / current_price > 0.002
         and cl.historical_touches >= 2
+        and cl.confidence >= min_conf
     ]
 
-    clusters.sort(key=lambda c: -c.score)
+    clusters.sort(key=lambda cl: -opportunity_rank(cl, structure.trend, current_price))
 
     # 7. Backtest Lite
     bt = backtest_clusters(clusters, df_1h,
                            cooldown=cooldown,
                            min_gap=min_gap,
-                           max_per_cluster=max_per_cluster) if do_backtest else None
+                           max_per_cluster=max_per_cluster,
+                           entry_dist_atr=dist_atr) if do_backtest else None
 
     return {
         "symbol":   symbol,
@@ -141,9 +145,9 @@ def _print_report(res: dict, top_n: int = 5) -> None:
         return
 
     print(f"\n  {b('PIVOT CLUSTERS:')}\n")
-    hdr = f"  {'CLUSTER':>14}  {'DIST%':>6}  {'PROB':>6}  {'CONF':>6}  {'TFs':>3}  {'TCH':>4}  {'SCR':>4}  TF LIST"
+    hdr = f"  {'CLUSTER':>14}  {'DIST%':>6}  {'PROB':>6}  {'CONF':>6}  {'TFs':>3}  {'TCH':>4}  {'SCR':>4}  {'OPP':>6}  TF LIST"
     print(hdr)
-    print(f"  {'-'*90}")
+    print(f"  {'-'*104}")
 
     for cl in cls:
         dist  = (cl.center - price) / price * 100
@@ -151,8 +155,10 @@ def _print_report(res: dict, top_n: int = 5) -> None:
         pc    = g(f"{cl.probability:.2f}") if cl.probability>=0.65 else (y(f"{cl.probability:.2f}") if cl.probability>=0.5 else r(f"{cl.probability:.2f}"))
         cc    = g(f"{cl.confidence:.2f}") if cl.confidence>=0.7  else (y(f"{cl.confidence:.2f}") if cl.confidence>=0.4 else r(f"{cl.confidence:.2f}"))
         sc    = g(str(cl.score)) if cl.score>=70 else (y(str(cl.score)) if cl.score>=50 else str(cl.score))
+        opp   = opportunity_rank(cl, trend, price)
+        opp_s = g(f"{opp:.3f}") if opp >= 0.3 else (y(f"{opp:.3f}") if opp >= 0.15 else r(f"{opp:.3f}"))
         center_s = y(f"{cl.center:>14,.6f}")
-        print(f"  {center_s}  {dist:>+6.2f}%  {pc:>14}  {cc:>14}  {cl.tf_count:>3}  {cl.historical_touches:>4}  {sc:>12}  {tfs}")
+        print(f"  {center_s}  {dist:>+6.2f}%  {pc:>14}  {cc:>14}  {cl.tf_count:>3}  {cl.historical_touches:>4}  {sc:>12}  {opp_s:>14}  {tfs}")
 
     if bt:
         pf    = f"{bt.profit_factor:.2f}" if bt.profit_factor != float("inf") else "inf"
@@ -180,6 +186,8 @@ async def cmd_single(args) -> None:
         cooldown=args.cooldown,
         min_gap=args.min_gap,
         max_per_cluster=args.max_per_cluster,
+        min_conf=args.min_conf,
+        dist_atr=args.dist_atr,
     )
     if not res:
         print(r("ERROR: could not fetch or analyze data"))
@@ -207,7 +215,9 @@ async def cmd_scan(args) -> None:
     results = await asyncio.gather(*[_run(s) for s in syms])
     results = [x for x in results if x and x["clusters"]]
     results = [x for x in results if x["clusters"][0].probability >= args.min_prob]
-    results.sort(key=lambda x: -x["clusters"][0].score)
+    if args.min_conf > 0.0:
+        results = [x for x in results if x["clusters"][0].confidence >= args.min_conf]
+    results.sort(key=lambda x: -opportunity_rank(x["clusters"][0], x["trend"], x["price"]))
     top = results[:args.top]
 
     print(f"\n{b('='*64)}")
@@ -218,20 +228,101 @@ async def cmd_scan(args) -> None:
         print(f"\n  {y('No candidates above threshold.')}\n")
         return
 
-    print(f"\n  {'#':<3} {'SYMBOL':<14} {'PRICE':>14}  {'TREND':<11}  {'PROB':>6}  {'CONF':>6}  {'SCR':>4}  {'CLUSTER':>14}")
-    print(f"  {'-'*90}")
+    print(f"\n  {'#':<3} {'SYMBOL':<14} {'PRICE':>14}  {'TREND':<11}  {'PROB':>6}  {'CONF':>6}  {'OPP':>6}  {'SCR':>4}  {'CLUSTER':>14}")
+    print(f"  {'-'*104}")
     for i, res in enumerate(top, 1):
-        cl   = res["clusters"][0]
-        tc   = g("UP") if res["trend"]=="UPTREND" else (r("DN") if res["trend"]=="DOWNTREND" else y("RNG"))
-        pc   = g(f"{cl.probability:.2f}") if cl.probability>=0.65 else y(f"{cl.probability:.2f}")
-        cc   = g(f"{cl.confidence:.2f}") if cl.confidence>=0.7 else (y(f"{cl.confidence:.2f}") if cl.confidence>=0.4 else r(f"{cl.confidence:.2f}"))
-        sc   = g(str(cl.score)) if cl.score>=70 else (y(str(cl.score)) if cl.score>=50 else str(cl.score))
-        price_s   = y(f"{res['price']:>12,.4f}")
-        center_s  = y(f"{cl.center:>12,.4f}")
-        sym_s     = c(res["symbol"])
-        num_s     = g(str(i))
-        print(f"  {num_s:<10} {sym_s:<17} {price_s}  {tc:<18}  {pc:>14}  {cc:>14}  {sc:>12}  {center_s}")
+        cl    = res["clusters"][0]
+        tc    = g("UP") if res["trend"]=="UPTREND" else (r("DN") if res["trend"]=="DOWNTREND" else y("RNG"))
+        pc    = g(f"{cl.probability:.2f}") if cl.probability>=0.65 else y(f"{cl.probability:.2f}")
+        cc    = g(f"{cl.confidence:.2f}") if cl.confidence>=0.7 else (y(f"{cl.confidence:.2f}") if cl.confidence>=0.4 else r(f"{cl.confidence:.2f}"))
+        sc    = g(str(cl.score)) if cl.score>=70 else (y(str(cl.score)) if cl.score>=50 else str(cl.score))
+        opp   = opportunity_rank(cl, res["trend"], res["price"])
+        opp_s = g(f"{opp:.3f}") if opp >= 0.3 else (y(f"{opp:.3f}") if opp >= 0.15 else r(f"{opp:.3f}"))
+        price_s  = y(f"{res['price']:>12,.4f}")
+        center_s = y(f"{cl.center:>12,.4f}")
+        sym_s    = c(res["symbol"])
+        num_s    = g(str(i))
+        print(f"  {num_s:<10} {sym_s:<17} {price_s}  {tc:<18}  {pc:>14}  {cc:>14}  {opp_s:>14}  {sc:>12}  {center_s}")
     print()
+
+
+def _print_sweep_table(results: list, symbol: str, n_robust: int) -> None:
+    print(f"\n{b('='*78)}")
+    print(f"  OPTIMIZATION — {c(symbol.upper())}   robust:{n_robust}/{TOTAL_COMBINATIONS:,}")
+    print(b('='*78))
+
+    if not results:
+        print(f"\n  {y('No robust parameter sets found.')}")
+        print(f"  Tip: add --show-all to include non-robust results\n")
+        return
+
+    # Header
+    print(f"\n  {'#':>2}  {'PROB':>4} {'CONF':>4} {'TCH':>3} {'CW':>4}  {'TREND':>7}  {'CD':>2} {'DIST':>4}"
+          f"    {'WR':>5}  {'PF':>5}  {'EXP':>7}  {'MDD':>5} {'N':>3}  CS")
+    print(f"  {'-'*86}")
+
+    for i, res in enumerate(results, 1):
+        p     = res.params
+        wr_s  = g(f"{res.win_rate:.1%}") if res.win_rate>=0.50 else (y(f"{res.win_rate:.1%}") if res.win_rate>=0.45 else r(f"{res.win_rate:.1%}"))
+        pf_v  = res.profit_factor
+        pf_s  = g(f"{pf_v:.2f}") if pf_v>=1.5 else (y(f"{pf_v:.2f}") if pf_v>=1.2 else r(f"{pf_v:.2f}"))
+        exp_s = g(f"+{res.expectancy:.3f}") if res.expectancy>0 else r(f"{res.expectancy:+.3f}")
+        mdd_s = r(f"{res.max_drawdown:.2f}")
+        cs_s  = g(f"{res.composite_score:.4f}") if res.composite_score>=0.40 else y(f"{res.composite_score:.4f}")
+        tag   = f"  {r('OVERFIT')}" if res.overfit_flag else ("  ★" if i == 1 else "")
+        # Params section
+        row_p = (f"{i:>3}  {p.min_prob:.2f} {p.min_conf:.2f} {p.min_touches:>3} {p.cluster_width_atr:.2f}"
+                 f"  {p.trend_filter:>7}  {p.cooldown:>2} {p.dist_atr:.1f}")
+        # Metrics section (colors embedded → use raw values for alignment)
+        print(f"  {row_p}    {wr_s:>13}  {pf_s:>13}  {exp_s:>15}  {mdd_s:>13} {res.trade_count:>3}  {cs_s}{tag}")
+
+    # Recommended config
+    best = results[0]
+    p    = best.params
+    print(f"\n{b('='*78)}")
+    print(f"  {b('RECOMMENDED')}  CS={g(f'{best.composite_score:.4f}')}"
+          f"  WR={best.win_rate:.1%}  PF={best.profit_factor:.2f}"
+          f"  Exp={best.expectancy:+.3f}ATR  MDD={best.max_drawdown:.2f}ATR  N={best.trade_count}")
+    print(b('='*78))
+    print(f"  min_prob={p.min_prob}  min_conf={p.min_conf}  min_touches={p.min_touches}")
+    print(f"  cluster_width={p.cluster_width_atr}ATR  trend={p.trend_filter}  cooldown={p.cooldown}  dist={p.dist_atr}ATR")
+    sym_lower = symbol.lower()
+    cmd = (f"  python scripts/pivot_scan.py {sym_lower}"
+           f" --min-prob {p.min_prob}"
+           f" --min-conf {p.min_conf}"
+           f" --min-touches {p.min_touches}"
+           f" --cooldown {p.cooldown}"
+           f" --dist-atr {p.dist_atr}")
+    print(f"\n  Run with optimal settings:\n{y(cmd)}\n")
+
+
+async def cmd_optimize(args) -> None:
+    sym = args.symbol
+    print(f"\n{y('...')} {b(sym.upper())} | Fetching 1h+4h+1d data (300 candles)...")
+    dfs = {}
+    for tf in _TFS:
+        try:
+            dfs[tf] = await bx.get_kline(sym, tf, 300)
+        except Exception as e:
+            print(r(f"ERROR fetching {tf}: {e}"))
+            sys.exit(1)
+
+    df_1h = dfs.get("1h")
+    if df_1h is None or len(df_1h) < 50:
+        print(r("ERROR: insufficient 1h data"))
+        sys.exit(1)
+
+    print(f"  Running parameter sweep [{TOTAL_COMBINATIONS:,} combinations]...")
+    top, n_robust = run_sweep(
+        dfs, _TF_N,
+        reaction_atr_multiple=args.atr_mult,
+        reaction_window=args.react_window,
+        top_n=10,
+        robust_only=not args.show_all,
+        verbose=True,
+    )
+
+    _print_sweep_table(top, sym, n_robust)
 
 
 def main():
@@ -242,26 +333,33 @@ def main():
         epilog=(
             "Examples:\n"
             "  python scripts/pivot_scan.py btc_usdt\n"
+            "  python scripts/pivot_scan.py btc_usdt --optimize\n"
             "  python scripts/pivot_scan.py eth_usdt --no-backtest\n"
             "  python scripts/pivot_scan.py --scan --top 10\n"
             "  python scripts/pivot_scan.py --scan --pool 60 --min-prob 0.6 --top 15\n"
         ),
     )
-    p.add_argument("symbol",         nargs="?", default=None)
-    p.add_argument("--scan",         action="store_true")
-    p.add_argument("--top",          type=int,   default=10)
-    p.add_argument("--pool",         type=int,   default=50,   help="symbols to scan")
-    p.add_argument("--min-prob",     type=float, default=0.55, dest="min_prob")
-    p.add_argument("--atr-mult",     type=float, default=1.5,  dest="atr_mult",  help="reaction ATR multiple (default 1.5)")
-    p.add_argument("--react-window", type=int,   default=10,   dest="react_window")
-    p.add_argument("--min-touches",    type=int,   default=4,   dest="min_touches")
-    p.add_argument("--no-backtest",    action="store_true",     dest="no_backtest")
-    p.add_argument("--cooldown",       type=int,   default=10,  help="bars before re-trading same cluster")
-    p.add_argument("--min-gap",        type=int,   default=5,   dest="min_gap",  help="min bars between any trades")
-    p.add_argument("--max-per-cluster",type=int,   default=3,   dest="max_per_cluster", help="max trades per cluster")
+    p.add_argument("symbol",           nargs="?", default=None)
+    p.add_argument("--scan",           action="store_true")
+    p.add_argument("--optimize",       action="store_true",     help="run parameter sweep and show top configs")
+    p.add_argument("--show-all",       action="store_true",     dest="show_all", help="include non-robust results in --optimize")
+    p.add_argument("--top",            type=int,   default=10)
+    p.add_argument("--pool",           type=int,   default=50,   help="symbols to scan")
+    p.add_argument("--min-prob",       type=float, default=0.55, dest="min_prob")
+    p.add_argument("--min-conf",       type=float, default=0.0,  dest="min_conf",  help="minimum cluster confidence (default 0)")
+    p.add_argument("--atr-mult",       type=float, default=1.5,  dest="atr_mult",  help="reaction ATR multiple (default 1.5)")
+    p.add_argument("--react-window",   type=int,   default=10,   dest="react_window")
+    p.add_argument("--min-touches",    type=int,   default=4,    dest="min_touches")
+    p.add_argument("--no-backtest",    action="store_true",      dest="no_backtest")
+    p.add_argument("--cooldown",       type=int,   default=10,   help="bars before re-trading same cluster")
+    p.add_argument("--min-gap",        type=int,   default=5,    dest="min_gap",   help="min bars between any trades")
+    p.add_argument("--max-per-cluster",type=int,   default=3,    dest="max_per_cluster", help="max trades per cluster")
+    p.add_argument("--dist-atr",       type=float, default=None, dest="dist_atr",  help="entry distance in ATR units (default: auto)")
     args = p.parse_args()
 
-    if args.scan:
+    if args.optimize and args.symbol:
+        asyncio.run(cmd_optimize(args))
+    elif args.scan:
         asyncio.run(cmd_scan(args))
     elif args.symbol:
         asyncio.run(cmd_single(args))

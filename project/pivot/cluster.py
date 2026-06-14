@@ -35,9 +35,10 @@ def cluster_pivots(
     pivots: list[Pivot],
     atr: float,
     tol_pct: float = 0.5,
+    tol_atr: float = 0.5,
 ) -> list[Cluster]:
     """
-    Merge pivots within max(tol_pct%, 0.5×ATR).
+    Merge pivots within max(tol_pct%, tol_atr×ATR).
     Sorted by pivot_count descending.
     """
     if not pivots:
@@ -50,7 +51,7 @@ def cluster_pivots(
     for i, p in enumerate(sorted_p):
         if used[i]:
             continue
-        tol   = max(p.price * tol_pct / 100.0, atr * 0.5)
+        tol   = max(p.price * tol_pct / 100.0, atr * tol_atr)
         group = [p];  used[i] = True
 
         for j in range(i + 1, len(sorted_p)):
