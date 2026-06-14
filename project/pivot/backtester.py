@@ -1,4 +1,4 @@
-"""Backtest Lite v3 — regime-aware thresholds + false-signal analysis."""
+"""Backtest Lite v4 — per-touch stats, no touch-decay entry filter."""
 
 from __future__ import annotations
 from dataclasses import dataclass, field
@@ -33,10 +33,10 @@ def backtest_clusters(
     min_gap:         int          = 5,
     max_per_cluster: int          = 3,
     entry_dist_atr:  float | None = None,
-    regime_prob_adj: float        = 0.0,   # from regime.regime_min_prob delta
+    regime_prob_adj: float        = 0.0,
 ) -> BacktestResult:
     """
-    Entry:  price touches cluster where effective_prob >= min_prob + regime_prob_adj.
+    Entry:  price touches cluster where probability >= effective_min_prob.
     Exit:   first of TP or SL within reaction_window bars.
     Rules:
       - cooldown:        same cluster cannot be re-entered for cooldown bars
@@ -45,6 +45,8 @@ def backtest_clusters(
       - entry_dist_atr:  max distance to cluster center (ATR units); None=auto
       - regime_prob_adj: dynamic threshold shift from regime detection
     No lookahead bias: exit uses only future bars.
+    Touch decay is intentionally NOT applied here — it is already encoded in
+    pf_touch_reliability and the Laplace-smoothed probability from analyze_reactions.
     """
     atr    = atr14(df)
     closes = df["close"].values
@@ -58,33 +60,30 @@ def backtest_clusters(
     viable = [c for c in clusters if c.probability >= effective_min_prob
               and c.historical_touches >= 2]
 
-    # Precompute entry tolerances (fixed per cluster, not per bar)
     if entry_dist_atr is not None:
         _tols = [atr * entry_dist_atr] * len(viable)
     else:
         _tols = [max(cl.center * 0.005, atr * 0.5) for cl in viable]
 
-    # Precompute rolling 20-bar volume average for false-signal analysis
-    has_vol   = "volume" in df.columns
+    has_vol = "volume" in df.columns
     if has_vol:
         vol_arr  = df["volume"].values
         vol_roll = df["volume"].rolling(20, min_periods=1).mean().values
     else:
         vol_arr = vol_roll = None
 
-    # Per-cluster state
-    cluster_last_trade: list[int]  = [-9999] * len(viable)
-    cluster_trade_cnt:  list[int]  = [0]     * len(viable)
+    cluster_last_trade: list[int] = [-9999] * len(viable)
+    cluster_trade_cnt:  list[int] = [0]     * len(viable)
 
-    equity: list[float]    = [0.0]
+    equity: list[float]   = [0.0]
     holding_bars: list[int] = []
     last_trade_bar          = -9999
     wins = losses           = 0
     cur_streak = max_loss_streak = 0
 
-    # False-signal analysis
-    loss_clusters: dict[str, int] = {}
-    loss_by_touch: dict[int, int] = {}
+    loss_clusters:  dict[str, int] = {}
+    loss_by_touch:  dict[int, int] = {}
+    win_by_touch:   dict[int, int] = {}
     loss_by_volume: dict[str, int] = {}
 
     for i in range(n - reaction_window):
@@ -98,13 +97,9 @@ def backtest_clusters(
             if abs(closes[i] - cl.center) > _tols[ci]:
                 continue
 
-            # First-touch probability decay: 0.85 ^ (touch_number - 1)
-            touch_num      = cluster_trade_cnt[ci] + 1
-            effective_prob = cl.probability * (0.85 ** (touch_num - 1))
-            if effective_prob < effective_min_prob:
-                continue
+            touch_num  = cluster_trade_cnt[ci] + 1
+            touch_key  = touch_num if touch_num <= 3 else 4
 
-            # Simulate trade
             entry      = closes[i]
             is_support = cl.center < closes[-1]
             result     = 0.0
@@ -134,16 +129,15 @@ def backtest_clusters(
             if result > 0:
                 wins      += 1
                 cur_streak = 0
+                win_by_touch[touch_key] = win_by_touch.get(touch_key, 0) + 1
             else:
                 losses    += 1
                 cur_streak += 1
                 max_loss_streak = max(max_loss_streak, cur_streak)
+                loss_by_touch[touch_key]  = loss_by_touch.get(touch_key, 0) + 1
 
-                # False-signal analysis
                 tf_key = str(cl.timeframes)
                 loss_clusters[tf_key] = loss_clusters.get(tf_key, 0) + 1
-
-                loss_by_touch[touch_num] = loss_by_touch.get(touch_num, 0) + 1
 
                 if has_vol and vol_roll is not None and vol_roll[i] > 0:
                     vr = vol_arr[i] / vol_roll[i]
@@ -177,8 +171,9 @@ def backtest_clusters(
         max_consec_losses   = max_loss_streak,
         overtrading_warning = overfit,
         loss_analysis       = {
-            "by_timeframe": loss_clusters,
-            "by_touch":     loss_by_touch,
-            "by_volume":    loss_by_volume,
+            "by_timeframe":  loss_clusters,
+            "by_touch":      loss_by_touch,
+            "wins_by_touch": win_by_touch,
+            "by_volume":     loss_by_volume,
         },
     )

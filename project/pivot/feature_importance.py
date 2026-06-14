@@ -76,9 +76,6 @@ def analyze_feature_importance(
             if abs(closes[i] - cl.center) > tols[ci]: continue
 
             touch_num  = cl_cnt[ci] + 1
-            eff_prob   = cl.probability * (0.85 ** (touch_num - 1))
-            if eff_prob < min_prob:
-                continue
 
             entry      = closes[i]
             is_support = cl.center < closes[-1]

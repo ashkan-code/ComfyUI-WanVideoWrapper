@@ -217,18 +217,27 @@ def _print_report(res: dict, top_n: int = 5) -> None:
         if bt.overtrading_warning:
             print(f"  {r('WARNING: Possible overtrading / overfitting detected')}")
             print(f"  {D}  trades({bt.total_trades}) > candles*0.5 — reduce pool or increase cooldown{X}")
-        # False-signal analysis
-        la        = bt.loss_analysis or {}
-        by_touch  = la.get("by_touch",  {})
-        by_volume = la.get("by_volume", {})
-        if by_touch or by_volume:
-            print(f"  {b('FALSE SIGNALS:')}")
-            if by_touch:
-                tch_s = "  ".join(f"#{k}:{v}" for k, v in sorted(by_touch.items()))
-                print(f"    by_touch:  {tch_s}")
-            if by_volume:
-                vol_s = "  ".join(f"{k}:{v}" for k, v in sorted(by_volume.items()))
-                print(f"    by_volume: {vol_s}")
+        # Per-touch breakdown
+        la           = bt.loss_analysis or {}
+        by_touch     = la.get("by_touch",      {})
+        wins_by_tch  = la.get("wins_by_touch", {})
+        by_volume    = la.get("by_volume",     {})
+        all_touch_ks = sorted(set(list(by_touch.keys()) + list(wins_by_tch.keys())))
+        if all_touch_ks:
+            print(f"  {b('TOUCH BREAKDOWN:')}")
+            labels = {1:"Touch 1", 2:"Touch 2", 3:"Touch 3", 4:"Touch 4+"}
+            for k in all_touch_ks:
+                w_k = wins_by_tch.get(k, 0)
+                l_k = by_touch.get(k, 0)
+                t_k = w_k + l_k
+                wr_k = g(f"{w_k/t_k:.0%}") if t_k > 0 and w_k/t_k >= 0.55 else (y(f"{w_k/t_k:.0%}") if t_k > 0 else "-")
+                pf_k = round((w_k * bt.profit_factor) / max(l_k * 1, 1e-9), 2) if l_k > 0 else float("inf")
+                pf_ks = g(f"{pf_k:.2f}") if pf_k >= 1.3 else (y(f"{pf_k:.2f}") if pf_k >= 1.0 else r(f"{pf_k:.2f}"))
+                print(f"    {labels.get(k,f'Touch {k}'):<10}  {t_k:>3} trades  {w_k}W/{l_k}L  WR={wr_k}")
+        if by_volume:
+            print(f"  {b('FALSE SIGNALS by volume:')}")
+            vol_s = "  ".join(f"{k}:{v}" for k, v in sorted(by_volume.items()))
+            print(f"    {vol_s}")
     print()
 
 
