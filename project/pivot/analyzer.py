@@ -41,6 +41,7 @@ def analyze_reactions(
         is_support = cl.center < last_close
 
         touch_results: list[bool] = []
+        magnitudes: list[float] = []
 
         for i in range(n - reaction_window):
             if abs(closes[i] - cl.center) > tol:
@@ -49,8 +50,11 @@ def analyze_reactions(
             future_lo = float(lows[i + 1  : i + 1 + reaction_window].min())
             if is_support:
                 touch_results.append(future_hi - closes[i] >= move)
+                mag = (future_hi - closes[i]) / atr
             else:
                 touch_results.append(closes[i] - future_lo >= move)
+                mag = (closes[i] - future_lo) / atr
+            magnitudes.append(max(0.0, mag))
 
         raw_touches = len(touch_results)
         raw_hits    = sum(touch_results)
@@ -64,6 +68,8 @@ def analyze_reactions(
             if is_hit:
                 hit_w += w
 
+        cl.reaction_magnitudes = magnitudes
+        cl.touch_outcomes      = touch_results
         cl.historical_touches = raw_touches
         cl.reaction_rate      = raw_hits / raw_touches if raw_touches > 0 else 0.0
         cl.probability        = (hit_w + 1.0) / (total_w + 2.0)

@@ -21,6 +21,8 @@ from pivot.structure  import detect_structure
 from pivot.backtester import backtest_clusters
 from pivot.trend_score import compute_trend_score, compute_volume_score
 from pivot.regime      import detect_regime, regime_min_prob, _PROB_ADJ
+from pivot.pivot_features    import compute_pivot_features, DEFAULT_PIVOT_WEIGHTS
+from pivot.feature_importance import analyze_feature_importance
 
 # ── Parameter grids ───────────────────────────────────────────────────────────
 PROB_THRESHOLDS     = (0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90)
@@ -141,9 +143,9 @@ def run_sweep(
     all_pivots: list[Pivot] = []
     for tf, df in dfs.items():
         if len(df) >= 10:
-            all_pivots.extend(detect_pivots(df, tf, n=tf_n[tf], max_pivots=max_pivots))
+            all_pivots.extend(detect_pivots(df, tf, n=tf_n[tf], max_pivots=max_pivots, atr=atr14(df)))
 
-    pivots_1d  = detect_pivots(dfs["1d"], "1d", n=2, max_pivots=50)
+    pivots_1d  = detect_pivots(dfs["1d"], "1d", n=2, max_pivots=50, atr=atr14(dfs["1d"]))
     structure  = detect_structure(pivots_1d)
     trend      = structure.trend
     regime     = detect_regime(df_1h)
@@ -177,6 +179,7 @@ def run_sweep(
                 min_touches=min_touches,
             )
             for cl in clusters_a:
+                compute_pivot_features(cl, last_ts)        # NEW
                 score_cluster(cl, structure, price)
                 compute_quality_score(cl, t_score, v_score, last_ts)
 

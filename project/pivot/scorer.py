@@ -60,7 +60,5 @@ def compute_quality_score(
     cl.recency_weight = round(max(0.1, math.exp(-_RECENCY_LAMBDA * age_bars)), 3)
     cl.trend_score    = round(float(trend_score),  3)
     cl.volume_score   = round(float(volume_score), 3)
-    cl.quality_score  = round(
-        cl.probability * cl.confidence * trend_score * volume_score,
-        4,
-    )
+    pivot_component  = cl.pivot_score if cl.pivot_score > 0.0 else (cl.probability * cl.confidence)
+    cl.quality_score = round(pivot_component * trend_score * volume_score, 4)

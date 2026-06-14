@@ -27,6 +27,16 @@ class Cluster:
     trend_score:        float = 0.5
     volume_score:       float = 0.5
     recency_weight:     float = 1.0   # exp(-λ × age_in_bars)
+    # pivot sub-features (filled by pivot_features.compute_pivot_features)
+    pf_strength:          float = 0.0
+    pf_recency:           float = 0.0
+    pf_reaction_quality:  float = 0.0
+    pf_mtf_agreement:     float = 0.0
+    pf_touch_reliability: float = 0.0
+    pivot_score:          float = 0.0
+    # raw sequences for importance analysis (filled by analyzer)
+    reaction_magnitudes:  list  = field(default_factory=list, repr=False)
+    touch_outcomes:       list  = field(default_factory=list, repr=False)
 
 
 def atr14(df: pd.DataFrame) -> float:
