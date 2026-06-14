@@ -1,10 +1,11 @@
-"""Backtest Lite v4 — per-touch stats, no touch-decay entry filter."""
+"""Backtest Lite v5 — shared utils, per-touch stats, calibration report."""
 
 from __future__ import annotations
 from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
-from pivot.cluster import Cluster, atr14
+from pivot.cluster     import Cluster, atr14
+from pivot.trade_utils import get_viable_clusters, entry_tolerance, resolve_trade
 
 
 @dataclass
@@ -37,16 +38,16 @@ def backtest_clusters(
 ) -> BacktestResult:
     """
     Entry:  price touches cluster where probability >= effective_min_prob.
-    Exit:   first of TP or SL within reaction_window bars.
+    Exit:   first of TP or SL within reaction_window bars (via resolve_trade).
     Rules:
       - cooldown:        same cluster cannot be re-entered for cooldown bars
       - min_gap:         no new trade within min_gap bars of any prior trade
-      - max_per_cluster: cluster retired after this many trades (freshness)
-      - entry_dist_atr:  max distance to cluster center (ATR units); None=auto
-      - regime_prob_adj: dynamic threshold shift from regime detection
-    No lookahead bias: exit uses only future bars.
-    Touch decay is intentionally NOT applied here — it is already encoded in
-    pf_touch_reliability and the Laplace-smoothed probability from analyze_reactions.
+      - max_per_cluster: cluster retired after this many trades
+      - entry_dist_atr:  override auto entry tolerance (ATR units)
+      - regime_prob_adj: applied at entry time only (not in initial viable filter)
+
+    Viable filter uses plain min_prob (matches feature_importance).
+    regime_prob_adj tightens the per-entry threshold in RANGING / HIGH_VOL regimes.
     """
     atr    = atr14(df)
     closes = df["close"].values
@@ -56,14 +57,17 @@ def backtest_clusters(
     tp     = tp_atr * atr
     sl     = sl_atr * atr
 
-    effective_min_prob = min(0.90, max(0.50, min_prob + regime_prob_adj))
-    viable = [c for c in clusters if c.probability >= effective_min_prob
-              and c.historical_touches >= 2]
+    # Viable filter: same as feature_importance (no regime adj)
+    viable = get_viable_clusters(clusters, min_prob)
 
+    # Per-entry regime-adjusted threshold
+    effective_min_prob = min(0.90, max(0.50, min_prob + regime_prob_adj))
+
+    # Entry tolerances: width-based (same formula as feature_importance)
     if entry_dist_atr is not None:
         _tols = [atr * entry_dist_atr] * len(viable)
     else:
-        _tols = [max(cl.center * 0.005, atr * 0.5) for cl in viable]
+        _tols = [entry_tolerance(cl, atr) for cl in viable]
 
     has_vol = "volume" in df.columns
     if has_vol:
@@ -96,29 +100,20 @@ def backtest_clusters(
                 continue
             if abs(closes[i] - cl.center) > _tols[ci]:
                 continue
-
-            touch_num  = cluster_trade_cnt[ci] + 1
-            touch_key  = touch_num if touch_num <= 3 else 4
-
-            entry      = closes[i]
-            is_support = cl.center < closes[-1]
-            result     = 0.0
-            hold       = 0
-
-            for k in range(1, reaction_window + 1):
-                idx = i + k
-                if idx >= n:
-                    break
-                hold = k
-                if is_support:
-                    if highs[idx] - entry >= tp:  result =  tp_atr; break
-                    if entry - lows[idx]  >= sl:  result = -sl_atr; break
-                else:
-                    if entry - lows[idx]  >= tp:  result =  tp_atr; break
-                    if highs[idx] - entry >= sl:  result = -sl_atr; break
-
-            if result == 0.0:
+            # Per-entry regime check (does not affect viable set)
+            if cl.probability < effective_min_prob:
                 continue
+
+            touch_key  = min(cluster_trade_cnt[ci] + 1, 4)  # 4 = "4+"
+            is_support = cl.center < closes[-1]
+
+            outcome, hold = resolve_trade(
+                closes, highs, lows, i, is_support, tp, sl, reaction_window
+            )
+            if outcome is None:
+                continue
+
+            result = tp_atr if outcome == 1 else -sl_atr
 
             cluster_last_trade[ci]  = i
             cluster_trade_cnt[ci]  += 1
@@ -126,7 +121,7 @@ def backtest_clusters(
             holding_bars.append(hold)
             equity.append(equity[-1] + result)
 
-            if result > 0:
+            if outcome == 1:
                 wins      += 1
                 cur_streak = 0
                 win_by_touch[touch_key] = win_by_touch.get(touch_key, 0) + 1
@@ -135,10 +130,8 @@ def backtest_clusters(
                 cur_streak += 1
                 max_loss_streak = max(max_loss_streak, cur_streak)
                 loss_by_touch[touch_key]  = loss_by_touch.get(touch_key, 0) + 1
-
                 tf_key = str(cl.timeframes)
                 loss_clusters[tf_key] = loss_clusters.get(tf_key, 0) + 1
-
                 if has_vol and vol_roll is not None and vol_roll[i] > 0:
                     vr = vol_arr[i] / vol_roll[i]
                     vs = "high" if vr > 1.5 else ("low" if vr < 0.70 else "normal")
@@ -177,3 +170,41 @@ def backtest_clusters(
             "by_volume":     loss_by_volume,
         },
     )
+
+
+def calibration_report(
+    clusters: list[Cluster],
+    df: pd.DataFrame,
+    **bt_kwargs,
+) -> list[dict]:
+    """
+    Group clusters by probability bucket, run a mini-backtest per bucket,
+    and compare the predicted win rate (bucket midpoint) to the actual WR.
+
+    Shows whether the system is well-calibrated:
+      well-calibrated  → actual WR tracks predicted WR closely
+      overconfident    → actual WR < predicted WR
+      underconfident   → actual WR > predicted WR
+
+    Returns list of:
+      {"bucket": "0.60-0.70", "predicted_wr": 0.65, "actual_wr": 0.61, "count": 8}
+    """
+    buckets = [(0.50, 0.60), (0.60, 0.70), (0.70, 0.80), (0.80, 1.01)]
+    report: list[dict] = []
+    for lo, hi in buckets:
+        bucket_cls = [c for c in clusters if lo <= c.probability < hi]
+        if not bucket_cls:
+            continue
+        try:
+            bt = backtest_clusters(bucket_cls, df, **bt_kwargs)
+        except Exception:
+            continue
+        if bt.total_trades == 0:
+            continue
+        report.append({
+            "bucket":       f"{lo:.2f}-{hi:.2f}",
+            "predicted_wr": round((lo + hi) / 2, 2),
+            "actual_wr":    bt.win_rate,
+            "count":        bt.total_trades,
+        })
+    return report

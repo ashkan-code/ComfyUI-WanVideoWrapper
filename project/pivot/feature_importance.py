@@ -1,12 +1,13 @@
 """Predictive power analysis for the 5 pivot sub-features."""
 from __future__ import annotations
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
 
-from pivot.cluster import Cluster, atr14
+from pivot.cluster     import Cluster, atr14
+from pivot.trade_utils import get_viable_clusters, entry_tolerance, resolve_trade
 
 FEATURE_NAMES = (
     "pf_strength",
@@ -27,9 +28,9 @@ class FeatureImportanceResult:
     lift_ratios:        dict[str, float]   # winner_mean / loser_mean
     correlations:       dict[str, float]   # point-biserial r ∈ [-1, 1]
     ranking:            list[str]          # sorted by |r| descending
-    optimal_weights:    dict[str, float]   # normalised from max(0, r)
-    top_winner_feature: str                # highest positive r
-    top_loser_feature:  str                # most negative r
+    optimal_weights:    dict[str, float]   # normalised from max(0, r); pf_recency forced 0
+    top_winner_feature: str
+    top_loser_feature:  str
 
 
 def analyze_feature_importance(
@@ -44,9 +45,15 @@ def analyze_feature_importance(
     max_per_cluster: int   = 3,
 ) -> FeatureImportanceResult:
     """
-    Replay a lightweight backtest, recording per-trade pivot feature values
-    and outcomes.  Compute point-biserial correlation for each feature,
-    rank by |r|, and derive optimal weights from positive correlations only.
+    Replay a backtest with IDENTICAL logic to backtest_clusters (no regime adj),
+    recording per-trade pivot feature values and binary outcomes.
+
+    Uses the same get_viable_clusters / entry_tolerance / resolve_trade as
+    backtester.py — guarantees trade counts match when regime_prob_adj=0.
+
+    Computes point-biserial correlation for each feature, ranks by |r|,
+    and derives optimal weights from positive correlations only.
+    pf_recency is always forced to 0 in optimal_weights (empirically negative).
     """
     atr    = atr14(df)
     closes = df["close"].values
@@ -56,52 +63,38 @@ def analyze_feature_importance(
     tp     = tp_atr * atr
     sl     = sl_atr * atr
 
-    viable = [c for c in clusters
-              if c.probability >= min_prob and c.historical_touches >= 2
-              and c.pivot_score > 0.0]
+    # Identical viable filter to backtester (no regime adj)
+    viable = get_viable_clusters(clusters, min_prob)
     if not viable:
         return _empty()
 
-    tols = [max(cl.center * 0.005, atr * 0.5) for cl in viable]
-    cl_last   = [-9999] * len(viable)
-    cl_cnt    = [0]     * len(viable)
-    last_bar  = -9999
+    # Identical entry tolerances to backtester
+    tols     = [entry_tolerance(cl, atr) for cl in viable]
+    cl_last  = [-9999] * len(viable)
+    cl_cnt   = [0]     * len(viable)
+    last_bar = -9999
     records: list[dict] = []
 
     for i in range(n - reaction_window):
         for ci, cl in enumerate(viable):
-            if cl_cnt[ci]  >= max_per_cluster:    continue
-            if (i - cl_last[ci]) < cooldown:      continue
-            if (i - last_bar)    < min_gap:        continue
+            if cl_cnt[ci]  >= max_per_cluster:       continue
+            if (i - cl_last[ci]) < cooldown:          continue
+            if (i - last_bar)    < min_gap:           continue
             if abs(closes[i] - cl.center) > tols[ci]: continue
 
-            touch_num  = cl_cnt[ci] + 1
-
-            entry      = closes[i]
             is_support = cl.center < closes[-1]
-            outcome    = 0   # default: no trade resolved → skip below
+            outcome, _hold = resolve_trade(
+                closes, highs, lows, i, is_support, tp, sl, reaction_window
+            )
+            if outcome is None:
+                continue   # unresolved (end-of-data or window expired) — skip
 
-            for k in range(1, reaction_window + 1):
-                idx = i + k
-                if idx >= n:
-                    break
-                if is_support:
-                    if highs[idx] - entry >= tp:  outcome = 1; break
-                    if entry - lows[idx]  >= sl:  outcome = 0; break
-                else:
-                    if entry - lows[idx]  >= tp:  outcome = 1; break
-                    if highs[idx] - entry >= sl:  outcome = 0; break
-            else:
-                continue   # no TP or SL hit → skip
-
-            # Both TP and SL might not trigger in the inner loop but we broke out properly
-            # Verify we have a valid exit (outcome was set inside loop)
             cl_last[ci]  = i
             cl_cnt[ci]  += 1
             last_bar     = i
 
             records.append({
-                "outcome":              outcome,
+                "outcome":              1 if outcome == 1 else 0,
                 "pf_strength":          cl.pf_strength,
                 "pf_recency":           cl.pf_recency,
                 "pf_reaction_quality":  cl.pf_reaction_quality,
@@ -123,12 +116,12 @@ def analyze_feature_importance(
     correlations: dict[str, float] = {}
 
     for feat in FEATURE_NAMES:
-        vals     = np.array([r[feat] for r in records], dtype=float)
-        w_vals   = vals[outcomes == 1]
-        l_vals   = vals[outcomes == 0]
-        w_mean   = float(w_vals.mean()) if len(w_vals) > 0 else 0.0
-        l_mean   = float(l_vals.mean()) if len(l_vals) > 0 else 0.0
-        std_all  = float(vals.std())
+        vals    = np.array([r[feat] for r in records], dtype=float)
+        w_vals  = vals[outcomes == 1]
+        l_vals  = vals[outcomes == 0]
+        w_mean  = float(w_vals.mean()) if len(w_vals) > 0 else 0.0
+        l_mean  = float(l_vals.mean()) if len(l_vals) > 0 else 0.0
+        std_all = float(vals.std())
 
         winner_means[feat] = round(w_mean, 4)
         loser_means[feat]  = round(l_mean, 4)
@@ -141,15 +134,21 @@ def analyze_feature_importance(
         else:
             correlations[feat] = 0.0
 
-    ranking    = sorted(FEATURE_NAMES, key=lambda f: -abs(correlations[f]))
-    pos_feats  = [f for f in ranking if correlations[f] > 0]
-    neg_feats  = [f for f in ranking if correlations[f] < 0]
-    raw_pos    = {f: max(0.0, correlations[f]) for f in FEATURE_NAMES}
-    total_pos  = sum(raw_pos.values())
-    if total_pos > 1e-9:
-        opt_w = {f: round(raw_pos[f] / total_pos, 4) for f in FEATURE_NAMES}
-    else:
-        opt_w = {f: 0.2 for f in FEATURE_NAMES}
+    ranking   = sorted(FEATURE_NAMES, key=lambda f: -abs(correlations[f]))
+    pos_feats = [f for f in ranking if correlations[f] > 0]
+    neg_feats = [f for f in ranking if correlations[f] < 0]
+
+    # Optimal weights: positive correlations only; pf_recency forced to 0
+    raw_pos = {
+        f: (max(0.0, correlations[f]) if f != "pf_recency" else 0.0)
+        for f in FEATURE_NAMES
+    }
+    total_pos = sum(raw_pos.values())
+    opt_w = (
+        {f: round(raw_pos[f] / total_pos, 4) for f in FEATURE_NAMES}
+        if total_pos > 1e-9
+        else {f: (0.25 if f != "pf_recency" else 0.0) for f in FEATURE_NAMES}
+    )
 
     return FeatureImportanceResult(
         n_trades           = n_total,
@@ -167,8 +166,8 @@ def analyze_feature_importance(
 
 
 def _empty() -> FeatureImportanceResult:
-    emp  = {f: 0.0 for f in FEATURE_NAMES}
-    eq_w = {f: 0.2 for f in FEATURE_NAMES}
+    emp  = {f: 0.0  for f in FEATURE_NAMES}
+    eq_w = {f: (0.25 if f != "pf_recency" else 0.0) for f in FEATURE_NAMES}
     return FeatureImportanceResult(
         n_trades=0, n_winners=0, n_losers=0,
         winner_means=emp, loser_means=emp,
@@ -176,5 +175,5 @@ def _empty() -> FeatureImportanceResult:
         ranking=list(FEATURE_NAMES),
         optimal_weights=eq_w,
         top_winner_feature="pf_reaction_quality",
-        top_loser_feature="pf_strength",
+        top_loser_feature="pf_recency",
     )

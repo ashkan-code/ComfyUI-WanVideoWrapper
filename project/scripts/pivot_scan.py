@@ -28,6 +28,7 @@ from pivot.regime      import detect_regime, regime_min_prob
 from pivot.scorer      import compute_quality_score
 from pivot.pivot_features     import compute_pivot_features, DEFAULT_PIVOT_WEIGHTS
 from pivot.feature_importance import analyze_feature_importance, FeatureImportanceResult
+from pivot.trade_utils        import verify_consistency
 
 G="\033[92m";R="\033[91m";Y="\033[93m";C="\033[96m";B="\033[1m";D="\033[2m";X="\033[0m"
 def g(t): return f"{G}{t}{X}"
@@ -37,8 +38,9 @@ def c(t): return f"{C}{t}{X}"
 def b(t): return f"{B}{t}{X}"
 
 # Pivot window per timeframe: larger TF = smaller n (fewer, cleaner pivots)
-_TF_N    = {"1h": 3, "4h": 2, "1d": 2}
-_TFS     = ["1h", "4h", "1d"]
+_TF_N     = {"1h": 3, "4h": 2, "1d": 2}
+_TF_LIMIT = {"1h": 1000, "4h": 600, "1d": 500}
+_TFS      = ["1h", "4h", "1d"]
 _FALLBACK = [
     "btc_usdt","eth_usdt","bnb_usdt","sol_usdt","xrp_usdt","ada_usdt",
     "doge_usdt","avax_usdt","dot_usdt","link_usdt","ltc_usdt","uni_usdt",
@@ -61,11 +63,13 @@ async def analyze_symbol(
     dist_atr: float | None = None,
     run_importance: bool = False,
 ) -> dict | None:
-    # 1. Fetch 3 timeframes
+    # 1. Fetch 3 timeframes — use per-TF candle limits
     dfs = {}
+    api_calls = 0
     for tf in _TFS:
         try:
-            dfs[tf] = await bx.get_kline(symbol, tf, 300)
+            dfs[tf] = await bx.get_kline(symbol, tf, _TF_LIMIT[tf])
+            api_calls += 1
         except Exception:
             return None
 
@@ -135,14 +139,32 @@ async def analyze_symbol(
             clusters.sort(key=lambda cl: -(cl.quality_score * cl.recency_weight))
 
     # 7. Backtest with regime-adjusted probability threshold
-    bt = backtest_clusters(
-        clusters, df_1h,
+    _bt_kwargs = dict(
         cooldown=cooldown,
         min_gap=min_gap,
         max_per_cluster=max_per_cluster,
         entry_dist_atr=dist_atr,
         regime_prob_adj=regime_adj,
-    ) if do_backtest else None
+    )
+    bt = backtest_clusters(clusters, df_1h, **_bt_kwargs) if do_backtest else None
+
+    # Top-N sub-backtests (Top-1 / Top-3 / Top-5) — no extra API calls
+    top_n_wr: dict[int, float] = {}
+    if do_backtest and clusters:
+        for n in (1, 3, 5):
+            if len(clusters) >= n:
+                try:
+                    bt_n = backtest_clusters(clusters[:n], df_1h, **_bt_kwargs)
+                    top_n_wr[n] = bt_n.win_rate if bt_n.total_trades > 0 else 0.0
+                except Exception:
+                    pass
+
+    import logging
+    logging.getLogger(__name__).debug(
+        "%s  API calls: %d  (1h=%d 4h=%d 1d=%d bars)",
+        symbol, api_calls,
+        len(dfs.get("1h", [])), len(dfs.get("4h", [])), len(dfs.get("1d", [])),
+    )
 
     return {
         "symbol":      symbol,
@@ -150,21 +172,24 @@ async def analyze_symbol(
         "trend":       structure.trend,
         "clusters":    clusters,
         "backtest":    bt,
+        "top_n_wr":    top_n_wr,
         "atr":         atr,
         "regime":      regime,
         "trend_score": t_score,
         "vol_score":   v_score,
         "importance":  importance,
+        "api_calls":   api_calls,
     }
 
 
 def _print_report(res: dict, top_n: int = 5) -> None:
-    sym   = res["symbol"]
-    price = res["price"]
-    trend = res["trend"]
-    atr   = res["atr"]
-    bt    = res["backtest"]
-    cls   = res["clusters"][:top_n]
+    sym      = res["symbol"]
+    price    = res["price"]
+    trend    = res["trend"]
+    atr      = res["atr"]
+    bt       = res["backtest"]
+    cls      = res["clusters"][:top_n]
+    top_n_wr = res.get("top_n_wr", {})
 
     regime  = res.get("regime", "?")
     ts_val  = res.get("trend_score", 0.5)
@@ -238,6 +263,11 @@ def _print_report(res: dict, top_n: int = 5) -> None:
             print(f"  {b('FALSE SIGNALS by volume:')}")
             vol_s = "  ".join(f"{k}:{v}" for k, v in sorted(by_volume.items()))
             print(f"    {vol_s}")
+        if top_n_wr:
+            print(f"  {b('TOP-N WIN RATE:')}")
+            for n, wr in sorted(top_n_wr.items()):
+                wr_s = g(f"{wr:.1%}") if wr >= 0.55 else (y(f"{wr:.1%}") if wr >= 0.45 else r(f"{wr:.1%}"))
+                print(f"    Top-{n} cluster{'s' if n>1 else ' '}  WR={wr_s}")
     print()
 
 
@@ -274,7 +304,8 @@ def _print_importance(imp: FeatureImportanceResult) -> None:
 
 
 async def cmd_single(args) -> None:
-    print(f"\n{y('...')} {b(args.symbol.upper())} | 1h+4h+1d | 300 candles | Bitunix")
+    limits_str = "  ".join(f"{tf}={_TF_LIMIT[tf]}" for tf in _TFS)
+    print(f"\n{y('...')} {b(args.symbol.upper())} | 1h+4h+1d | {limits_str} candles | Bitunix")
     res = await analyze_symbol(
         args.symbol,
         reaction_atr_multiple=args.atr_mult,
@@ -291,9 +322,16 @@ async def cmd_single(args) -> None:
     if not res:
         print(r("ERROR: could not fetch or analyze data"))
         sys.exit(1)
+    print(f"  {D}API calls: {res.get('api_calls', '?')}  (1h={_TF_LIMIT['1h']} 4h={_TF_LIMIT['4h']} 1d={_TF_LIMIT['1d']} bars){X}")
     _print_report(res)
-    if res.get("importance"):
-        _print_importance(res["importance"])
+    imp = res.get("importance")
+    if imp:
+        _print_importance(imp)
+        # Consistency check: FI trade count should match BT trade count
+        bt = res.get("backtest")
+        if bt is not None:
+            verdict = verify_consistency(bt.total_trades, imp.n_trades)
+            print(f"  CONSISTENCY CHECK: {verdict}\n")
 
 
 async def cmd_scan(args) -> None:
@@ -406,14 +444,18 @@ def _print_sweep_table(results: list, symbol: str, n_robust: int) -> None:
 
 async def cmd_optimize(args) -> None:
     sym = args.symbol
-    print(f"\n{y('...')} {b(sym.upper())} | Fetching 1h+4h+1d data (300 candles)...")
+    limits_str = "  ".join(f"{tf}={_TF_LIMIT[tf]}" for tf in _TFS)
+    print(f"\n{y('...')} {b(sym.upper())} | Fetching 1h+4h+1d data ({limits_str} candles)...")
     dfs = {}
+    api_calls = 0
     for tf in _TFS:
         try:
-            dfs[tf] = await bx.get_kline(sym, tf, 300)
+            dfs[tf] = await bx.get_kline(sym, tf, _TF_LIMIT[tf])
+            api_calls += 1
         except Exception as e:
             print(r(f"ERROR fetching {tf}: {e}"))
             sys.exit(1)
+    print(f"  {D}API calls: {api_calls}{X}")
 
     df_1h = dfs.get("1h")
     if df_1h is None or len(df_1h) < 50:
