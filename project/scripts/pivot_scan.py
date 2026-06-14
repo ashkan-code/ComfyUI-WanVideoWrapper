@@ -21,8 +21,11 @@ from pivot.cluster   import cluster_pivots, atr14
 from pivot.structure import detect_structure
 from pivot.analyzer  import analyze_reactions
 from pivot.scorer    import score_cluster
-from pivot.backtester import backtest_clusters
-from pivot.optimizer  import run_sweep, opportunity_rank, TOTAL_COMBINATIONS
+from pivot.backtester  import backtest_clusters
+from pivot.optimizer   import run_sweep, opportunity_rank, TOTAL_COMBINATIONS
+from pivot.trend_score import compute_trend_score, compute_volume_score
+from pivot.regime      import detect_regime, regime_min_prob
+from pivot.scorer      import compute_quality_score
 
 G="\033[92m";R="\033[91m";Y="\033[93m";C="\033[96m";B="\033[1m";D="\033[2m";X="\033[0m"
 def g(t): return f"{G}{t}{X}"
@@ -67,8 +70,9 @@ async def analyze_symbol(
     if df_1h is None or len(df_1h) < 50:
         return None
 
-    atr          = atr14(df_1h)
+    atr           = atr14(df_1h)
     current_price = float(df_1h["close"].iloc[-1])
+    last_ts       = int(df_1h["open_time"].iloc[-1])
 
     # 2. Extract pivots from each TF
     all_pivots = []
@@ -80,14 +84,18 @@ async def analyze_symbol(
     if not all_pivots:
         return None
 
-    # 3. Cluster across all TFs (ATR from 1h)
+    # 3. Cluster across all TFs
     clusters = cluster_pivots(all_pivots, atr=atr, tol_pct=tol_pct)
 
-    # 4. Market structure from 1d pivots
-    pivots_1d = detect_pivots(dfs["1d"], "1d", n=2, max_pivots=50)
+    # 4. Market structure + signal quality scores (computed once per symbol)
+    pivots_1d  = detect_pivots(dfs["1d"], "1d", n=2, max_pivots=50)
     structure  = detect_structure(pivots_1d)
+    regime     = detect_regime(df_1h)
+    t_score    = compute_trend_score(df_1h, structure)
+    v_score    = compute_volume_score(df_1h)
+    regime_adj = regime_min_prob(regime, 0.55) - 0.55   # delta from default baseline
 
-    # 5. Reaction analysis on 1h data
+    # 5. Reaction analysis on 1h data (touch-decay weighted probability)
     clusters = analyze_reactions(
         df_1h, clusters,
         reaction_atr_multiple=reaction_atr_multiple,
@@ -95,34 +103,43 @@ async def analyze_symbol(
         min_touches=min_touches,
     )
 
-    # 6. Score every cluster
+    # 6. Score + quality score for each cluster
     for cl in clusters:
         score_cluster(cl, structure, current_price)
+        compute_quality_score(cl, t_score, v_score, last_ts)
 
-    # Filter: too close to current price (noise), insufficient touches, low confidence
+    # Filter: too close to price, insufficient touches, low confidence, zero quality
     clusters = [
         cl for cl in clusters
         if abs(cl.center - current_price) / current_price > 0.002
         and cl.historical_touches >= 2
         and cl.confidence >= min_conf
+        and cl.quality_score > 0.0
     ]
 
-    clusters.sort(key=lambda cl: -opportunity_rank(cl, structure.trend, current_price))
+    # Sort by quality × recency (highest quality, freshest first)
+    clusters.sort(key=lambda cl: -(cl.quality_score * cl.recency_weight))
 
-    # 7. Backtest Lite
-    bt = backtest_clusters(clusters, df_1h,
-                           cooldown=cooldown,
-                           min_gap=min_gap,
-                           max_per_cluster=max_per_cluster,
-                           entry_dist_atr=dist_atr) if do_backtest else None
+    # 7. Backtest with regime-adjusted probability threshold
+    bt = backtest_clusters(
+        clusters, df_1h,
+        cooldown=cooldown,
+        min_gap=min_gap,
+        max_per_cluster=max_per_cluster,
+        entry_dist_atr=dist_atr,
+        regime_prob_adj=regime_adj,
+    ) if do_backtest else None
 
     return {
-        "symbol":   symbol,
-        "price":    current_price,
-        "trend":    structure.trend,
-        "clusters": clusters,
-        "backtest": bt,
-        "atr":      atr,
+        "symbol":      symbol,
+        "price":       current_price,
+        "trend":       structure.trend,
+        "clusters":    clusters,
+        "backtest":    bt,
+        "atr":         atr,
+        "regime":      regime,
+        "trend_score": t_score,
+        "vol_score":   v_score,
     }
 
 
@@ -134,31 +151,40 @@ def _print_report(res: dict, top_n: int = 5) -> None:
     bt    = res["backtest"]
     cls   = res["clusters"][:top_n]
 
-    tc = g(trend) if trend=="UPTREND" else (r(trend) if trend=="DOWNTREND" else y(trend))
-    print(f"\n{b('='*58)}")
+    regime  = res.get("regime", "?")
+    ts_val  = res.get("trend_score", 0.5)
+    vs_val  = res.get("vol_score", 0.5)
+    tc      = g(trend) if trend=="UPTREND" else (r(trend) if trend=="DOWNTREND" else y(trend))
+    ts_s    = g(f"{ts_val:.3f}") if ts_val>=0.65 else (y(f"{ts_val:.3f}") if ts_val>=0.40 else r(f"{ts_val:.3f}"))
+    vs_s    = g(f"{vs_val:.3f}") if vs_val>=0.50 else (y(f"{vs_val:.3f}") if vs_val>=0.25 else r(f"{vs_val:.3f}"))
+    rgm_c   = c(regime)
+
+    print(f"\n{b('='*70)}")
     price_s = y(f"{price:,.6f}")
     print(f"  {c(sym.upper())}   price:{price_s}   trend:{tc}   ATR:{atr:.5f}")
-    print(b('='*58))
+    print(f"  TrendScore:{ts_s}   VolumeScore:{vs_s}   Regime:{rgm_c}")
+    print(b('='*70))
 
     if not cls:
         print(f"  {y('No clusters found.')}\n")
         return
 
     print(f"\n  {b('PIVOT CLUSTERS:')}\n")
-    hdr = f"  {'CLUSTER':>14}  {'DIST%':>6}  {'PROB':>6}  {'CONF':>6}  {'TFs':>3}  {'TCH':>4}  {'SCR':>4}  {'OPP':>6}  TF LIST"
+    hdr = f"  {'CLUSTER':>14}  {'DIST%':>6}  {'PROB':>6}  {'CONF':>6}  {'TFs':>3}  {'TCH':>4}  {'SCR':>4}  {'QUAL':>6}  {'RCY':>5}  TF LIST"
     print(hdr)
-    print(f"  {'-'*104}")
+    print(f"  {'-'*108}")
 
     for cl in cls:
-        dist  = (cl.center - price) / price * 100
-        tfs   = "+".join(sorted(cl.timeframes))
-        pc    = g(f"{cl.probability:.2f}") if cl.probability>=0.65 else (y(f"{cl.probability:.2f}") if cl.probability>=0.5 else r(f"{cl.probability:.2f}"))
-        cc    = g(f"{cl.confidence:.2f}") if cl.confidence>=0.7  else (y(f"{cl.confidence:.2f}") if cl.confidence>=0.4 else r(f"{cl.confidence:.2f}"))
-        sc    = g(str(cl.score)) if cl.score>=70 else (y(str(cl.score)) if cl.score>=50 else str(cl.score))
-        opp   = opportunity_rank(cl, trend, price)
-        opp_s = g(f"{opp:.3f}") if opp >= 0.3 else (y(f"{opp:.3f}") if opp >= 0.15 else r(f"{opp:.3f}"))
+        dist   = (cl.center - price) / price * 100
+        tfs    = "+".join(sorted(cl.timeframes))
+        pc     = g(f"{cl.probability:.2f}") if cl.probability>=0.65 else (y(f"{cl.probability:.2f}") if cl.probability>=0.5 else r(f"{cl.probability:.2f}"))
+        cc     = g(f"{cl.confidence:.2f}") if cl.confidence>=0.7  else (y(f"{cl.confidence:.2f}") if cl.confidence>=0.4 else r(f"{cl.confidence:.2f}"))
+        sc     = g(str(cl.score)) if cl.score>=70 else (y(str(cl.score)) if cl.score>=50 else str(cl.score))
+        qual   = cl.quality_score
+        qual_s = g(f"{qual:.3f}") if qual>=0.15 else (y(f"{qual:.3f}") if qual>=0.08 else r(f"{qual:.3f}"))
+        rcy_s  = g(f"{cl.recency_weight:.2f}") if cl.recency_weight>=0.7 else y(f"{cl.recency_weight:.2f}")
         center_s = y(f"{cl.center:>14,.6f}")
-        print(f"  {center_s}  {dist:>+6.2f}%  {pc:>14}  {cc:>14}  {cl.tf_count:>3}  {cl.historical_touches:>4}  {sc:>12}  {opp_s:>14}  {tfs}")
+        print(f"  {center_s}  {dist:>+6.2f}%  {pc:>14}  {cc:>14}  {cl.tf_count:>3}  {cl.historical_touches:>4}  {sc:>12}  {qual_s:>14}  {rcy_s:>13}  {tfs}")
 
     if bt:
         pf    = f"{bt.profit_factor:.2f}" if bt.profit_factor != float("inf") else "inf"
@@ -172,6 +198,18 @@ def _print_report(res: dict, top_n: int = 5) -> None:
         if bt.overtrading_warning:
             print(f"  {r('WARNING: Possible overtrading / overfitting detected')}")
             print(f"  {D}  trades({bt.total_trades}) > candles*0.5 — reduce pool or increase cooldown{X}")
+        # False-signal analysis
+        la        = bt.loss_analysis or {}
+        by_touch  = la.get("by_touch",  {})
+        by_volume = la.get("by_volume", {})
+        if by_touch or by_volume:
+            print(f"  {b('FALSE SIGNALS:')}")
+            if by_touch:
+                tch_s = "  ".join(f"#{k}:{v}" for k, v in sorted(by_touch.items()))
+                print(f"    by_touch:  {tch_s}")
+            if by_volume:
+                vol_s = "  ".join(f"{k}:{v}" for k, v in sorted(by_volume.items()))
+                print(f"    by_volume: {vol_s}")
     print()
 
 
@@ -217,7 +255,13 @@ async def cmd_scan(args) -> None:
     results = [x for x in results if x["clusters"][0].probability >= args.min_prob]
     if args.min_conf > 0.0:
         results = [x for x in results if x["clusters"][0].confidence >= args.min_conf]
-    results.sort(key=lambda x: -opportunity_rank(x["clusters"][0], x["trend"], x["price"]))
+    def _rank_key(x: dict) -> float:
+        cl = x["clusters"][0]
+        if cl.quality_score > 0.0:
+            return cl.quality_score * cl.recency_weight
+        return opportunity_rank(cl, x["trend"], x["price"])
+
+    results.sort(key=lambda x: -_rank_key(x))
     top = results[:args.top]
 
     print(f"\n{b('='*64)}")
@@ -228,21 +272,22 @@ async def cmd_scan(args) -> None:
         print(f"\n  {y('No candidates above threshold.')}\n")
         return
 
-    print(f"\n  {'#':<3} {'SYMBOL':<14} {'PRICE':>14}  {'TREND':<11}  {'PROB':>6}  {'CONF':>6}  {'OPP':>6}  {'SCR':>4}  {'CLUSTER':>14}")
-    print(f"  {'-'*104}")
+    print(f"\n  {'#':<3} {'SYMBOL':<14} {'PRICE':>14}  {'TREND':<11}  {'PROB':>6}  {'CONF':>6}  {'QUAL':>6}  {'RCY':>5}  {'SCR':>4}  {'CLUSTER':>14}")
+    print(f"  {'-'*112}")
     for i, res in enumerate(top, 1):
-        cl    = res["clusters"][0]
-        tc    = g("UP") if res["trend"]=="UPTREND" else (r("DN") if res["trend"]=="DOWNTREND" else y("RNG"))
-        pc    = g(f"{cl.probability:.2f}") if cl.probability>=0.65 else y(f"{cl.probability:.2f}")
-        cc    = g(f"{cl.confidence:.2f}") if cl.confidence>=0.7 else (y(f"{cl.confidence:.2f}") if cl.confidence>=0.4 else r(f"{cl.confidence:.2f}"))
-        sc    = g(str(cl.score)) if cl.score>=70 else (y(str(cl.score)) if cl.score>=50 else str(cl.score))
-        opp   = opportunity_rank(cl, res["trend"], res["price"])
-        opp_s = g(f"{opp:.3f}") if opp >= 0.3 else (y(f"{opp:.3f}") if opp >= 0.15 else r(f"{opp:.3f}"))
+        cl     = res["clusters"][0]
+        tc     = g("UP") if res["trend"]=="UPTREND" else (r("DN") if res["trend"]=="DOWNTREND" else y("RNG"))
+        pc     = g(f"{cl.probability:.2f}") if cl.probability>=0.65 else y(f"{cl.probability:.2f}")
+        cc     = g(f"{cl.confidence:.2f}") if cl.confidence>=0.7 else (y(f"{cl.confidence:.2f}") if cl.confidence>=0.4 else r(f"{cl.confidence:.2f}"))
+        sc     = g(str(cl.score)) if cl.score>=70 else (y(str(cl.score)) if cl.score>=50 else str(cl.score))
+        qual   = cl.quality_score
+        qual_s = g(f"{qual:.3f}") if qual>=0.15 else (y(f"{qual:.3f}") if qual>=0.08 else r(f"{qual:.3f}"))
+        rcy_s  = g(f"{cl.recency_weight:.2f}") if cl.recency_weight>=0.7 else y(f"{cl.recency_weight:.2f}")
         price_s  = y(f"{res['price']:>12,.4f}")
         center_s = y(f"{cl.center:>12,.4f}")
         sym_s    = c(res["symbol"])
         num_s    = g(str(i))
-        print(f"  {num_s:<10} {sym_s:<17} {price_s}  {tc:<18}  {pc:>14}  {cc:>14}  {opp_s:>14}  {sc:>12}  {center_s}")
+        print(f"  {num_s:<10} {sym_s:<17} {price_s}  {tc:<18}  {pc:>14}  {cc:>14}  {qual_s:>14}  {rcy_s:>13}  {sc:>12}  {center_s}")
     print()
 
 

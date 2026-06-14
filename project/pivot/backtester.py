@@ -1,4 +1,4 @@
-"""Backtest Lite v2 — cooldown, min-gap, first-touch priority, rich metrics."""
+"""Backtest Lite v3 — regime-aware thresholds + false-signal analysis."""
 
 from __future__ import annotations
 from dataclasses import dataclass, field
@@ -33,16 +33,17 @@ def backtest_clusters(
     min_gap:         int          = 5,
     max_per_cluster: int          = 3,
     entry_dist_atr:  float | None = None,
+    regime_prob_adj: float        = 0.0,   # from regime.regime_min_prob delta
 ) -> BacktestResult:
     """
-    Entry:  price touches cluster where probability >= min_prob.
+    Entry:  price touches cluster where effective_prob >= min_prob + regime_prob_adj.
     Exit:   first of TP or SL within reaction_window bars.
     Rules:
       - cooldown:        same cluster cannot be re-entered for cooldown bars
       - min_gap:         no new trade within min_gap bars of any prior trade
       - max_per_cluster: cluster retired after this many trades (freshness)
-      - entry_dist_atr:  price must be within N×ATR of cluster center to enter
-                         (None = legacy formula: max(0.5%price, 0.5×ATR))
+      - entry_dist_atr:  max distance to cluster center (ATR units); None=auto
+      - regime_prob_adj: dynamic threshold shift from regime detection
     No lookahead bias: exit uses only future bars.
     """
     atr    = atr14(df)
@@ -53,46 +54,57 @@ def backtest_clusters(
     tp     = tp_atr * atr
     sl     = sl_atr * atr
 
-    viable = [c for c in clusters if c.probability >= min_prob and c.historical_touches >= 2]
+    effective_min_prob = min(0.90, max(0.50, min_prob + regime_prob_adj))
+    viable = [c for c in clusters if c.probability >= effective_min_prob
+              and c.historical_touches >= 2]
 
-    # Precompute entry tolerance per cluster (fixed for all bars)
+    # Precompute entry tolerances (fixed per cluster, not per bar)
     if entry_dist_atr is not None:
         _tols = [atr * entry_dist_atr] * len(viable)
     else:
         _tols = [max(cl.center * 0.005, atr * 0.5) for cl in viable]
 
+    # Precompute rolling 20-bar volume average for false-signal analysis
+    has_vol   = "volume" in df.columns
+    if has_vol:
+        vol_arr  = df["volume"].values
+        vol_roll = df["volume"].rolling(20, min_periods=1).mean().values
+    else:
+        vol_arr = vol_roll = None
+
     # Per-cluster state
-    cluster_last_trade: list[int]   = [-9999] * len(viable)
-    cluster_trade_count: list[int]  = [0]     * len(viable)
+    cluster_last_trade: list[int]  = [-9999] * len(viable)
+    cluster_trade_cnt:  list[int]  = [0]     * len(viable)
 
-    equity: list[float]   = [0.0]
+    equity: list[float]    = [0.0]
     holding_bars: list[int] = []
-    last_trade_bar         = -9999
-    wins = losses          = 0
-    loss_streak = max_loss_streak = cur_streak = 0
+    last_trade_bar          = -9999
+    wins = losses           = 0
+    cur_streak = max_loss_streak = 0
 
+    # False-signal analysis
     loss_clusters: dict[str, int] = {}
+    loss_by_touch: dict[int, int] = {}
+    loss_by_volume: dict[str, int] = {}
 
     for i in range(n - reaction_window):
         for ci, cl in enumerate(viable):
-            # ── filters ──────────────────────────────────────────────────
-            if cluster_trade_count[ci] >= max_per_cluster:
+            if cluster_trade_cnt[ci] >= max_per_cluster:
                 continue
             if (i - cluster_last_trade[ci]) < cooldown:
                 continue
             if (i - last_trade_bar) < min_gap:
                 continue
-
             if abs(closes[i] - cl.center) > _tols[ci]:
                 continue
 
-            # ── first-touch probability decay ─────────────────────────
-            touch_num = cluster_trade_count[ci] + 1
+            # First-touch probability decay: 0.85 ^ (touch_number - 1)
+            touch_num      = cluster_trade_cnt[ci] + 1
             effective_prob = cl.probability * (0.85 ** (touch_num - 1))
-            if effective_prob < min_prob:
+            if effective_prob < effective_min_prob:
                 continue
 
-            # ── simulate trade ────────────────────────────────────────
+            # Simulate trade
             entry      = closes[i]
             is_support = cl.center < closes[-1]
             result     = 0.0
@@ -111,24 +123,34 @@ def backtest_clusters(
                     if highs[idx] - entry >= sl:  result = -sl_atr; break
 
             if result == 0.0:
-                continue  # no outcome — skip (expired)
+                continue
 
-            # ── record ────────────────────────────────────────────────
             cluster_last_trade[ci]  = i
-            cluster_trade_count[ci] += 1
-            last_trade_bar           = i
+            cluster_trade_cnt[ci]  += 1
+            last_trade_bar          = i
             holding_bars.append(hold)
             equity.append(equity[-1] + result)
 
             if result > 0:
-                wins     += 1
+                wins      += 1
                 cur_streak = 0
             else:
-                losses   += 1
+                losses    += 1
                 cur_streak += 1
                 max_loss_streak = max(max_loss_streak, cur_streak)
-                key = cl.timeframes.__str__()
-                loss_clusters[key] = loss_clusters.get(key, 0) + 1
+
+                # False-signal analysis
+                tf_key = str(cl.timeframes)
+                loss_clusters[tf_key] = loss_clusters.get(tf_key, 0) + 1
+
+                loss_by_touch[touch_num] = loss_by_touch.get(touch_num, 0) + 1
+
+                if has_vol and vol_roll is not None and vol_roll[i] > 0:
+                    vr = vol_arr[i] / vol_roll[i]
+                    vs = "high" if vr > 1.5 else ("low" if vr < 0.70 else "normal")
+                else:
+                    vs = "normal"
+                loss_by_volume[vs] = loss_by_volume.get(vs, 0) + 1
 
     total = wins + losses
     wr    = wins / total if total > 0 else 0.0
@@ -154,5 +176,9 @@ def backtest_clusters(
         avg_holding_bars    = avg_hold,
         max_consec_losses   = max_loss_streak,
         overtrading_warning = overfit,
-        loss_analysis       = loss_clusters,
+        loss_analysis       = {
+            "by_timeframe": loss_clusters,
+            "by_touch":     loss_by_touch,
+            "by_volume":    loss_by_volume,
+        },
     )

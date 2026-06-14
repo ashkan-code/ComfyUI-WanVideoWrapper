@@ -19,9 +19,14 @@ class Cluster:
     # filled by analyzer
     historical_touches: int   = 0
     reaction_rate:      float = 0.0   # raw
-    probability:        float = 0.0   # Laplace smoothed
+    probability:        float = 0.0   # Laplace smoothed + touch-decay weighted
     confidence:         float = 0.0
     score:              int   = 0
+    # filled by scorer.compute_quality_score
+    quality_score:      float = 0.0   # Prob × Conf × TrendScore × VolumeScore
+    trend_score:        float = 0.5
+    volume_score:       float = 0.5
+    recency_weight:     float = 1.0   # exp(-λ × age_in_bars)
 
 
 def atr14(df: pd.DataFrame) -> float:
