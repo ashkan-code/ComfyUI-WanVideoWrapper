@@ -26,6 +26,8 @@ from pivot.optimizer   import run_sweep, opportunity_rank, TOTAL_COMBINATIONS
 from pivot.trend_score import compute_trend_score, compute_volume_score
 from pivot.regime      import detect_regime, regime_min_prob
 from pivot.scorer      import compute_quality_score
+from pivot.pivot_features     import compute_pivot_features, DEFAULT_PIVOT_WEIGHTS
+from pivot.feature_importance import analyze_feature_importance, FeatureImportanceResult
 
 G="\033[92m";R="\033[91m";Y="\033[93m";C="\033[96m";B="\033[1m";D="\033[2m";X="\033[0m"
 def g(t): return f"{G}{t}{X}"
@@ -57,6 +59,7 @@ async def analyze_symbol(
     max_per_cluster: int = 3,
     min_conf: float = 0.0,
     dist_atr: float | None = None,
+    run_importance: bool = False,
 ) -> dict | None:
     # 1. Fetch 3 timeframes
     dfs = {}
@@ -79,7 +82,7 @@ async def analyze_symbol(
     for tf, df in dfs.items():
         if len(df) < 10:
             continue
-        all_pivots.extend(detect_pivots(df, tf, n=_TF_N[tf], max_pivots=100))
+        all_pivots.extend(detect_pivots(df, tf, n=_TF_N[tf], max_pivots=100, atr=atr14(df)))
 
     if not all_pivots:
         return None
@@ -88,7 +91,7 @@ async def analyze_symbol(
     clusters = cluster_pivots(all_pivots, atr=atr, tol_pct=tol_pct)
 
     # 4. Market structure + signal quality scores (computed once per symbol)
-    pivots_1d  = detect_pivots(dfs["1d"], "1d", n=2, max_pivots=50)
+    pivots_1d  = detect_pivots(dfs["1d"], "1d", n=2, max_pivots=50, atr=atr14(dfs["1d"]))
     structure  = detect_structure(pivots_1d)
     regime     = detect_regime(df_1h)
     t_score    = compute_trend_score(df_1h, structure)
@@ -105,6 +108,7 @@ async def analyze_symbol(
 
     # 6. Score + quality score for each cluster
     for cl in clusters:
+        compute_pivot_features(cl, last_ts)
         score_cluster(cl, structure, current_price)
         compute_quality_score(cl, t_score, v_score, last_ts)
 
@@ -119,6 +123,16 @@ async def analyze_symbol(
 
     # Sort by quality × recency (highest quality, freshest first)
     clusters.sort(key=lambda cl: -(cl.quality_score * cl.recency_weight))
+
+    # Optional: feature importance analysis + re-weight
+    importance = None
+    if run_importance:
+        importance = analyze_feature_importance(clusters, df_1h)
+        if importance.n_trades >= 5:
+            for cl in clusters:
+                compute_pivot_features(cl, last_ts, weights=importance.optimal_weights)
+                compute_quality_score(cl, t_score, v_score, last_ts)
+            clusters.sort(key=lambda cl: -(cl.quality_score * cl.recency_weight))
 
     # 7. Backtest with regime-adjusted probability threshold
     bt = backtest_clusters(
@@ -140,6 +154,7 @@ async def analyze_symbol(
         "regime":      regime,
         "trend_score": t_score,
         "vol_score":   v_score,
+        "importance":  importance,
     }
 
 
@@ -170,9 +185,9 @@ def _print_report(res: dict, top_n: int = 5) -> None:
         return
 
     print(f"\n  {b('PIVOT CLUSTERS:')}\n")
-    hdr = f"  {'CLUSTER':>14}  {'DIST%':>6}  {'PROB':>6}  {'CONF':>6}  {'TFs':>3}  {'TCH':>4}  {'SCR':>4}  {'QUAL':>6}  {'RCY':>5}  TF LIST"
+    hdr = f"  {'CLUSTER':>14}  {'DIST%':>6}  {'PROB':>6}  {'CONF':>6}  {'STR':>5}  {'RCY':>5}  {'RQL':>5}  {'MTF':>5}  {'REL':>5}  {'QUAL':>6}  {'SCR':>4}  TF LIST"
     print(hdr)
-    print(f"  {'-'*108}")
+    print(f"  {'-'*130}")
 
     for cl in cls:
         dist   = (cl.center - price) / price * 100
@@ -182,9 +197,13 @@ def _print_report(res: dict, top_n: int = 5) -> None:
         sc     = g(str(cl.score)) if cl.score>=70 else (y(str(cl.score)) if cl.score>=50 else str(cl.score))
         qual   = cl.quality_score
         qual_s = g(f"{qual:.3f}") if qual>=0.15 else (y(f"{qual:.3f}") if qual>=0.08 else r(f"{qual:.3f}"))
-        rcy_s  = g(f"{cl.recency_weight:.2f}") if cl.recency_weight>=0.7 else y(f"{cl.recency_weight:.2f}")
         center_s = y(f"{cl.center:>14,.6f}")
-        print(f"  {center_s}  {dist:>+6.2f}%  {pc:>14}  {cc:>14}  {cl.tf_count:>3}  {cl.historical_touches:>4}  {sc:>12}  {qual_s:>14}  {rcy_s:>13}  {tfs}")
+        str_s = g(f"{cl.pf_strength:.2f}")          if cl.pf_strength >= 0.6     else y(f"{cl.pf_strength:.2f}")
+        rcy2_s= g(f"{cl.pf_recency:.2f}")           if cl.pf_recency  >= 0.7     else y(f"{cl.pf_recency:.2f}")
+        rql_s = g(f"{cl.pf_reaction_quality:.2f}")  if cl.pf_reaction_quality >= 0.4 else y(f"{cl.pf_reaction_quality:.2f}")
+        mtf_s = g(f"{cl.pf_mtf_agreement:.2f}")     if cl.pf_mtf_agreement >= 0.55   else y(f"{cl.pf_mtf_agreement:.2f}")
+        rel_s = g(f"{cl.pf_touch_reliability:.2f}") if cl.pf_touch_reliability >= 0.5 else y(f"{cl.pf_touch_reliability:.2f}")
+        print(f"  {center_s}  {dist:>+6.2f}%  {pc:>14}  {cc:>14}  {str_s:>13}  {rcy2_s:>13}  {rql_s:>13}  {mtf_s:>13}  {rel_s:>13}  {qual_s:>14}  {sc:>12}  {tfs}")
 
     if bt:
         pf    = f"{bt.profit_factor:.2f}" if bt.profit_factor != float("inf") else "inf"
@@ -213,6 +232,38 @@ def _print_report(res: dict, top_n: int = 5) -> None:
     print()
 
 
+def _print_importance(imp: FeatureImportanceResult) -> None:
+    if imp.n_trades == 0:
+        print(f"  {y('Not enough trades for importance analysis.')}\n")
+        return
+    print(f"\n{b('='*70)}")
+    print(f"  PIVOT FEATURE IMPORTANCE  |  {imp.n_trades} trades  ({imp.n_winners}W / {imp.n_losers}L)")
+    print(b('='*70))
+    labels = {
+        "pf_strength":          "Pivot Strength    ",
+        "pf_recency":           "Pivot Recency     ",
+        "pf_reaction_quality":  "Reaction Quality  ",
+        "pf_mtf_agreement":     "MTF Agreement     ",
+        "pf_touch_reliability": "Touch Reliability ",
+    }
+    print(f"\n  {'RANK':<5} {'FEATURE':<22} {'CORR':>7}  {'W-MEAN':>7}  {'L-MEAN':>7}  {'LIFT':>6}  {'OPT-W':>6}")
+    print(f"  {'-'*64}")
+    for rank, feat in enumerate(imp.ranking, 1):
+        rv    = imp.correlations[feat]
+        w_m   = imp.winner_means[feat]
+        l_m   = imp.loser_means[feat]
+        lift  = imp.lift_ratios[feat]
+        opt_w = imp.optimal_weights[feat]
+        r_s   = g(f"{rv:+.4f}") if rv > 0.05 else (r(f"{rv:+.4f}") if rv < -0.05 else y(f"{rv:+.4f}"))
+        is_top_win  = feat == imp.top_winner_feature
+        is_top_loss = feat == imp.top_loser_feature
+        tag = f"  {g('★ WINNERS')} " if is_top_win else (f"  {r('▼ LOSERS')} " if is_top_loss else "")
+        print(f"  #{rank:<4} {labels[feat]}  {r_s:>15}  {w_m:>7.4f}  {l_m:>7.4f}  {lift:>6.3f}  {opt_w:>6.4f}{tag}")
+    print(f"\n  {b('Optimal weights derived from positive correlations:')}")
+    print(f"  " + "  ".join(f"{k.replace('pf_','').replace('_',' ')[:8]}={v:.3f}" for k, v in imp.optimal_weights.items()))
+    print()
+
+
 async def cmd_single(args) -> None:
     print(f"\n{y('...')} {b(args.symbol.upper())} | 1h+4h+1d | 300 candles | Bitunix")
     res = await analyze_symbol(
@@ -226,11 +277,14 @@ async def cmd_single(args) -> None:
         max_per_cluster=args.max_per_cluster,
         min_conf=args.min_conf,
         dist_atr=args.dist_atr,
+        run_importance=args.feature_importance,
     )
     if not res:
         print(r("ERROR: could not fetch or analyze data"))
         sys.exit(1)
     _print_report(res)
+    if res.get("importance"):
+        _print_importance(res["importance"])
 
 
 async def cmd_scan(args) -> None:
@@ -400,6 +454,8 @@ def main():
     p.add_argument("--min-gap",        type=int,   default=5,    dest="min_gap",   help="min bars between any trades")
     p.add_argument("--max-per-cluster",type=int,   default=3,    dest="max_per_cluster", help="max trades per cluster")
     p.add_argument("--dist-atr",       type=float, default=None, dest="dist_atr",  help="entry distance in ATR units (default: auto)")
+    p.add_argument("--feature-importance", action="store_true", dest="feature_importance",
+                   help="analyse predictive power of pivot sub-features")
     args = p.parse_args()
 
     if args.optimize and args.symbol:
